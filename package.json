@@ -4,7 +4,7 @@
     "main": "index.js",
     "author": "Viljar Võidula",
     "license": "MIT",
-    "private": true,
+    "private": false,
     "dependencies": {
         "redis": "^4.7.1"
     },
