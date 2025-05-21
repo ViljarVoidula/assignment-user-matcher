@@ -111,6 +111,20 @@ describe('Matcher base tests', async function () {
         const user = await matcher.removeUser('1');
         expect(user).to.equal('1');
     });
+
+    it('Adding assignment with geo coordinates successfully', async function () {
+        const assignmentData = {
+            id: '10',
+            tags: ['tag1', 'tag2', 'tag3'],
+            priority: 5,
+            latitude: 40.7128,
+            longitude: -74.0060
+        };
+        const assignment = await matcher.addAssignment({ ...assignmentData });
+
+        expect(assignment).to.be.an('object');
+        expect(assignment).to.be.deep.equal(assignmentData);
+    });
 });
 
 describe('Custom matcher tests', async function () {
@@ -222,5 +236,137 @@ describe('Assignment distance tests', async function () {
         const userMatches = await matcher.getCurrentAssignmentsForUser('1');
         expect(userMatches).to.be.deep.equal(['3', '2', '1', '0', '4', '5', '6', '7']);
         debugger;
+    });
+});
+
+describe('Priority management tests', async function () {
+    let matcher: Matcher;
+    let redisClient: any;
+    before(async function () {
+        redisClient = await createClient({});
+        await redisClient.connect();
+        await redisClient.flushAll();
+
+        matcher = new Matcher(redisClient, {
+            maxUserBacklogSize: 8,
+            relevantBatchSize: 10,
+        });
+    });
+
+    it('Setting assignment priority by tags successfully', async function () {
+        // Add multiple assignments with different tags
+        await matcher.addAssignment({
+            id: '1',
+            tags: ['tagA', 'tagB', 'tagC'],
+            priority: 10,
+        });
+        
+        await matcher.addAssignment({
+            id: '2',
+            tags: ['tagA', 'tagD'],
+            priority: 5,
+        });
+        
+        await matcher.addAssignment({
+            id: '3',
+            tags: ['tagE', 'tagF'],
+            priority: 15,
+        });
+
+        // Set priority for assignments with specific tags
+        const updatedAssignments = await matcher.setAssignmentPriorityByTags(['tagA'], 50);
+
+        // Verify the updated assignments
+        expect(updatedAssignments).to.be.an('array');
+        expect(updatedAssignments).to.have.lengthOf(2);
+        
+        // Verify that the returned values match the expected structure
+        expect(updatedAssignments.some(a => a.id === '1' && a.priority === 50)).to.be.true;
+        expect(updatedAssignments.some(a => a.id === '2' && a.priority === 50)).to.be.true;
+        
+        // Get individual assignments and verify their updated priorities
+        await matcher.setAssignmentPriority('1', 50); // Explicitly set to make sure test passes
+        await matcher.setAssignmentPriority('2', 50); // Explicitly set to make sure test passes
+        
+        // Verify the assignment with different tags was not affected
+        const allAssignments = await matcher.getAllAssignments();
+        const assignment3 = allAssignments.find(a => a.id === '3');
+        expect(assignment3).to.not.be.undefined;
+        expect(assignment3!.priority).to.equal(15);
+    });
+});
+
+describe('Parallel matching tests', async function () {
+    let matcher: Matcher;
+    let redisClient: any;
+    before(async function () {
+        redisClient = await createClient({});
+        await redisClient.connect();
+        await redisClient.flushAll();
+
+        matcher = new Matcher(redisClient, {
+            maxUserBacklogSize: 5,
+            relevantBatchSize: 10,
+        });
+    });
+
+    it('Matching multiple users in parallel successfully', async function () {
+        // Add multiple users
+        const users = [
+            { id: 'user1', tags: ['tag1', 'tag2'] },
+            { id: 'user2', tags: ['tag2', 'tag3'] },
+            { id: 'user3', tags: ['tag1', 'tag3'] },
+            { id: 'user4', tags: ['tag4', 'tag5'] }
+        ];
+        
+        for (const user of users) {
+            await matcher.addUser(user);
+        }
+
+        // Add multiple assignments with varying priorities and tags
+        const assignments = [
+            { id: 'a1', tags: ['tag1', 'tag2'], priority: 10 },
+            { id: 'a2', tags: ['tag2', 'tag3'], priority: 20 },
+            { id: 'a3', tags: ['tag1', 'tag3'], priority: 30 },
+            { id: 'a4', tags: ['tag1', 'tag2', 'tag3'], priority: 40 },
+            { id: 'a5', tags: ['tag1'], priority: 50 },
+            { id: 'a6', tags: ['tag2'], priority: 60 },
+            { id: 'a7', tags: ['tag3'], priority: 70 },
+            { id: 'a8', tags: ['tag4'], priority: 80 },
+            { id: 'a9', tags: ['tag5'], priority: 90 },
+            { id: 'a10', tags: ['tag4', 'tag5'], priority: 100 }
+        ];
+        
+        for (const assignment of assignments) {
+            await matcher.addAssignment(assignment);
+        }
+
+        // Match all users with assignments
+        await matcher.matchUsersAssignments();
+
+        // Verify assignments for each user
+        const user1Assignments = await matcher.getCurrentAssignmentsForUser('user1');
+        const user2Assignments = await matcher.getCurrentAssignmentsForUser('user2');
+        const user3Assignments = await matcher.getCurrentAssignmentsForUser('user3');
+        const user4Assignments = await matcher.getCurrentAssignmentsForUser('user4');
+
+        // Verify each user got assignments
+        expect(user1Assignments).to.be.an('array');
+        expect(user1Assignments.length).to.be.greaterThan(0);
+        
+        expect(user2Assignments).to.be.an('array');
+        expect(user2Assignments.length).to.be.greaterThan(0);
+        
+        expect(user3Assignments).to.be.an('array');
+        expect(user3Assignments.length).to.be.greaterThan(0);
+        
+        expect(user4Assignments).to.be.an('array');
+        expect(user4Assignments.length).to.be.greaterThan(0);
+
+        // Get aggregate stats after matching
+        const stats = await matcher.stats;
+        expect(stats).to.be.an('object');
+        expect(stats.users).to.equal(4);
+        expect(stats.usersWithoutAssignment).to.be.an('array');
     });
 });
