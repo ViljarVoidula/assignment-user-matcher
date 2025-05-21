@@ -49,22 +49,27 @@ jobs:
   publish_npm:
     name: Publish to NPM
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: true
     needs: test
     if: success() && startsWith(github.ref, 'refs/tags/')
     steps:
+    
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up Node.js for NPM publishing
-        uses: actions/setup-node@v4
+    
+      - name: Install pnpm action
+        uses: pnpm/action-setup@v4
         with:
-          node-version: '18'
-          registry-url: 'https://registry.npmjs.org/' # Necessary for npm publish
+            version: 9
+            run_install: false
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies using pnpm
         run: pnpm install --frozen-lockfile
