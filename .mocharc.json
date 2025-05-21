@@ -1,0 +1,11 @@
+{
+    "extension": ["ts"],
+    "diff": true,
+    "recursive": true,
+    "exit": true,
+    "slow": 100,
+    "ui": "bdd",
+    "full-trace": true,
+    "spec": "tests/**/*.ts",
+    "require": ["ts-node/register"]
+}
