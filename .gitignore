@@ -26,3 +26,4 @@ dist/
 client.ts
 .nyc_output
 docs/.nojekyll
+test.sh

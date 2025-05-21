@@ -10,7 +10,7 @@
         "redis": "^4.7.1"
     },
     "scripts": {
-        "test": "nyc mocha",
+        "test": "nyc mocha tests/ --recursive --extension .ts --exit",
         "build:docs": "npx typedoc --plugin typedoc-plugin-markdown",
         "prettier": "prettier --write .",
         "build": "rimraf dist && tsc"

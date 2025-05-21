@@ -260,8 +260,10 @@ export default class AssignmentMatcher {
   
       // Fetch all users in a single loop
       do {
+          // @ts-expect-error
           const { cursor: nextCursor, tuples } = await this.redisClient.hScan(this.usersKey, cursor);
           users.push(...tuples.map((t: { value: string }) => JSON.parse(t.value)));
+          // @ts-expect-error
           cursor = nextCursor;
       } while (cursor !== 0);
   

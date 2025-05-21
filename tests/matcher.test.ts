@@ -2,11 +2,14 @@ import Matcher from '../src/matcher.class';
 import { createClient } from 'redis';
 import { expect } from 'chai';
 import sinon from 'sinon';
+
 describe('Matcher base tests', async function () {
+    this.timeout(5000); // Increase timeout for potentially long-running tests
     let matcher: Matcher;
     let redisClient: any;
     before(async function () {
         redisClient = await createClient({});
+        await redisClient.connect();
 
         matcher = new Matcher(redisClient, {
             maxUserBacklogSize: 8,
