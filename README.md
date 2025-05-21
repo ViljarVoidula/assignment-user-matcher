@@ -1,10 +1,10 @@
-# `match-assignment`: Lightning-Fast, Tag-Based User & Assignment Matching
+# `assignment-user-matcher`: Lightning-Fast, Tag-Based User & Assignment Matching
 
-[![npm version](https://badge.fury.io/js/match-assignment.svg)](https://badge.fury.io/js/match-assignment)
+[![npm version](https://badge.fury.io/js/assignment-user-matcher.svg)](https://badge.fury.io/js/assignment-user-matcher)
 [![CI Pipeline](https://github.com/ViljarVoidula/assignment-user-matcher/actions/workflows/docker-build.yml/badge.svg)](https://github.com/ViljarVoidula/assignment-user-matcher/actions/workflows/docker-build.yml)
 <!-- Add other badges if you have them, e.g., build status, test coverage -->
 
-**Tired of inefficiently assigning tasks or struggling to connect the right users with the right work? `match-assignment` is a specialized Node.js library designed for high-performance, near real-time matching of a smaller pool of users to a large volume of assignments, primarily based on shared tags and priority.**
+**Tired of inefficiently assigning tasks or struggling to connect the right users with the right work? `assignment-user-matcher` is a specialized Node.js library designed for high-performance, near real-time matching of a smaller pool of users to a large volume of assignments, primarily based on shared tags and priority.**
 
 It leverages the speed and efficiency of Redis to deliver a robust solution perfect for scenarios like call centers, customer support queues, back-office operations, and more.
 
@@ -18,9 +18,9 @@ In many applications, from customer service platforms to internal task managemen
 
 Traditional matching systems can become bottlenecks, leading to delays, suboptimal pairings, and frustrated users or customers.
 
-## Introducing `match-assignment`: Your Solution for Smart Task Distribution
+## Introducing `assignment-user-matcher`: Your Solution for Smart Task Distribution
 
-`match-assignment` tackles these challenges head-on by providing a specialized engine optimized for a common pattern: a relatively small, active set of users (like support agents or back-office staff) processing a continuous, large stream of assignments.
+`assignment-user-matcher` tackles these challenges head-on by providing a specialized engine optimized for a common pattern: a relatively small, active set of users (like support agents or back-office staff) processing a continuous, large stream of assignments.
 
 **Key Features:**
 
@@ -30,7 +30,7 @@ Traditional matching systems can become bottlenecks, leading to delays, suboptim
 *   **Optimized for Specific Scenarios:** Excels where a smaller group of users handles a large number of assignments.
 *   **User Backlog Management:** Prevents users from being overwhelmed by limiting the number of assignments they can be tentatively matched with.
 
-## Why `match-assignment`?
+## Why `assignment-user-matcher`?
 
 *   🚀 **Speed:** Designed for near real-time performance, ensuring assignments are matched and delivered swiftly.
 *   🎯 **Accuracy:** Improves the quality of matches by considering relevant tags and priorities.
@@ -40,7 +40,7 @@ Traditional matching systems can become bottlenecks, leading to delays, suboptim
 
 ## Core Concepts: How It Works
 
-`match-assignment` operates on a few key principles:
+`assignment-user-matcher` operates on a few key principles:
 
 1.  **Users and Assignments Have Tags:**
     *   **Users:** Each user is defined by an ID and a set of `tags` representing their skills, capabilities, or any other relevant attributes (e.g., `['english', 'billing_support', 'tier_1']`).
@@ -56,11 +56,11 @@ Traditional matching systems can become bottlenecks, leading to delays, suboptim
     Redis is used to store user availability, assignment details, and manage the matching process. Its speed is crucial for the near real-time performance of the library. Users are maintained in sorted sets based on their backlog size and last activity, ensuring fair and efficient distribution.
 
 5.  **User Backlog (`maxUserBacklogSize`):**
-    To prevent any single user from being assigned too many tasks at once (even if they are a match), `match-assignment` maintains a backlog for each user. New assignments are only matched if a user's backlog is below this threshold.
+    To prevent any single user from being assigned too many tasks at once (even if they are a match), `assignment-user-matcher` maintains a backlog for each user. New assignments are only matched if a user's backlog is below this threshold.
 
 ## Real-World Use Cases
 
-`match-assignment` is particularly well-suited for:
+`assignment-user-matcher` is particularly well-suited for:
 
 *   **📞 Call Centers:** Routing incoming calls (assignments) to the agent (user) with the right language skills, product knowledge, and availability.
 *   **🎫 Customer Support Ticketing:** Assigning new support tickets to support agents based on their expertise (e.g., "technical_issue," "api_support") and the ticket's urgency.
@@ -73,11 +73,11 @@ Traditional matching systems can become bottlenecks, leading to delays, suboptim
 ### 1. Installation
 
 ```bash
-npm install match-assignment redis
+npm install assignment-user-matcher redis
 # or
-yarn add match-assignment redis
+yarn add assignment-user-matcher redis
 # or
-pnpm add match-assignment redis
+pnpm add assignment-user-matcher redis
 ```
 
 ### 2. Basic Usage
@@ -85,7 +85,7 @@ pnpm add match-assignment redis
 Here's a simple example to get you up and running:
 
 ```javascript
-import AssignmentMatcher from 'match-assignment'; // or `import { AssignmentMatcher } from 'match-assignment';`
+import AssignmentMatcher from 'assignment-user-matcher'; // or `import { AssignmentMatcher } from 'assignment-user-matcher';`
 import { createClient } from 'redis';
 
 async function runExample() {
@@ -251,7 +251,7 @@ The following example demonstrates adding multiple users and assignments and the
 // npm install -D ts-node typescript
 // Then run: ./example.ts
 
-import AssignmentMatcher, { User, Assignment } from 'match-assignment';
+import AssignmentMatcher, { User, Assignment } from 'assignment-user-matcher';
 import { createClient } from 'redis';
 
 async function bootstrap(userCount: number, assignmentCount: number) {
@@ -345,7 +345,7 @@ bootstrap(USER_COUNT, ASSIGNMENT_COUNT)
 
 ## Important Considerations (Disclaimer)
 
-*   **Optimized for a Specific Use Case:** `match-assignment` is primarily designed and optimized for scenarios with a **relatively small set of active users processing a large volume of incoming assignments** (e.g., call centers, customer support teams, back-office operations). While it might work for other scenarios, its performance characteristics are best suited for this model.
+*   **Optimized for a Specific Use Case:** `assignment-user-matcher` is primarily designed and optimized for scenarios with a **relatively small set of active users processing a large volume of incoming assignments** (e.g., call centers, customer support teams, back-office operations). While it might work for other scenarios, its performance characteristics are best suited for this model.
 *   **Redis Dependency:** This library requires a running Redis instance. Ensure your Redis server is adequately provisioned for your workload.
 *   **Near Real-Time, Not Instantaneous:** While fast, the matching process involves Redis operations and logic execution. "Near real-time" means it's quick, but not strictly instantaneous with nanosecond precision. The `matchUsersAssignments()` method needs to be called periodically or triggered by events (e.g., new assignment, user becomes available) to perform matching.
 
