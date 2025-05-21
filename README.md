@@ -1,7 +1,7 @@
 # `assignment-user-matcher`: Lightning-Fast, Tag-Based User & Assignment Matching
 
 [![npm version](https://badge.fury.io/js/assignment-user-matcher.svg)](https://badge.fury.io/js/assignment-user-matcher)
-[![CI Pipeline](https://github.com/ViljarVoidula/assignment-user-matcher/actions/workflows/docker-build.yml/badge.svg)](https://github.com/ViljarVoidula/assignment-user-matcher/actions/workflows/docker-build.yml)
+[![CI Pipeline](https://github.com/ViljarVoidula/assignment-user-matcher/actions/workflows/npm-publish.yml/badge.svg)](https://github.com/ViljarVoidula/assignment-user-matcher/actions/workflows/npm-publish.yml)
 <!-- Add other badges if you have them, e.g., build status, test coverage -->
 
 **Tired of inefficiently assigning tasks or struggling to connect the right users with the right work? `assignment-user-matcher` is a specialized Node.js library designed for high-performance, near real-time matching of a smaller pool of users to a large volume of assignments, primarily based on shared tags and priority.**
