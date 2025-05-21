@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@redis/client':
-        specifier: ^5.1.0
-        version: 5.1.0
       redis:
         specifier: ^4.7.1
         version: 4.7.1
@@ -168,10 +165,6 @@ packages:
   '@redis/client@1.6.1':
     resolution: {integrity: sha512-/KCsg3xSlR+nCK8/8ZYSknYxvXHwubJrU82F3Lm1Fp6789VQ0/3RJKfsmRXjqfaTA++23CvC3hqmqe/2GEt6Kw==}
     engines: {node: '>=14'}
-
-  '@redis/client@5.1.0':
-    resolution: {integrity: sha512-FMD35y2KgCWTBLOfF0MhwDSaIVcu5mOUuTV9Kw3JOWHMgON3+ulht31cjTB/gph0BfD1vzUvCeROeRaf/d+35w==}
-    engines: {node: '>= 18'}
 
   '@redis/graph@1.1.1':
     resolution: {integrity: sha512-FEMTcTHZozZciLRl6GiiIB4zGm5z5F3F6a6FZCyrfxdKOhFlGkiAqlexWMBzCi4DcRoyiOsuLfW+cjlGWyExOw==}
@@ -1216,10 +1209,6 @@ snapshots:
       cluster-key-slot: 1.1.2
       generic-pool: 3.9.0
       yallist: 4.0.0
-
-  '@redis/client@5.1.0':
-    dependencies:
-      cluster-key-slot: 1.1.2
 
   '@redis/graph@1.1.1(@redis/client@1.6.1)':
     dependencies:
