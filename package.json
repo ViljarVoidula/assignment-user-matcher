@@ -6,6 +6,7 @@
     "license": "MIT",
     "private": true,
     "dependencies": {
+        "@redis/client": "^5.1.0",
         "redis": "^4.7.1"
     },
     "scripts": {
