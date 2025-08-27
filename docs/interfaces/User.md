@@ -1,4 +1,4 @@
-[assignment-engine](../README.md) / [Exports](../modules.md) / User
+[assignment-user-matcher](../README.md) / [Exports](../modules.md) / User
 
 # Interface: User
 
@@ -10,8 +10,9 @@
 
 ### Properties
 
--   [id](User.md#id)
--   [tags](User.md#tags)
+- [id](User.md#id)
+- [routingWeights](User.md#routingweights)
+- [tags](User.md#tags)
 
 ## Properties
 
@@ -21,7 +22,17 @@
 
 #### Defined in
 
-matcher.class.ts:5
+[src/matcher.class.ts:5](https://github.com/ViljarVoidula/assignment-user-matcher/blob/0ce32038c772b4e8d42971554926655878f2eeec/src/matcher.class.ts#L5)
+
+---
+
+### routingWeights
+
+• `Optional` **routingWeights**: `Record`\<`string`, `number`\>
+
+#### Defined in
+
+[src/matcher.class.ts:9](https://github.com/ViljarVoidula/assignment-user-matcher/blob/0ce32038c772b4e8d42971554926655878f2eeec/src/matcher.class.ts#L9)
 
 ---
 
@@ -31,4 +42,4 @@ matcher.class.ts:5
 
 #### Defined in
 
-matcher.class.ts:6
+[src/matcher.class.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/0ce32038c772b4e8d42971554926655878f2eeec/src/matcher.class.ts#L6)

@@ -1,23 +1,23 @@
-[assignment-engine](README.md) / Exports
+[assignment-user-matcher](README.md) / Exports
 
-# assignment-engine
+# assignment-user-matcher
 
 ## Table of contents
 
 ### Classes
 
--   [default](classes/default.md)
+- [default](classes/default.md)
 
 ### Interfaces
 
--   [User](interfaces/User.md)
+- [User](interfaces/User.md)
 
 ### Type Aliases
 
--   [Assignment](modules.md#assignment)
--   [RedisClientType](modules.md#redisclienttype)
--   [Stats](modules.md#stats)
--   [options](modules.md#options)
+- [Assignment](modules.md#assignment)
+- [RedisClientType](modules.md#redisclienttype)
+- [Stats](modules.md#stats)
+- [options](modules.md#options)
 
 ## Type Aliases
 
@@ -39,17 +39,17 @@
 
 #### Defined in
 
-matcher.class.ts:10
+[src/matcher.class.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/0ce32038c772b4e8d42971554926655878f2eeec/src/matcher.class.ts#L13)
 
 ---
 
 ### RedisClientType
 
-Ƭ **RedisClientType**: `ReturnType`<typeof `createClient`\>
+Ƭ **RedisClientType**: `ReturnType`\<typeof `createClient`\>
 
 #### Defined in
 
-matcher.class.ts:2
+[src/matcher.class.ts:2](https://github.com/ViljarVoidula/assignment-user-matcher/blob/0ce32038c772b4e8d42971554926655878f2eeec/src/matcher.class.ts#L2)
 
 ---
 
@@ -67,7 +67,7 @@ matcher.class.ts:2
 
 #### Defined in
 
-matcher.class.ts:17
+[src/matcher.class.ts:20](https://github.com/ViljarVoidula/assignment-user-matcher/blob/0ce32038c772b4e8d42971554926655878f2eeec/src/matcher.class.ts#L20)
 
 ---
 
@@ -77,15 +77,15 @@ matcher.class.ts:17
 
 #### Type declaration
 
-| Name                      | Type                                                                                                                                                                          |
-| :------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enableDefaultMatching?`  | `boolean`                                                                                                                                                                     |
-| `matchingFunction?`       | (`user`: [`User`](interfaces/User.md), `assignmentTags`: `string`, `assignmentPriority`: `number` \| `string`, `assignmentId?`: `string`) => `Promise`<[`number`, `number`]\> |
-| `maxUserBacklogSize?`     | `number`                                                                                                                                                                      |
-| `prioritizationFunction?` | (...`args`: ([`Assignment`](modules.md#assignment) \| `undefined`)[]) => `Promise`<`number`\>                                                                                 |
-| `redisPrefix?`            | `string`                                                                                                                                                                      |
-| `relevantBatchSize?`      | `number`                                                                                                                                                                      |
+| Name                      | Type                                                                                                                                                                           |
+| :------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enableDefaultMatching?`  | `boolean`                                                                                                                                                                      |
+| `matchingFunction?`       | (`user`: [`User`](interfaces/User.md), `assignmentTags`: `string`, `assignmentPriority`: `number` \| `string`, `assignmentId?`: `string`) => `Promise`\<[`number`, `number`]\> |
+| `maxUserBacklogSize?`     | `number`                                                                                                                                                                       |
+| `prioritizationFunction?` | (...`args`: ([`Assignment`](modules.md#assignment) \| `undefined`)[]) => `Promise`\<`number`\>                                                                                 |
+| `redisPrefix?`            | `string`                                                                                                                                                                       |
+| `relevantBatchSize?`      | `number`                                                                                                                                                                       |
 
 #### Defined in
 
-matcher.class.ts:23
+[src/matcher.class.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/0ce32038c772b4e8d42971554926655878f2eeec/src/matcher.class.ts#L26)

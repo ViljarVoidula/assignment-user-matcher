@@ -118,7 +118,7 @@ describe('Matcher base tests', async function () {
             tags: ['tag1', 'tag2', 'tag3'],
             priority: 5,
             latitude: 40.7128,
-            longitude: -74.0060
+            longitude: -74.006,
         };
         const assignment = await matcher.addAssignment({ ...assignmentData });
 
@@ -260,13 +260,13 @@ describe('Priority management tests', async function () {
             tags: ['tagA', 'tagB', 'tagC'],
             priority: 10,
         });
-        
+
         await matcher.addAssignment({
             id: '2',
             tags: ['tagA', 'tagD'],
             priority: 5,
         });
-        
+
         await matcher.addAssignment({
             id: '3',
             tags: ['tagE', 'tagF'],
@@ -279,18 +279,18 @@ describe('Priority management tests', async function () {
         // Verify the updated assignments
         expect(updatedAssignments).to.be.an('array');
         expect(updatedAssignments).to.have.lengthOf(2);
-        
+
         // Verify that the returned values match the expected structure
-        expect(updatedAssignments.some(a => a.id === '1' && a.priority === 50)).to.be.true;
-        expect(updatedAssignments.some(a => a.id === '2' && a.priority === 50)).to.be.true;
-        
+        expect(updatedAssignments.some((a) => a.id === '1' && a.priority === 50)).to.be.true;
+        expect(updatedAssignments.some((a) => a.id === '2' && a.priority === 50)).to.be.true;
+
         // Get individual assignments and verify their updated priorities
         await matcher.setAssignmentPriority('1', 50); // Explicitly set to make sure test passes
         await matcher.setAssignmentPriority('2', 50); // Explicitly set to make sure test passes
-        
+
         // Verify the assignment with different tags was not affected
         const allAssignments = await matcher.getAllAssignments();
-        const assignment3 = allAssignments.find(a => a.id === '3');
+        const assignment3 = allAssignments.find((a) => a.id === '3');
         expect(assignment3).to.not.be.undefined;
         expect(assignment3!.priority).to.equal(15);
     });
@@ -316,9 +316,9 @@ describe('Parallel matching tests', async function () {
             { id: 'user1', tags: ['tag1', 'tag2'] },
             { id: 'user2', tags: ['tag2', 'tag3'] },
             { id: 'user3', tags: ['tag1', 'tag3'] },
-            { id: 'user4', tags: ['tag4', 'tag5'] }
+            { id: 'user4', tags: ['tag4', 'tag5'] },
         ];
-        
+
         for (const user of users) {
             await matcher.addUser(user);
         }
@@ -334,9 +334,9 @@ describe('Parallel matching tests', async function () {
             { id: 'a7', tags: ['tag3'], priority: 70 },
             { id: 'a8', tags: ['tag4'], priority: 80 },
             { id: 'a9', tags: ['tag5'], priority: 90 },
-            { id: 'a10', tags: ['tag4', 'tag5'], priority: 100 }
+            { id: 'a10', tags: ['tag4', 'tag5'], priority: 100 },
         ];
-        
+
         for (const assignment of assignments) {
             await matcher.addAssignment(assignment);
         }
@@ -353,13 +353,13 @@ describe('Parallel matching tests', async function () {
         // Verify each user got assignments
         expect(user1Assignments).to.be.an('array');
         expect(user1Assignments.length).to.be.greaterThan(0);
-        
+
         expect(user2Assignments).to.be.an('array');
         expect(user2Assignments.length).to.be.greaterThan(0);
-        
+
         expect(user3Assignments).to.be.an('array');
         expect(user3Assignments.length).to.be.greaterThan(0);
-        
+
         expect(user4Assignments).to.be.an('array');
         expect(user4Assignments.length).to.be.greaterThan(0);
 
@@ -368,5 +368,74 @@ describe('Parallel matching tests', async function () {
         expect(stats).to.be.an('object');
         expect(stats.users).to.equal(4);
         expect(stats.usersWithoutAssignment).to.be.an('array');
+    });
+});
+
+describe('Weighted skill matching tests', async function () {
+    let matcher: Matcher;
+    let redisClient: any;
+    before(async function () {
+        redisClient = await createClient({});
+        await redisClient.connect();
+        await redisClient.flushAll();
+        matcher = new Matcher(redisClient, {
+            maxUserBacklogSize: 10,
+            relevantBatchSize: 10,
+        });
+    });
+
+    it('Excludes zero-weight tags (dutch:0)', async function () {
+        await matcher.addUser({
+            id: 'wu1',
+            tags: ['english', 'dutch'],
+            // @ts-ignore enrich user data with routing weights
+            routingWeights: { english: 100, dutch: 0 },
+        } as any);
+
+        await matcher.addAssignment({ id: 'e1', tags: ['english'], priority: 10 });
+        await matcher.addAssignment({ id: 'd1', tags: ['dutch'], priority: 10 });
+
+        await matcher.matchUsersAssignments('wu1');
+        const assignments = await matcher.getCurrentAssignmentsForUser('wu1');
+        expect(assignments).to.deep.equal(['e1']);
+    });
+
+    it('Prefers higher weights when priorities are equal (english:100 > dutch:30)', async function () {
+        await redisClient.flushAll();
+        matcher = new Matcher(redisClient, {
+            maxUserBacklogSize: 10,
+            relevantBatchSize: 10,
+        });
+
+        await matcher.addUser({
+            id: 'wu2',
+            tags: ['english', 'dutch'],
+            // @ts-ignore enrich user data with routing weights
+            routingWeights: { english: 100, dutch: 30 },
+        } as any);
+
+        // Equal base priorities, english should be ranked ahead of dutch due to higher weight
+        await matcher.addAssignment({ id: 'e1', tags: ['english'], priority: 10 });
+        await matcher.addAssignment({ id: 'd1', tags: ['dutch'], priority: 10 });
+        await matcher.addAssignment({ id: 'e2', tags: ['english'], priority: 10 });
+        await matcher.addAssignment({ id: 'd2', tags: ['dutch'], priority: 10 });
+
+        await matcher.matchUsersAssignments('wu2');
+        const assignments = await matcher.getCurrentAssignmentsForUser('wu2');
+        expect(assignments).to.have.lengthOf(4);
+
+        const i_e1 = assignments.indexOf('e1');
+        const i_e2 = assignments.indexOf('e2');
+        const i_d1 = assignments.indexOf('d1');
+        const i_d2 = assignments.indexOf('d2');
+        expect(i_e1).to.be.greaterThan(-1);
+        expect(i_e2).to.be.greaterThan(-1);
+        expect(i_d1).to.be.greaterThan(-1);
+        expect(i_d2).to.be.greaterThan(-1);
+        // English assignments should appear before Dutch assignments
+        expect(i_e1).to.be.lessThan(i_d1);
+        expect(i_e1).to.be.lessThan(i_d2);
+        expect(i_e2).to.be.lessThan(i_d1);
+        expect(i_e2).to.be.lessThan(i_d2);
     });
 });
