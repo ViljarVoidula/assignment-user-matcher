@@ -1,0 +1,53 @@
+This Strict Commercial License ("License") is a legal agreement between the Owner identified below ("Owner") and any natural person or legal entity that receives, accesses, or uses the Software ("Recipient"). By receiving, accessing, or using the Software, Recipient acknowledges and agrees to the terms below. All capitalized terms not otherwise defined herein have the meanings given in Section 1.
+
+1. Definitions
+- "Software" means the source code, binaries, documentation, designs, examples, data, configuration, and any other materials provided by Owner.
+- "Use" means to copy, execute, run, display, distribute, host, provide as a service, sublicense, or otherwise employ the Software.
+- "Modify" means to alter, adapt, translate, create derivative works of, reverse engineer, decompile, disassemble, or otherwise change the Software.
+
+2. No Grant
+- Except for a specific, express, written license signed by Owner, no rights, licenses, or permissions are granted to Recipient, whether by implication, estoppel, or otherwise. Owner expressly reserves all rights in the Software.
+
+3. Prohibited Acts
+- Without Owner's prior written permission, Recipient shall not, directly or indirectly, Use, copy, publish, distribute, sublicense, make available, or Modify the Software in whole or in part.
+- Recipient shall not remove, alter, or obscure any proprietary, copyright, or other notices in or on the Software, nor attempt to bypass technological restrictions or authentication controls.
+
+4. Remedies; Liquidated Damages; Fees
+- Each unauthorized Use or Modification of the Software (each an "Infringing Act") shall constitute a material breach and an actionable wrong.
+- For each Infringing Act, Recipient agrees that Owner shall be entitled to recover liquidated damages in the amount of USD 250,000 (Two Hundred Fifty Thousand United States Dollars) per Infringing Act, which the parties agree is a reasonable pre-estimate of damages and not a penalty. In addition, Owner may recover:
+  - disgorgement of all profits and revenues derived from the Infringing Act;
+  - statutory damages available under applicable law (if greater than the liquidated damages amount);
+  - pre-judgment and post-judgment interest at the highest lawful rate;
+  - Owner's reasonable attorneys' fees, costs, and expenses incurred to investigate or enforce this License; and
+  - any other equitable or legal relief available, including injunctive and declaratory relief.
+- The remedies in this Section are cumulative, not exclusive, and shall not limit other remedies at law or in equity. Owner need not post a bond to obtain injunctive relief.
+
+5. Indemnity
+- Recipient shall indemnify, defend, and hold Owner harmless from and against any and all claims, liabilities, losses, damages, costs and expenses (including reasonable attorneys' fees) arising from any unauthorized Use, Modification, distribution, or other breach of this License.
+
+6. Termination and Return
+- Owner may terminate this License immediately upon written notice if Recipient commits any breach, including any Infringing Act. Upon termination, Recipient shall immediately cease all Use of the Software and destroy or return all copies of the Software and related materials and certify such destruction or return in writing to Owner.
+
+7. Preservation of Notices
+- Recipient shall not remove, alter, or obscure any copyright, trademark, patent, or other proprietary notices, legends, or labels contained in or on the Software.
+
+8. Warranty Disclaimer
+- THE SOFTWARE IS PROVIDED "AS IS" AND OWNER DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NONINFRINGEMENT. THIS DISCLAIMER DOES NOT AFFECT OWNER'S RIGHT TO SEEK EQUITABLE RELIEF OR DAMAGES FOR UNAUTHORIZED USE.
+
+9. Limitation of Liability
+- EXCEPT FOR OWNER'S RIGHTS AND REMEDIES FOR UNAUTHORIZED USE (WHICH ARE PRESERVED), IN NO EVENT SHALL OWNER BE LIABLE TO RECIPIENT FOR ANY INDIRECT, INCIDENTAL, CONSEQUENTIAL, SPECIAL, PUNITIVE, OR EXEMPLARY DAMAGES ARISING OUT OF OR RELATED TO THIS LICENSE OR THE SOFTWARE, WHETHER IN CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY, OR OTHERWISE.
+
+10. Governing Law and Venue
+- This License shall be governed by and construed in accordance with the laws of [INSERT STATE/PROVINCE/COUNTRY], without regard to its conflicts of laws rules. The exclusive venue and jurisdiction for any dispute arising out of or related to this License shall be the state and federal courts located in [INSERT CITY, STATE/PROVINCE/COUNTRY]. Recipient consents to personal jurisdiction in those courts.
+
+11. Severability; Waiver; Entire Agreement
+- If any provision of this License is held to be invalid or unenforceable, the remainder of this License shall remain in full force and effect. No waiver by Owner of any breach shall be deemed a waiver of any other or subsequent breach. This License constitutes the entire agreement between the parties regarding the subject matter hereof.
+
+12. Effective Date 21/05/2025 or since intiial commit of this repository
+- Effective Date: the date Recipient first receives, accesses, or uses the Software.
+- Owner: Viljar Võidula
+- Contact: viljar@forgemaster.ai
+
+Footnote — Non-Commercial Fair Use
+- As a limited exception to Sections 2 and 3, non-commercial fair use (e.g., academic evaluation, internal demonstrations, code review excerpts) is permitted provided that, prior to any such use, Recipient contacts the Owner at viljar@forgemaster.ai and receives written confirmation authorizing the specific use.
+- Any such authorization is non-exclusive, non-transferable, revocable at any time, and may be conditioned on additional terms. All other provisions of this License remain in full force and effect unless explicitly modified in the written confirmation.

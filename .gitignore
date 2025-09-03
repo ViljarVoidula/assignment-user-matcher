@@ -28,3 +28,4 @@ client.ts
 docs/.nojekyll
 test.sh
 example.ts
+example/**
