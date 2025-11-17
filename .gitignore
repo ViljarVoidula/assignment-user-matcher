@@ -29,3 +29,4 @@ docs/.nojekyll
 test.sh
 example.ts
 example/**
+assignment-user-matcher-*.tgz

@@ -400,6 +400,16 @@ Contributions are welcome! If you have ideas for improvements, new features, or 
 
 Please open an issue first to discuss significant changes.
 
+## Packaging & Publishing
+
+The npm package only ships the compiled artifacts in `dist/`. Before publishing:
+
+1. Install dependencies: `pnpm install`
+2. Build the library: `pnpm run build`
+3. (Optional) Inspect the publish payload: `pnpm pack --dry-run`
+
+Consumers can `import AssignmentMatcher from 'assignment-user-matcher'` or `const { AssignmentMatcher } = require('assignment-user-matcher')` without running TypeScript themselves.
+
 ## License
 
 This library is licensed under the MIT License. (Assuming MIT - please update if incorrect)

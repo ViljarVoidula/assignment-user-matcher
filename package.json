@@ -1,7 +1,18 @@
 {
     "name": "assignment-user-matcher",
     "version": "1.0.11",
-    "main": "index.js",
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "files": ["dist"],
+    "exports": {
+        "./package.json": "./package.json",
+        ".": {
+            "types": "./dist/index.d.ts",
+            "require": "./dist/index.js",
+            "import": "./dist/index.js"
+        }
+    },
     "author": "Viljar Võidula",
     "license": "MIT",
     "private": false,
@@ -12,7 +23,8 @@
         "test": "nyc mocha tests/ --recursive --extension .ts --exit",
         "build:docs": "npx typedoc --plugin typedoc-plugin-markdown",
         "prettier": "prettier --write .",
-        "build": "rimraf dist && tsc"
+        "build": "rimraf dist && tsc",
+        "prepublishOnly": "pnpm run build"
     },
     "prettier": {
         "semi": true,
