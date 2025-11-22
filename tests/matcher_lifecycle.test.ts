@@ -62,7 +62,7 @@ describe('Matcher Lifecycle Tests', async function () {
 
         // Verify it's back in the pool
         const allAssignments = await matcher.getAllAssignments();
-        expect(allAssignments.find((a) => a.id === 'a1')).to.not.be.undefined;
+        expect(allAssignments.find(a => a.id === 'a1')).to.not.be.undefined;
     });
 
     it('Should process expired matches and return them to pool', async function () {
@@ -77,7 +77,7 @@ describe('Matcher Lifecycle Tests', async function () {
         expect(userAssignments).to.include('a1');
 
         // Wait for expiration
-        await new Promise((resolve) => setTimeout(resolve, 1100));
+        await new Promise(resolve => setTimeout(resolve, 1100));
 
         const processedCount = await matcher.processExpiredMatches();
         expect(processedCount).to.equal(1);
@@ -87,13 +87,13 @@ describe('Matcher Lifecycle Tests', async function () {
 
         // Verify it's back in the pool
         const allAssignments = await matcher.getAllAssignments();
-        expect(allAssignments.find((a) => a.id === 'a1')).to.not.be.undefined;
+        expect(allAssignments.find(a => a.id === 'a1')).to.not.be.undefined;
     });
 
     it('Should throw error when accepting non-existent assignment', async function () {
         const user = { id: 'u1', tags: ['tag1'] };
         await matcher.addUser(user);
-
+        
         try {
             await matcher.acceptAssignment('u1', 'non-existent');
             expect.fail('Should have thrown error');
@@ -105,7 +105,7 @@ describe('Matcher Lifecycle Tests', async function () {
     it('Should throw error when rejecting non-existent assignment', async function () {
         const user = { id: 'u1', tags: ['tag1'] };
         await matcher.addUser(user);
-
+        
         try {
             await matcher.rejectAssignment('u1', 'non-existent');
             expect.fail('Should have thrown error');
@@ -129,14 +129,14 @@ describe('Matcher Lifecycle Tests', async function () {
         matcher.startAutoReleaseInterval(100);
 
         // Wait for expiration (1000ms) + interval check
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
         userAssignments = await matcher.getCurrentAssignmentsForUser('u1');
         expect(userAssignments).to.not.include('a1');
 
         // Verify it's back in the pool
         const allAssignments = await matcher.getAllAssignments();
-        expect(allAssignments.find((a) => a.id === 'a1')).to.not.be.undefined;
+        expect(allAssignments.find(a => a.id === 'a1')).to.not.be.undefined;
 
         matcher.stopAutoReleaseInterval();
     });
