@@ -22,9 +22,9 @@
 
 #### Defined in
 
-[src/matcher.class.ts:5](https://github.com/ViljarVoidula/assignment-user-matcher/blob/0ce32038c772b4e8d42971554926655878f2eeec/src/matcher.class.ts#L5)
+[src/matcher.class.ts:5](https://github.com/ViljarVoidula/assignment-user-matcher/blob/168f33781e93bc95ab7f2c7d42219804cc882522/src/matcher.class.ts#L5)
 
----
+___
 
 ### routingWeights
 
@@ -32,9 +32,9 @@
 
 #### Defined in
 
-[src/matcher.class.ts:9](https://github.com/ViljarVoidula/assignment-user-matcher/blob/0ce32038c772b4e8d42971554926655878f2eeec/src/matcher.class.ts#L9)
+[src/matcher.class.ts:9](https://github.com/ViljarVoidula/assignment-user-matcher/blob/168f33781e93bc95ab7f2c7d42219804cc882522/src/matcher.class.ts#L9)
 
----
+___
 
 ### tags
 
@@ -42,4 +42,4 @@
 
 #### Defined in
 
-[src/matcher.class.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/0ce32038c772b4e8d42971554926655878f2eeec/src/matcher.class.ts#L6)
+[src/matcher.class.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/168f33781e93bc95ab7f2c7d42219804cc882522/src/matcher.class.ts#L6)

@@ -28,6 +28,7 @@ export type options = {
     redisPrefix?: string;
     maxUserBacklogSize?: number;
     enableDefaultMatching?: boolean;
+    matchExpirationMs?: number;
     prioritizationFunction?: (...args: (Assignment | undefined)[]) => Promise<number>;
     matchingFunction?: (
         user: User,
@@ -45,6 +46,11 @@ export default class AssignmentMatcher {
     usersKey: string;
     maxUserBacklogSize: number;
     enableDefaultMatching: boolean;
+    matchExpirationMs: number;
+    pendingAssignmentsKey: string;
+    pendingAssignmentsExpiryKey: string;
+    assignmentOwnerKey: string;
+    allTagsKey: string;
 
     constructor(
         public redisClient: RedisClientType,
@@ -57,6 +63,11 @@ export default class AssignmentMatcher {
         this.assignmentsKey = this.redisPrefix + 'assignments';
         this.assignmentsRefKey = this.redisPrefix + 'assignments:ref';
         this.maxUserBacklogSize = options?.maxUserBacklogSize ?? 9;
+        this.matchExpirationMs = options?.matchExpirationMs ?? 60000;
+        this.pendingAssignmentsKey = this.redisPrefix + 'assignments:pending:data';
+        this.pendingAssignmentsExpiryKey = this.redisPrefix + 'assignments:pending:expiry';
+        this.assignmentOwnerKey = this.redisPrefix + 'assignments:pending:owner';
+        this.allTagsKey = this.redisPrefix + 'all:tags';
         this.calculatePriority = options?.prioritizationFunction ?? this.calculatePriority;
         this.matchScore = options?.matchingFunction ?? this.matchScore;
         this.initRedis();
@@ -118,6 +129,7 @@ export default class AssignmentMatcher {
                 score: Number(priority),
                 value: id,
             });
+            multi.zAdd(this.allTagsKey, { score: 0, value: tag });
         }
 
         await multi.exec();
@@ -132,7 +144,10 @@ export default class AssignmentMatcher {
         // Fetch tags to remove from per-tag indices
         const [tagsCsv] = await this.redisClient.multi().hGet(assignmentTagsKey, 'tags').exec();
 
-        const tags = (typeof tagsCsv === 'string' && tagsCsv.length > 0 ? tagsCsv.split(',') : []) as string[];
+        let tags: string[] = [];
+        if (typeof tagsCsv === 'string' && tagsCsv.length > 0) {
+            tags = tagsCsv.split(',');
+        }
 
         const multi = this.redisClient.multi();
         // Remove from reference and per-assignment hashes
@@ -171,31 +186,69 @@ export default class AssignmentMatcher {
         assignmentPriority: string | number,
         assignmentId?: string,
     ): Promise<[number, number]> {
+        const aTags = assignmentTags ? assignmentTags.split(',') : [];
+        
+        const matchesPattern = (pattern: string, tag: string) => {
+            if (pattern === tag) return true;
+            if (pattern.endsWith('*')) {
+                const prefix = pattern.slice(0, -1);
+                return tag.startsWith(prefix);
+            }
+            return false;
+        };
+
         // If weighted skills are present, use them for scoring
         if (user.routingWeights && Object.keys(user.routingWeights).length > 0) {
-            const aTags = assignmentTags ? assignmentTags.split(',') : [];
-            // If any assignment tag has explicit weight 0, treat as a hard exclude
-            for (const t of aTags) {
-                if (user.routingWeights[t] === 0) {
-                    return [0, Number(assignmentPriority) || 0];
+            // Check for exclusions (weight 0)
+            for (const [pattern, weight] of Object.entries(user.routingWeights)) {
+                if (weight === 0) {
+                    for (const t of aTags) {
+                        if (matchesPattern(pattern, t)) {
+                            return [0, Number(assignmentPriority) || 0];
+                        }
+                    }
                 }
             }
+
             let weightSum = 0;
             for (const t of aTags) {
-                const w = user.routingWeights[t];
-                if (typeof w === 'number' && w > 0) weightSum += w;
+                let matchedByRouting = false;
+                for (const [pattern, weight] of Object.entries(user.routingWeights)) {
+                    if (typeof weight === 'number' && weight > 0) {
+                        if (matchesPattern(pattern, t)) {
+                            weightSum += weight;
+                            matchedByRouting = true;
+                        }
+                    }
+                }
+                
+                // If enableDefaultMatching is true, and the tag is 'default', and it wasn't matched by any routing weight,
+                // we give it default weight 1.
+                if (this.enableDefaultMatching && t === 'default' && !matchedByRouting) {
+                     weightSum += 1;
+                }
             }
             const base = Number(assignmentPriority) || 0;
-            // score: total positive weight overlap; priority: base weighted slightly by weight
             return [weightSum, base + weightSum];
         }
 
         // Fallback to default tag-intersection scoring
         const userTagSet = new Set(user.tags);
-        const assignmentTagSet = new Set((assignmentTags || '').split(',').filter(Boolean));
-        const intersection = new Set([...userTagSet].filter((tag) => assignmentTagSet.has(tag)));
+        const assignmentTagSet = new Set(aTags);
+        
+        let intersectionSize = 0;
+        for (const userTag of userTagSet) {
+            let matched = false;
+            for (const assignmentTag of assignmentTagSet) {
+                if (matchesPattern(userTag, assignmentTag)) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (matched) intersectionSize++;
+        }
 
-        const score = userTagSet.size > 0 ? intersection.size / userTagSet.size : 0;
+        const score = userTagSet.size > 0 ? intersectionSize / userTagSet.size : 0;
         const base = Number(assignmentPriority) || 0;
         return [score || 0, base + (score || 0)];
     }
@@ -313,19 +366,26 @@ export default class AssignmentMatcher {
 
         if (positiveWeights.length === 0) return userAssignments;
 
+        // Expand wildcards
+        const expandedPositive = await this.expandTagWildcards(positiveWeights);
+        const expandedZero = await this.expandTagWildcards(zeroWeightTags.map((t) => ({ tag: t, weight: 0 })));
+        const finalZeroTags = expandedZero.map((t) => t.tag);
+
+        if (expandedPositive.length === 0) return userAssignments;
+
         const tempKey = this.redisPrefix + `tmp:user:${user.id}:candidates`;
         const tempZeroKey = this.redisPrefix + `tmp:user:${user.id}:exclude`;
         const tempFinalKey = this.redisPrefix + `tmp:user:${user.id}:final`;
 
-        const unionKeys = positiveWeights.map((pw) => this.redisPrefix + `tag:${pw.tag}:assignments`);
-        const unionWeights = positiveWeights.map((pw) => pw.weight);
+        const unionKeys = expandedPositive.map((pw) => this.redisPrefix + `tag:${pw.tag}:assignments`);
+        const unionWeights = expandedPositive.map((pw) => pw.weight);
 
         const multi = this.redisClient.multi();
         // Weighted union of positive tag assignment zsets
         multi.zUnionStore(tempKey, unionKeys, { WEIGHTS: unionWeights });
         // Optional exclude set for zero-weight tags
-        if (zeroWeightTags.length > 0) {
-            const zeroKeys = zeroWeightTags.map((t) => this.redisPrefix + `tag:${t}:assignments`);
+        if (finalZeroTags.length > 0) {
+            const zeroKeys = finalZeroTags.map((t) => this.redisPrefix + `tag:${t}:assignments`);
             multi.zUnionStore(tempZeroKey, zeroKeys);
             // Final = candidates - exclude
             multi.zDiffStore(tempFinalKey, [tempKey, tempZeroKey]);
@@ -380,8 +440,16 @@ export default class AssignmentMatcher {
 
         // Batch-remove all selected assignments from indexes and references to reduce round trips
         if (selected.length > 0) {
+            // Fetch JSONs first to store in pending
+            const jsonPromises = selected.map((s) => this.redisClient.hGet(this.assignmentsRefKey, s.id));
+            const jsons = await Promise.all(jsonPromises);
+            const now = Date.now();
+
             const rm = this.redisClient.multi();
-            for (const s of selected) {
+            for (let i = 0; i < selected.length; i++) {
+                const s = selected[i];
+                const json = jsons[i];
+                
                 const assignmentPriorityKey = this.redisPrefix + `assignment:${s.id}:priority`;
                 const assignmentTagsKey = this.redisPrefix + `assignment:${s.id}:tags`;
                 // Remove from reference and per-assignment hashes
@@ -394,6 +462,13 @@ export default class AssignmentMatcher {
                 const tags = (s.tags ? s.tags.split(',').filter(Boolean) : []) as string[];
                 for (const tag of tags) {
                     rm.zRem(this.redisPrefix + `tag:${tag}:assignments`, s.id);
+                }
+
+                // Add to pending structures
+                if (json) {
+                    rm.hSet(this.pendingAssignmentsKey, s.id, json);
+                    rm.zAdd(this.pendingAssignmentsExpiryKey, { score: now + this.matchExpirationMs, value: s.id });
+                    rm.hSet(this.assignmentOwnerKey, s.id, user.id);
                 }
             }
             await rm.exec();
@@ -456,5 +531,110 @@ export default class AssignmentMatcher {
         const userAssignments = await this.redisClient.sMembers(this.redisPrefix + `user:${userId}:assignments`);
 
         return userAssignments.map((el: string) => el.split(':')[1]);
+    }
+
+    async acceptAssignment(userId: string, assignmentId: string): Promise<boolean> {
+        const isAssigned = await this.redisClient.sIsMember(
+            this.redisPrefix + `user:${userId}:assignments`,
+            `assignment:${assignmentId}`,
+        );
+        if (!isAssigned) throw new Error('Assignment not found for user');
+
+        const multi = this.redisClient.multi();
+        multi.sRem(this.redisPrefix + `user:${userId}:assignments`, `assignment:${assignmentId}`);
+        multi.hDel(this.pendingAssignmentsKey, assignmentId);
+        multi.zRem(this.pendingAssignmentsExpiryKey, assignmentId);
+        multi.hDel(this.assignmentOwnerKey, assignmentId);
+        await multi.exec();
+
+        return true;
+    }
+
+    async rejectAssignment(userId: string, assignmentId: string): Promise<boolean> {
+        const isAssigned = await this.redisClient.sIsMember(
+            this.redisPrefix + `user:${userId}:assignments`,
+            `assignment:${assignmentId}`,
+        );
+        if (!isAssigned) throw new Error('Assignment not found for user');
+
+        const json = await this.redisClient.hGet(this.pendingAssignmentsKey, assignmentId);
+        
+        const multi = this.redisClient.multi();
+        multi.sRem(this.redisPrefix + `user:${userId}:assignments`, `assignment:${assignmentId}`);
+        multi.hDel(this.pendingAssignmentsKey, assignmentId);
+        multi.zRem(this.pendingAssignmentsExpiryKey, assignmentId);
+        multi.hDel(this.assignmentOwnerKey, assignmentId);
+        await multi.exec();
+
+        if (json) {
+            await this.addAssignment(JSON.parse(json));
+        }
+
+        return true;
+    }
+
+    async processExpiredMatches(): Promise<number> {
+        const now = Date.now();
+        const expiredIds = await this.redisClient.zRangeByScore(this.pendingAssignmentsExpiryKey, '-inf', now);
+
+        for (const id of expiredIds) {
+            const owner = await this.redisClient.hGet(this.assignmentOwnerKey, id);
+            const json = await this.redisClient.hGet(this.pendingAssignmentsKey, id);
+
+            const multi = this.redisClient.multi();
+            if (owner) {
+                multi.sRem(this.redisPrefix + `user:${owner}:assignments`, `assignment:${id}`);
+            }
+            multi.hDel(this.pendingAssignmentsKey, id);
+            multi.zRem(this.pendingAssignmentsExpiryKey, id);
+            multi.hDel(this.assignmentOwnerKey, id);
+            await multi.exec();
+
+            if (json) {
+                await this.addAssignment(JSON.parse(json));
+            }
+        }
+        return expiredIds.length;
+    }
+
+    private autoReleaseInterval: NodeJS.Timeout | null = null;
+
+    startAutoReleaseInterval(intervalMs: number = 10000) {
+        if (this.autoReleaseInterval) return;
+        this.autoReleaseInterval = setInterval(() => {
+            this.processExpiredMatches().catch(console.error);
+        }, intervalMs);
+    }
+
+    stopAutoReleaseInterval() {
+        if (this.autoReleaseInterval) {
+            clearInterval(this.autoReleaseInterval);
+            this.autoReleaseInterval = null;
+        }
+    }
+
+    private async expandTagWildcards(tags: { tag: string; weight: number }[]): Promise<{ tag: string; weight: number }[]> {
+        const expanded: { tag: string; weight: number }[] = [];
+        const wildcards = tags.filter((t) => t.tag.endsWith('*'));
+        const literals = tags.filter((t) => !t.tag.endsWith('*'));
+
+        expanded.push(...literals);
+
+        if (wildcards.length > 0) {
+            const promises = wildcards.map((w) => {
+                const prefix = w.tag.slice(0, -1);
+                return this.redisClient.zRangeByLex(this.allTagsKey, `[${prefix}`, `[${prefix}\xff`);
+            });
+            const results = await Promise.all(promises);
+
+            for (let i = 0; i < wildcards.length; i++) {
+                const w = wildcards[i];
+                const matchedTags = results[i];
+                for (const tag of matchedTags) {
+                    expanded.push({ tag, weight: w.weight });
+                }
+            }
+        }
+        return expanded;
     }
 }
