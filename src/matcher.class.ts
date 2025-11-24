@@ -169,6 +169,7 @@ export default class AssignmentMatcher {
         const multi = this.redisClient
             .multi()
             .del(this.redisPrefix + `user:${userId}:assignments`)
+            .del(this.redisPrefix + `user:${userId}:rejected`)
             .hDel(this.usersKey, userId);
         await multi.exec();
 
@@ -376,6 +377,7 @@ export default class AssignmentMatcher {
         const tempKey = this.redisPrefix + `tmp:user:${user.id}:candidates`;
         const tempZeroKey = this.redisPrefix + `tmp:user:${user.id}:exclude`;
         const tempFinalKey = this.redisPrefix + `tmp:user:${user.id}:final`;
+        const rejectedKey = this.redisPrefix + `user:${user.id}:rejected`;
 
         const unionKeys = expandedPositive.map((pw) => this.redisPrefix + `tag:${pw.tag}:assignments`);
         const unionWeights = expandedPositive.map((pw) => pw.weight);
@@ -383,22 +385,25 @@ export default class AssignmentMatcher {
         const multi = this.redisClient.multi();
         // Weighted union of positive tag assignment zsets
         multi.zUnionStore(tempKey, unionKeys, { WEIGHTS: unionWeights });
+        
+        const excludeKeys: string[] = [];
         // Optional exclude set for zero-weight tags
         if (finalZeroTags.length > 0) {
             const zeroKeys = finalZeroTags.map((t) => this.redisPrefix + `tag:${t}:assignments`);
             multi.zUnionStore(tempZeroKey, zeroKeys);
-            // Final = candidates - exclude
-            multi.zDiffStore(tempFinalKey, [tempKey, tempZeroKey]);
-            // Set short TTLs to clean up
-            multi.expire(tempKey, 5);
             multi.expire(tempZeroKey, 5);
-            multi.expire(tempFinalKey, 5);
-        } else {
-            // No exclude; just use tempKey as final (copy into final for uniformity)
-            multi.zUnionStore(tempFinalKey, [tempKey]);
-            multi.expire(tempKey, 5);
-            multi.expire(tempFinalKey, 5);
+            excludeKeys.push(tempZeroKey);
         }
+        
+        // Always exclude rejected assignments
+        excludeKeys.push(rejectedKey);
+
+        // Final = candidates - exclude (zero weights + rejected)
+        multi.zDiffStore(tempFinalKey, [tempKey, ...excludeKeys]);
+        
+        // Set short TTLs to clean up
+        multi.expire(tempKey, 5);
+        multi.expire(tempFinalKey, 5);
 
         await multi.exec();
 
@@ -564,6 +569,10 @@ export default class AssignmentMatcher {
         multi.hDel(this.pendingAssignmentsKey, assignmentId);
         multi.zRem(this.pendingAssignmentsExpiryKey, assignmentId);
         multi.hDel(this.assignmentOwnerKey, assignmentId);
+        
+        // Add to rejected list to prevent immediate re-assignment
+        multi.sAdd(this.redisPrefix + `user:${userId}:rejected`, assignmentId);
+        
         await multi.exec();
 
         if (json) {
