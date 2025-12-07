@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-        "target": "ES2019",
+        "target": "ES2020",
         "module": "commonjs",
         "moduleResolution": "node",
         "forceConsistentCasingInFileNames": true,
@@ -8,7 +8,7 @@
         "outDir": "dist",
         "declaration": true,
         "declarationMap": true,
-        "lib": ["es2019", "dom"],
+        "lib": ["es2020", "dom"],
         "allowSyntheticDefaultImports": true,
         "experimentalDecorators": true,
         "strict": true,
