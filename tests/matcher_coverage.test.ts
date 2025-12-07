@@ -52,9 +52,9 @@ describe('Matcher Coverage Tests', async function () {
         const result = await matcher.removeAssignment(assignmentId);
         expect(result).to.equal(assignmentId);
         
-        // Verify it's gone
+        // Verify it's gone (hExists returns 0 or 1 in redis 5.x)
         const exists = await redisClient.hExists(matcher.assignmentsRefKey, assignmentId);
-        expect(exists).to.be.false;
+        expect(exists).to.equal(0);
     });
 
     it('Should handle removing non-existent assignment', async function () {

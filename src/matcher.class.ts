@@ -149,10 +149,10 @@ export default class AssignmentMatcher {
         const assignmentTagsKey = this.redisPrefix + `assignment:${id}:tags`;
 
         // Fetch tags to remove from per-tag indices
-        const [tagsCsv] = await this.redisClient.multi().hGet(assignmentTagsKey, 'tags').exec();
+        const [tagsCsv] = await this.redisClient.multi().hGet(assignmentTagsKey, 'tags').exec() as unknown as [string | null];
 
         let tags: string[] = [];
-        if (typeof tagsCsv === 'string' && tagsCsv.length > 0) {
+        if (tagsCsv && tagsCsv.length > 0) {
             tags = tagsCsv.split(',');
         }
 
@@ -452,8 +452,8 @@ export default class AssignmentMatcher {
             .multi()
             .hExists(this.assignmentsRefKey, id)
             .hGet(assignmentTagsKey, 'tags')
-            .exec();
-        const tags = (typeof tagsCsv === 'string' && tagsCsv.length > 0 ? tagsCsv.split(',') : []) as string[];
+            .exec() as unknown as [boolean, string | null];
+        const tags = (tagsCsv && tagsCsv.length > 0 ? tagsCsv.split(',') : []) as string[];
 
         const multi = this.redisClient.multi();
         multi.hSet(assignmentPriorityKey, 'priority', priority);
@@ -538,18 +538,22 @@ export default class AssignmentMatcher {
         const tempFinalKey = this.redisPrefix + `tmp:user:${user.id}:final`;
         const rejectedKey = this.redisPrefix + `user:${user.id}:rejected`;
 
-        const unionKeys = expandedPositive.map((pw) => this.redisPrefix + `tag:${pw.tag}:assignments`);
-        const unionWeights = expandedPositive.map((pw) => pw.weight);
+        const unionKeysWithWeights = expandedPositive.map((pw) => ({
+            key: this.redisPrefix + `tag:${pw.tag}:assignments`,
+            weight: pw.weight
+        }));
 
         const multi = this.redisClient.multi();
         // Weighted union of positive tag assignment zsets
-        multi.zUnionStore(tempKey, unionKeys, { WEIGHTS: unionWeights });
+        if (unionKeysWithWeights.length > 0) {
+            multi.zUnionStore(tempKey, unionKeysWithWeights as [typeof unionKeysWithWeights[0], ...typeof unionKeysWithWeights]);
+        }
         
         const excludeKeys: string[] = [];
         // Optional exclude set for zero-weight tags
         if (finalZeroTags.length > 0) {
             const zeroKeys = finalZeroTags.map((t) => this.redisPrefix + `tag:${t}:assignments`);
-            multi.zUnionStore(tempZeroKey, zeroKeys);
+            multi.zUnionStore(tempZeroKey, zeroKeys as [string, ...string[]]);
             multi.expire(tempZeroKey, 5);
             excludeKeys.push(tempZeroKey);
         }
@@ -582,13 +586,13 @@ export default class AssignmentMatcher {
             // Also fetch assignment JSON to access allowedCidrs for network matching
             batched.hGet(this.assignmentsRefKey, assignmentId);
         }
-        const flat = await batched.exec();
+        const flat = await batched.exec() as unknown as (string | null)[];
         const details = [] as Array<{ id: string; basePriority: number; tags: string; allowedCidrs?: string[] }>;
         for (let i = 0; i < top.length; i++) {
             const assignmentId = (top[i] as any).value;
             const priority = Number(flat[i * 3]) || 0;
             const tags = String(flat[i * 3 + 1] || '');
-            const assignmentJson = flat[i * 3 + 2] as string | null;
+            const assignmentJson = flat[i * 3 + 2];
             let allowedCidrs: string[] | undefined;
             if (assignmentJson) {
                 try {
@@ -680,14 +684,14 @@ export default class AssignmentMatcher {
 
         // Otherwise, process all users in parallel as before.
         let users: any[] = [];
-        let cursor = 0;
+        let cursor = '0';
 
         // Fetch all users in a single loop
         do {
-            const { cursor: nextCursor, tuples } = await this.redisClient.hScan(this.usersKey, cursor);
-            users.push(...tuples.map((t: { value: string }) => JSON.parse(t.value)));
+            const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.usersKey, cursor);
+            users.push(...entries.map((t: { field: string; value: string }) => JSON.parse(t.value)));
             cursor = nextCursor;
-        } while (cursor !== 0);
+        } while (cursor !== '0');
 
         // Process users in parallel
         await Promise.all(

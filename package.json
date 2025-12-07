@@ -19,7 +19,7 @@
     "license": "MIT",
     "private": false,
     "dependencies": {
-        "redis": "^4.7.1"
+        "redis": "5.10.0"
     },
     "scripts": {
         "test": "nyc mocha tests/ --recursive --extension .ts --exit",
