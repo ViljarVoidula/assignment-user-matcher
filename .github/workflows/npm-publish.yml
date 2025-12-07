@@ -53,6 +53,8 @@ jobs:
             FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: true
         needs: test
         if: success() && startsWith(github.ref, 'refs/tags/')
+        permissions:
+            id-token: write
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
@@ -77,6 +79,4 @@ jobs:
               run: pnpm run build # Runs "rimraf dist && tsc"
 
             - name: Publish to NPM
-              run: pnpm publish --no-git-checks
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+              run: pnpm publish --no-git-checks --provenance
