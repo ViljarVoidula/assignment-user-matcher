@@ -58,6 +58,7 @@ export default class AssignmentMatcher {
     pendingAssignmentsExpiryKey: string;
     assignmentOwnerKey: string;
     allTagsKey: string;
+    acceptedAssignmentsKey: string;
 
     constructor(
         public redisClient: RedisClientType,
@@ -75,6 +76,7 @@ export default class AssignmentMatcher {
         this.pendingAssignmentsExpiryKey = this.redisPrefix + 'assignments:pending:expiry';
         this.assignmentOwnerKey = this.redisPrefix + 'assignments:pending:owner';
         this.allTagsKey = this.redisPrefix + 'all:tags';
+        this.acceptedAssignmentsKey = this.redisPrefix + 'assignments:accepted';
         this.calculatePriority = options?.prioritizationFunction ?? this.calculatePriority;
         this.matchScore = options?.matchingFunction ?? this.matchScore;
         this.initRedis();
@@ -183,9 +185,267 @@ export default class AssignmentMatcher {
         return userId;
     }
 
+    /**
+     * Get all assignments (queued, pending, and accepted).
+     * For large datasets, prefer using getAssignmentsPaginated() instead.
+     */
     async getAllAssignments(): Promise<Assignment[]> {
-        const assignments = await this.redisClient.hGetAll(this.assignmentsRefKey);
-        return Object.values(assignments).map((assignment) => JSON.parse(assignment));
+        const [queuedAssignments, pendingAssignments, acceptedAssignments] = await Promise.all([
+            this.redisClient.hGetAll(this.assignmentsRefKey),
+            this.redisClient.hGetAll(this.pendingAssignmentsKey),
+            this.redisClient.hGetAll(this.acceptedAssignmentsKey),
+        ]);
+        
+        const allAssignments = { ...queuedAssignments, ...pendingAssignments, ...acceptedAssignments };
+        return Object.values(allAssignments).map((assignment) => JSON.parse(assignment));
+    }
+
+    /**
+     * Get assignments with pagination support for efficient querying of large datasets.
+     * Uses cursor-based pagination across statuses.
+     * 
+     * @param options.cursor - Cursor for pagination (null/undefined for first page)
+     * @param options.limit - Maximum number of assignments to return per page (default: 100)
+     * @param options.status - Filter by status: 'queued' | 'pending' | 'accepted' | 'all' (default: 'all')
+     * @param options.includeTotal - Whether to include total count (slower for large datasets)
+     */
+    async getAssignmentsPaginated(options?: {
+        cursor?: string | null;
+        limit?: number;
+        status?: 'queued' | 'pending' | 'accepted' | 'all';
+        includeTotal?: boolean;
+    }): Promise<{
+        assignments: Assignment[];
+        nextCursor: string | null;
+        hasMore: boolean;
+        total?: number;
+    }> {
+        const limit = options?.limit ?? 100;
+        const status = options?.status ?? 'all';
+        const includeTotal = options?.includeTotal ?? false;
+
+        const getKeyForStatus = (s: 'queued' | 'pending' | 'accepted'): string => {
+            switch (s) {
+                case 'queued': return this.assignmentsRefKey;
+                case 'pending': return this.pendingAssignmentsKey;
+                case 'accepted': return this.acceptedAssignmentsKey;
+            }
+        };
+
+        const statusOrder: Array<'queued' | 'pending' | 'accepted'> = 
+            status === 'all' ? ['queued', 'pending', 'accepted'] : [status];
+
+        // Parse cursor: "statusIndex:offset" where offset is how many we've seen in current status
+        let statusIndex = 0;
+        let offset = 0;
+
+        if (options?.cursor) {
+            const parts = options.cursor.split(':');
+            statusIndex = parseInt(parts[0], 10) || 0;
+            offset = parseInt(parts[1], 10) || 0;
+        }
+
+        const assignments: Assignment[] = [];
+        let nextCursor: string | null = null;
+        let hasMore = false;
+
+        while (assignments.length < limit && statusIndex < statusOrder.length) {
+            const scanStatus = statusOrder[statusIndex];
+            const key = getKeyForStatus(scanStatus);
+
+            // Get count for this status
+            const totalInStatus = await this.redisClient.hLen(key);
+            const remainingInStatus = totalInStatus - offset;
+
+            if (remainingInStatus <= 0) {
+                // Move to next status
+                statusIndex++;
+                offset = 0;
+                continue;
+            }
+
+            // Scan to get entries - we need to scan through and skip offset entries
+            const needed = limit - assignments.length;
+            let scanned = 0;
+            let cursor = '0';
+            const seenIds = new Set<string>();
+
+            do {
+                const { cursor: newCursor, entries } = await this.redisClient.hScan(key, cursor, {
+                    COUNT: Math.max(needed + offset - scanned, 100),
+                });
+
+                for (const entry of entries) {
+                    if (seenIds.has(entry.field)) continue; // Skip duplicates from HSCAN
+                    seenIds.add(entry.field);
+
+                    if (scanned < offset) {
+                        scanned++;
+                        continue; // Skip already-seen entries
+                    }
+
+                    if (assignments.length >= limit) {
+                        // We have enough, set cursor for next page
+                        nextCursor = `${statusIndex}:${offset + (assignments.length - (assignments.filter(a => (a as any)._status === scanStatus).length - 1))}`;
+                        hasMore = true;
+                        break;
+                    }
+
+                    try {
+                        const assignment = JSON.parse(entry.value);
+                        assignment._status = scanStatus;
+                        assignments.push(assignment);
+                    } catch {
+                        // Skip invalid JSON
+                    }
+                    scanned++;
+                }
+
+                cursor = newCursor;
+            } while (cursor !== '0' && assignments.length < limit);
+
+            if (assignments.length >= limit) {
+                // Calculate correct offset for resume
+                const countFromCurrentStatus = assignments.filter(a => (a as any)._status === scanStatus).length;
+                nextCursor = `${statusIndex}:${offset + countFromCurrentStatus}`;
+                hasMore = true;
+                break;
+            }
+
+            // Move to next status
+            statusIndex++;
+            offset = 0;
+        }
+
+        // Check if there's more data in remaining statuses
+        if (!hasMore && statusIndex < statusOrder.length) {
+            for (let i = statusIndex; i < statusOrder.length; i++) {
+                const count = await this.redisClient.hLen(getKeyForStatus(statusOrder[i]));
+                const processedInThisStatus = i === statusIndex ? offset : 0;
+                if (count > processedInThisStatus) {
+                    nextCursor = `${i}:${processedInThisStatus}`;
+                    hasMore = true;
+                    break;
+                }
+            }
+        }
+
+        const result: {
+            assignments: Assignment[];
+            nextCursor: string | null;
+            hasMore: boolean;
+            total?: number;
+        } = {
+            assignments,
+            nextCursor: hasMore ? nextCursor : null,
+            hasMore,
+        };
+
+        // Optionally include total count
+        if (includeTotal) {
+            if (status === 'all') {
+                const [queuedCount, pendingCount, acceptedCount] = await Promise.all([
+                    this.redisClient.hLen(this.assignmentsRefKey),
+                    this.redisClient.hLen(this.pendingAssignmentsKey),
+                    this.redisClient.hLen(this.acceptedAssignmentsKey),
+                ]);
+                result.total = queuedCount + pendingCount + acceptedCount;
+            } else {
+                result.total = await this.redisClient.hLen(getKeyForStatus(status));
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Get assignment counts by status without fetching the data.
+     * Efficient for dashboards and monitoring.
+     */
+    async getAssignmentCounts(): Promise<{
+        queued: number;
+        pending: number;
+        accepted: number;
+        total: number;
+    }> {
+        const [queued, pending, accepted] = await Promise.all([
+            this.redisClient.hLen(this.assignmentsRefKey),
+            this.redisClient.hLen(this.pendingAssignmentsKey),
+            this.redisClient.hLen(this.acceptedAssignmentsKey),
+        ]);
+
+        return {
+            queued,
+            pending,
+            accepted,
+            total: queued + pending + accepted,
+        };
+    }
+
+    /**
+     * Get a single assignment by ID from any status.
+     */
+    async getAssignment(id: string): Promise<(Assignment & { _status?: string }) | null> {
+        // Check all three stores in parallel
+        const [queued, pending, accepted] = await Promise.all([
+            this.redisClient.hGet(this.assignmentsRefKey, id),
+            this.redisClient.hGet(this.pendingAssignmentsKey, id),
+            this.redisClient.hGet(this.acceptedAssignmentsKey, id),
+        ]);
+
+        if (queued) {
+            const assignment = JSON.parse(queued);
+            assignment._status = 'queued';
+            return assignment;
+        }
+        if (pending) {
+            const assignment = JSON.parse(pending);
+            assignment._status = 'pending';
+            return assignment;
+        }
+        if (accepted) {
+            const assignment = JSON.parse(accepted);
+            assignment._status = 'accepted';
+            return assignment;
+        }
+
+        return null;
+    }
+
+    /**
+     * Get multiple assignments by IDs efficiently.
+     */
+    async getAssignmentsByIds(ids: string[]): Promise<Assignment[]> {
+        if (ids.length === 0) return [];
+
+        const multi = this.redisClient.multi();
+        for (const id of ids) {
+            multi.hGet(this.assignmentsRefKey, id);
+            multi.hGet(this.pendingAssignmentsKey, id);
+            multi.hGet(this.acceptedAssignmentsKey, id);
+        }
+
+        const results = await multi.exec() as unknown as (string | null)[];
+        const assignments: Assignment[] = [];
+
+        for (let i = 0; i < ids.length; i++) {
+            const queued = results[i * 3];
+            const pending = results[i * 3 + 1];
+            const accepted = results[i * 3 + 2];
+
+            const json = queued || pending || accepted;
+            if (json) {
+                try {
+                    const assignment = JSON.parse(json);
+                    assignment._status = queued ? 'queued' : pending ? 'pending' : 'accepted';
+                    assignments.push(assignment);
+                } catch {
+                    // Skip invalid JSON
+                }
+            }
+        }
+
+        return assignments;
     }
 
     // ==================== CIDR/IP Matching Utilities ====================
@@ -726,11 +986,19 @@ export default class AssignmentMatcher {
         );
         if (!isAssigned) throw new Error('Assignment not found for user');
 
+        // Get the assignment JSON before removing from pending
+        const json = await this.redisClient.hGet(this.pendingAssignmentsKey, assignmentId);
+
         const multi = this.redisClient.multi();
         multi.sRem(this.redisPrefix + `user:${userId}:assignments`, `assignment:${assignmentId}`);
         multi.hDel(this.pendingAssignmentsKey, assignmentId);
         multi.zRem(this.pendingAssignmentsExpiryKey, assignmentId);
         multi.hDel(this.assignmentOwnerKey, assignmentId);
+        
+        // Store in accepted assignments
+        if (json) {
+            multi.hSet(this.acceptedAssignmentsKey, assignmentId, json);
+        }
         await multi.exec();
 
         return true;
