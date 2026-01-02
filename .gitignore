@@ -31,3 +31,4 @@ example.ts
 example/**
 assignment-user-matcher-*.tgz
 benchmark-wildcards.ts
+docs/prds/deterministic-workflows.md

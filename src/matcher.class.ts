@@ -1,49 +1,20 @@
-import { createClient } from 'redis';
-export type RedisClientType = ReturnType<typeof createClient>;
+import { checkCidrMatch } from './utils/cidr';
+import { createKeyBuilders, type KeyBuilders } from './utils/keys';
+import {
+    getAllAssignmentsFromStores,
+    getAssignmentCountsFromStores,
+    getAssignmentById,
+    getAssignmentsByIdsBatch,
+    getAssignmentsPaginatedFromStores,
+    type PaginationOptions,
+    type PaginationResult,
+    type AssignmentCounts,
+} from './queries/pagination';
+import { calculateMatchScore, calculateDefaultPriority } from './scoring/match-score';
+import type { RedisClientType, User, Assignment, Stats, MatcherOptions, options } from './types/matcher';
 
-export interface User {
-    id: string;
-    tags: string[];
-    // Optional routing weights per tag; if present, matching will use these weights.
-    // Example: { english: 100, dutch: 30, brazil: 100, german: 0 }
-    routingWeights?: Record<string, number>;
-    // Optional IP address for network-based matching (IPv4 or IPv6)
-    // Example: '192.168.1.100' or '2001:db8::1'
-    ip?: string;
-    [key: string]: any;
-}
-
-export type Assignment = {
-    id: string;
-    tags: string[];
-    priority?: number;
-    // Optional CIDR ranges that restrict which users can receive this assignment
-    // If specified, only users with IPs within these ranges will be matched
-    // Supports both IPv4 (e.g., '192.168.1.0/24') and IPv6 (e.g., '2001:db8::/32')
-    allowedCidrs?: string[];
-    [key: string]: any;
-};
-
-export type Stats = {
-    users?: number;
-    usersWithoutAssignment?: string[];
-    remainingAssignments?: number;
-};
-
-export type options = {
-    relevantBatchSize?: number;
-    redisPrefix?: string;
-    maxUserBacklogSize?: number;
-    enableDefaultMatching?: boolean;
-    matchExpirationMs?: number;
-    prioritizationFunction?: (...args: (Assignment | undefined)[]) => Promise<number>;
-    matchingFunction?: (
-        user: User,
-        assignmentTags: string,
-        assignmentPriority: number | string,
-        assignmentId?: string,
-    ) => Promise<[number, number]>;
-};
+// Re-export types for backwards compatibility
+export type { RedisClientType, User, Assignment, Stats, MatcherOptions, options } from './types/matcher';
 
 export default class AssignmentMatcher {
     relevantBatchSize: number;
@@ -59,6 +30,7 @@ export default class AssignmentMatcher {
     assignmentOwnerKey: string;
     allTagsKey: string;
     acceptedAssignmentsKey: string;
+    private keys: KeyBuilders;
 
     constructor(
         public redisClient: RedisClientType,
@@ -67,19 +39,32 @@ export default class AssignmentMatcher {
         this.relevantBatchSize = options?.relevantBatchSize ?? 50;
         this.enableDefaultMatching = options?.enableDefaultMatching ?? true;
         this.redisPrefix = options?.redisPrefix ?? '';
-        this.usersKey = this.redisPrefix + 'users';
-        this.assignmentsKey = this.redisPrefix + 'assignments';
-        this.assignmentsRefKey = this.redisPrefix + 'assignments:ref';
+        
+        // Initialize key builders
+        this.keys = createKeyBuilders({ prefix: this.redisPrefix });
+        
+        this.usersKey = this.keys.users();
+        this.assignmentsKey = this.keys.assignments();
+        this.assignmentsRefKey = this.keys.assignmentsRef();
         this.maxUserBacklogSize = options?.maxUserBacklogSize ?? 9;
         this.matchExpirationMs = options?.matchExpirationMs ?? 60000;
-        this.pendingAssignmentsKey = this.redisPrefix + 'assignments:pending:data';
-        this.pendingAssignmentsExpiryKey = this.redisPrefix + 'assignments:pending:expiry';
-        this.assignmentOwnerKey = this.redisPrefix + 'assignments:pending:owner';
-        this.allTagsKey = this.redisPrefix + 'all:tags';
-        this.acceptedAssignmentsKey = this.redisPrefix + 'assignments:accepted';
+        this.pendingAssignmentsKey = this.keys.pendingAssignmentsData();
+        this.pendingAssignmentsExpiryKey = this.keys.pendingAssignmentsExpiry();
+        this.assignmentOwnerKey = this.keys.assignmentOwner();
+        this.allTagsKey = this.keys.allTags();
+        this.acceptedAssignmentsKey = this.keys.acceptedAssignments();
         this.calculatePriority = options?.prioritizationFunction ?? this.calculatePriority;
-        this.matchScore = options?.matchingFunction ?? this.matchScore;
+        this.matchScore = options?.matchingFunction ?? this.defaultMatchScore.bind(this);
         this.initRedis();
+    }
+
+    /** Keys for the three assignment stores (used by pagination queries) */
+    private get assignmentStoreKeys() {
+        return {
+            queued: this.assignmentsRefKey,
+            pending: this.pendingAssignmentsKey,
+            accepted: this.acceptedAssignmentsKey,
+        };
     }
 
     private async initRedis() {
@@ -107,9 +92,9 @@ export default class AssignmentMatcher {
         let { id, tags, priority, latitude, longitude } = assignment;
         if (!priority) priority = await this.calculatePriority(assignment);
 
-        const assignmentPriorityKey = this.redisPrefix + `assignment:${id}:priority`;
-        const assignmentTagsKey = this.redisPrefix + `assignment:${id}:tags`;
-        const assignmentGeoKey = this.redisPrefix + `assignments:geo`;
+        const assignmentPriorityKey = this.keys.assignmentPriority(id);
+        const assignmentTagsKey = this.keys.assignmentTags(id);
+        const assignmentGeoKey = this.keys.assignmentsGeo();
 
         const multi = this.redisClient
             .multi()
@@ -134,7 +119,7 @@ export default class AssignmentMatcher {
         // This enables efficient weighted matching via ZUNIONSTORE.
         const indexTags = [...tags, ...(this.enableDefaultMatching ? ['default'] : [])];
         for (const tag of indexTags) {
-            multi.zAdd(this.redisPrefix + `tag:${tag}:assignments`, {
+            multi.zAdd(this.keys.tagAssignments(tag), {
                 score: Number(priority),
                 value: id,
             });
@@ -147,11 +132,15 @@ export default class AssignmentMatcher {
     }
 
     async removeAssignment(id: string) {
-        const assignmentPriorityKey = this.redisPrefix + `assignment:${id}:priority`;
-        const assignmentTagsKey = this.redisPrefix + `assignment:${id}:tags`;
+        const assignmentPriorityKey = this.keys.assignmentPriority(id);
+        const assignmentTagsKey = this.keys.assignmentTags(id);
+        const assignmentGeoKey = this.keys.assignmentsGeo();
 
-        // Fetch tags to remove from per-tag indices
-        const [tagsCsv] = await this.redisClient.multi().hGet(assignmentTagsKey, 'tags').exec() as unknown as [string | null];
+        // Fetch tags and owner in case it's pending
+        const [tagsCsv, owner] = await Promise.all([
+            this.redisClient.hGet(assignmentTagsKey, 'tags'),
+            this.redisClient.hGet(this.assignmentOwnerKey, id)
+        ]);
 
         let tags: string[] = [];
         if (tagsCsv && tagsCsv.length > 0) {
@@ -159,16 +148,27 @@ export default class AssignmentMatcher {
         }
 
         const multi = this.redisClient.multi();
-        // Remove from reference and per-assignment hashes
+        
+        // 1. Remove from Queued state
         multi.hDel(this.assignmentsRefKey, id);
         multi.del(assignmentPriorityKey);
         multi.del(assignmentTagsKey);
-        // Remove from global zset
         multi.zRem(this.assignmentsKey, id.toString());
-        // Remove from per-tag zsets
         for (const tag of tags) {
-            multi.zRem(this.redisPrefix + `tag:${tag}:assignments`, id.toString());
+            multi.zRem(this.keys.tagAssignments(tag), id.toString());
         }
+        multi.zRem(assignmentGeoKey, id.toString());
+
+        // 2. Remove from Pending state
+        multi.hDel(this.pendingAssignmentsKey, id);
+        multi.zRem(this.pendingAssignmentsExpiryKey, id);
+        multi.hDel(this.assignmentOwnerKey, id);
+        if (owner) {
+            multi.sRem(this.keys.userAssignments(owner), `assignment:${id}`);
+        }
+
+        // 3. Remove from Accepted state
+        multi.hDel(this.acceptedAssignmentsKey, id);
 
         await multi.exec();
         return id;
@@ -177,8 +177,8 @@ export default class AssignmentMatcher {
     async removeUser(userId: string): Promise<string> {
         const multi = this.redisClient
             .multi()
-            .del(this.redisPrefix + `user:${userId}:assignments`)
-            .del(this.redisPrefix + `user:${userId}:rejected`)
+            .del(this.keys.userAssignments(userId))
+            .del(this.keys.userRejected(userId))
             .hDel(this.usersKey, userId);
         await multi.exec();
 
@@ -190,14 +190,7 @@ export default class AssignmentMatcher {
      * For large datasets, prefer using getAssignmentsPaginated() instead.
      */
     async getAllAssignments(): Promise<Assignment[]> {
-        const [queuedAssignments, pendingAssignments, acceptedAssignments] = await Promise.all([
-            this.redisClient.hGetAll(this.assignmentsRefKey),
-            this.redisClient.hGetAll(this.pendingAssignmentsKey),
-            this.redisClient.hGetAll(this.acceptedAssignmentsKey),
-        ]);
-        
-        const allAssignments = { ...queuedAssignments, ...pendingAssignments, ...acceptedAssignments };
-        return Object.values(allAssignments).map((assignment) => JSON.parse(assignment));
+        return getAllAssignmentsFromStores(this.redisClient, this.assignmentStoreKeys);
     }
 
     /**
@@ -209,472 +202,52 @@ export default class AssignmentMatcher {
      * @param options.status - Filter by status: 'queued' | 'pending' | 'accepted' | 'all' (default: 'all')
      * @param options.includeTotal - Whether to include total count (slower for large datasets)
      */
-    async getAssignmentsPaginated(options?: {
-        cursor?: string | null;
-        limit?: number;
-        status?: 'queued' | 'pending' | 'accepted' | 'all';
-        includeTotal?: boolean;
-    }): Promise<{
-        assignments: Assignment[];
-        nextCursor: string | null;
-        hasMore: boolean;
-        total?: number;
-    }> {
-        const limit = options?.limit ?? 100;
-        const status = options?.status ?? 'all';
-        const includeTotal = options?.includeTotal ?? false;
-
-        const getKeyForStatus = (s: 'queued' | 'pending' | 'accepted'): string => {
-            switch (s) {
-                case 'queued': return this.assignmentsRefKey;
-                case 'pending': return this.pendingAssignmentsKey;
-                case 'accepted': return this.acceptedAssignmentsKey;
-            }
-        };
-
-        const statusOrder: Array<'queued' | 'pending' | 'accepted'> = 
-            status === 'all' ? ['queued', 'pending', 'accepted'] : [status];
-
-        // Parse cursor: "statusIndex:offset" where offset is how many we've seen in current status
-        let statusIndex = 0;
-        let offset = 0;
-
-        if (options?.cursor) {
-            const parts = options.cursor.split(':');
-            statusIndex = parseInt(parts[0], 10) || 0;
-            offset = parseInt(parts[1], 10) || 0;
-        }
-
-        const assignments: Assignment[] = [];
-        let nextCursor: string | null = null;
-        let hasMore = false;
-
-        while (assignments.length < limit && statusIndex < statusOrder.length) {
-            const scanStatus = statusOrder[statusIndex];
-            const key = getKeyForStatus(scanStatus);
-
-            // Get count for this status
-            const totalInStatus = await this.redisClient.hLen(key);
-            const remainingInStatus = totalInStatus - offset;
-
-            if (remainingInStatus <= 0) {
-                // Move to next status
-                statusIndex++;
-                offset = 0;
-                continue;
-            }
-
-            // Scan to get entries - we need to scan through and skip offset entries
-            const needed = limit - assignments.length;
-            let scanned = 0;
-            let cursor = '0';
-            const seenIds = new Set<string>();
-
-            do {
-                const { cursor: newCursor, entries } = await this.redisClient.hScan(key, cursor, {
-                    COUNT: Math.max(needed + offset - scanned, 100),
-                });
-
-                for (const entry of entries) {
-                    if (seenIds.has(entry.field)) continue; // Skip duplicates from HSCAN
-                    seenIds.add(entry.field);
-
-                    if (scanned < offset) {
-                        scanned++;
-                        continue; // Skip already-seen entries
-                    }
-
-                    if (assignments.length >= limit) {
-                        // We have enough, set cursor for next page
-                        nextCursor = `${statusIndex}:${offset + (assignments.length - (assignments.filter(a => (a as any)._status === scanStatus).length - 1))}`;
-                        hasMore = true;
-                        break;
-                    }
-
-                    try {
-                        const assignment = JSON.parse(entry.value);
-                        assignment._status = scanStatus;
-                        assignments.push(assignment);
-                    } catch {
-                        // Skip invalid JSON
-                    }
-                    scanned++;
-                }
-
-                cursor = newCursor;
-            } while (cursor !== '0' && assignments.length < limit);
-
-            if (assignments.length >= limit) {
-                // Calculate correct offset for resume
-                const countFromCurrentStatus = assignments.filter(a => (a as any)._status === scanStatus).length;
-                nextCursor = `${statusIndex}:${offset + countFromCurrentStatus}`;
-                hasMore = true;
-                break;
-            }
-
-            // Move to next status
-            statusIndex++;
-            offset = 0;
-        }
-
-        // Check if there's more data in remaining statuses
-        if (!hasMore && statusIndex < statusOrder.length) {
-            for (let i = statusIndex; i < statusOrder.length; i++) {
-                const count = await this.redisClient.hLen(getKeyForStatus(statusOrder[i]));
-                const processedInThisStatus = i === statusIndex ? offset : 0;
-                if (count > processedInThisStatus) {
-                    nextCursor = `${i}:${processedInThisStatus}`;
-                    hasMore = true;
-                    break;
-                }
-            }
-        }
-
-        const result: {
-            assignments: Assignment[];
-            nextCursor: string | null;
-            hasMore: boolean;
-            total?: number;
-        } = {
-            assignments,
-            nextCursor: hasMore ? nextCursor : null,
-            hasMore,
-        };
-
-        // Optionally include total count
-        if (includeTotal) {
-            if (status === 'all') {
-                const [queuedCount, pendingCount, acceptedCount] = await Promise.all([
-                    this.redisClient.hLen(this.assignmentsRefKey),
-                    this.redisClient.hLen(this.pendingAssignmentsKey),
-                    this.redisClient.hLen(this.acceptedAssignmentsKey),
-                ]);
-                result.total = queuedCount + pendingCount + acceptedCount;
-            } else {
-                result.total = await this.redisClient.hLen(getKeyForStatus(status));
-            }
-        }
-
-        return result;
+    async getAssignmentsPaginated(options?: PaginationOptions): Promise<PaginationResult> {
+        return getAssignmentsPaginatedFromStores(this.redisClient, this.assignmentStoreKeys, options);
     }
 
     /**
      * Get assignment counts by status without fetching the data.
      * Efficient for dashboards and monitoring.
      */
-    async getAssignmentCounts(): Promise<{
-        queued: number;
-        pending: number;
-        accepted: number;
-        total: number;
-    }> {
-        const [queued, pending, accepted] = await Promise.all([
-            this.redisClient.hLen(this.assignmentsRefKey),
-            this.redisClient.hLen(this.pendingAssignmentsKey),
-            this.redisClient.hLen(this.acceptedAssignmentsKey),
-        ]);
-
-        return {
-            queued,
-            pending,
-            accepted,
-            total: queued + pending + accepted,
-        };
+    async getAssignmentCounts(): Promise<AssignmentCounts> {
+        return getAssignmentCountsFromStores(this.redisClient, this.assignmentStoreKeys);
     }
 
     /**
      * Get a single assignment by ID from any status.
      */
     async getAssignment(id: string): Promise<(Assignment & { _status?: string }) | null> {
-        // Check all three stores in parallel
-        const [queued, pending, accepted] = await Promise.all([
-            this.redisClient.hGet(this.assignmentsRefKey, id),
-            this.redisClient.hGet(this.pendingAssignmentsKey, id),
-            this.redisClient.hGet(this.acceptedAssignmentsKey, id),
-        ]);
-
-        if (queued) {
-            const assignment = JSON.parse(queued);
-            assignment._status = 'queued';
-            return assignment;
-        }
-        if (pending) {
-            const assignment = JSON.parse(pending);
-            assignment._status = 'pending';
-            return assignment;
-        }
-        if (accepted) {
-            const assignment = JSON.parse(accepted);
-            assignment._status = 'accepted';
-            return assignment;
-        }
-
-        return null;
+        return getAssignmentById(this.redisClient, this.assignmentStoreKeys, id);
     }
 
     /**
      * Get multiple assignments by IDs efficiently.
      */
     async getAssignmentsByIds(ids: string[]): Promise<Assignment[]> {
-        if (ids.length === 0) return [];
-
-        const multi = this.redisClient.multi();
-        for (const id of ids) {
-            multi.hGet(this.assignmentsRefKey, id);
-            multi.hGet(this.pendingAssignmentsKey, id);
-            multi.hGet(this.acceptedAssignmentsKey, id);
-        }
-
-        const results = await multi.exec() as unknown as (string | null)[];
-        const assignments: Assignment[] = [];
-
-        for (let i = 0; i < ids.length; i++) {
-            const queued = results[i * 3];
-            const pending = results[i * 3 + 1];
-            const accepted = results[i * 3 + 2];
-
-            const json = queued || pending || accepted;
-            if (json) {
-                try {
-                    const assignment = JSON.parse(json);
-                    assignment._status = queued ? 'queued' : pending ? 'pending' : 'accepted';
-                    assignments.push(assignment);
-                } catch {
-                    // Skip invalid JSON
-                }
-            }
-        }
-
-        return assignments;
+        return getAssignmentsByIdsBatch(this.redisClient, this.assignmentStoreKeys, ids);
     }
 
-    // ==================== CIDR/IP Matching Utilities ====================
-
-    /**
-     * Parse an IPv4 address into a BigInt representation
-     */
-    private parseIPv4(ip: string): bigint | null {
-        const parts = ip.split('.');
-        if (parts.length !== 4) return null;
-        
-        let result = 0n;
-        for (const part of parts) {
-            const num = parseInt(part, 10);
-            if (isNaN(num) || num < 0 || num > 255) return null;
-            result = (result << 8n) | BigInt(num);
-        }
-        return result;
+    /** Default match score implementation using extracted scoring module */
+    private defaultMatchScore(
+        user: User,
+        assignmentTags: string,
+        assignmentPriority: string | number,
+        _assignmentId?: string,
+    ): Promise<[number, number]> {
+        return Promise.resolve(calculateMatchScore(user, assignmentTags, assignmentPriority, this.enableDefaultMatching));
     }
 
-    /**
-     * Parse an IPv6 address into a BigInt representation
-     * Handles full, compressed (::), and IPv4-mapped formats
-     */
-    private parseIPv6(ip: string): bigint | null {
-        // Handle IPv4-mapped IPv6 (::ffff:192.168.1.1)
-        const ipv4MappedMatch = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
-        if (ipv4MappedMatch) {
-            const ipv4 = this.parseIPv4(ipv4MappedMatch[1]);
-            if (ipv4 === null) return null;
-            return 0xffff00000000n | ipv4;
-        }
-
-        // Handle :: expansion
-        let fullIp = ip.toLowerCase();
-        
-        if (fullIp.includes('::')) {
-            const parts = fullIp.split('::');
-            if (parts.length > 2) return null; // Invalid: more than one ::
-            
-            const leftParts = parts[0] ? parts[0].split(':') : [];
-            const rightParts = parts[1] ? parts[1].split(':') : [];
-            const missingGroups = 8 - leftParts.length - rightParts.length;
-            
-            if (missingGroups < 0) return null;
-            
-            const allParts = [...leftParts, ...Array(missingGroups).fill('0'), ...rightParts];
-            fullIp = allParts.join(':');
-        }
-
-        const groups = fullIp.split(':');
-        if (groups.length !== 8) return null;
-
-        let result = 0n;
-        for (const group of groups) {
-            if (group.length === 0 || group.length > 4) return null;
-            const num = parseInt(group, 16);
-            if (isNaN(num) || num < 0 || num > 0xffff) return null;
-            result = (result << 16n) | BigInt(num);
-        }
-        return result;
-    }
-
-    /**
-     * Parse an IP address (auto-detect IPv4 or IPv6)
-     * Returns { value: BigInt, isIPv6: boolean } or null if invalid
-     */
-    private parseIP(ip: string): { value: bigint; isIPv6: boolean } | null {
-        if (!ip || typeof ip !== 'string') return null;
-        
-        const trimmed = ip.trim();
-        
-        // Try IPv4 first (contains dots, no colons)
-        if (trimmed.includes('.') && !trimmed.includes(':')) {
-            const value = this.parseIPv4(trimmed);
-            if (value !== null) return { value, isIPv6: false };
-        }
-        
-        // Try IPv6 (contains colons)
-        if (trimmed.includes(':')) {
-            const value = this.parseIPv6(trimmed);
-            if (value !== null) return { value, isIPv6: true };
-        }
-        
-        return null;
-    }
-
-    /**
-     * Parse a CIDR notation string (e.g., '192.168.1.0/24' or '2001:db8::/32')
-     * Returns { network: BigInt, prefixLength: number, isIPv6: boolean } or null
-     */
-    private parseCIDR(cidr: string): { network: bigint; prefixLength: number; isIPv6: boolean } | null {
-        if (!cidr || typeof cidr !== 'string') return null;
-        
-        const parts = cidr.trim().split('/');
-        if (parts.length !== 2) return null;
-        
-        const ip = this.parseIP(parts[0]);
-        if (!ip) return null;
-        
-        const prefixLength = parseInt(parts[1], 10);
-        const maxPrefix = ip.isIPv6 ? 128 : 32;
-        
-        if (isNaN(prefixLength) || prefixLength < 0 || prefixLength > maxPrefix) return null;
-        
-        // Calculate network address by masking
-        const totalBits = ip.isIPv6 ? 128 : 32;
-        const hostBits = totalBits - prefixLength;
-        const mask = hostBits === totalBits ? 0n : ((1n << BigInt(totalBits)) - 1n) ^ ((1n << BigInt(hostBits)) - 1n);
-        const network = ip.value & mask;
-        
-        return { network, prefixLength, isIPv6: ip.isIPv6 };
-    }
-
-    /**
-     * Check if an IP address is within a CIDR range
-     */
-    private isIpInCidr(ip: string, cidr: string): boolean {
-        const parsedIp = this.parseIP(ip);
-        const parsedCidr = this.parseCIDR(cidr);
-        
-        if (!parsedIp || !parsedCidr) return false;
-        
-        // IP version must match CIDR version
-        if (parsedIp.isIPv6 !== parsedCidr.isIPv6) return false;
-        
-        const totalBits = parsedIp.isIPv6 ? 128 : 32;
-        const hostBits = totalBits - parsedCidr.prefixLength;
-        const mask = hostBits === totalBits ? 0n : ((1n << BigInt(totalBits)) - 1n) ^ ((1n << BigInt(hostBits)) - 1n);
-        
-        return (parsedIp.value & mask) === parsedCidr.network;
-    }
-
-    /**
-     * Check if a user's IP matches any of the allowed CIDRs
-     * Returns true if no CIDRs are specified (open assignment) or if IP matches any CIDR
-     */
-    private checkCidrMatch(userIp: string | undefined, allowedCidrs: string[] | undefined): boolean {
-        // If no CIDR restrictions, assignment is open to all
-        if (!allowedCidrs || allowedCidrs.length === 0) return true;
-        
-        // If CIDRs are specified but user has no IP, deny match
-        if (!userIp) return false;
-        
-        // Check if user IP matches any allowed CIDR
-        for (const cidr of allowedCidrs) {
-            if (this.isIpInCidr(userIp, cidr)) return true;
-        }
-        
-        return false;
-    }
-
-    // ==================== End CIDR/IP Matching Utilities ====================
-
-    private async matchScore(
+    private matchScore: (
         user: User,
         assignmentTags: string,
         assignmentPriority: string | number,
         assignmentId?: string,
-    ): Promise<[number, number]> {
-        const aTags = assignmentTags ? assignmentTags.split(',') : [];
-        
-        const matchesPattern = (pattern: string, tag: string) => {
-            if (pattern === tag) return true;
-            if (pattern.endsWith('*')) {
-                const prefix = pattern.slice(0, -1);
-                return tag.startsWith(prefix);
-            }
-            return false;
-        };
+    ) => Promise<[number, number]>;
 
-        // If weighted skills are present, use them for scoring
-        if (user.routingWeights && Object.keys(user.routingWeights).length > 0) {
-            // Check for exclusions (weight 0)
-            for (const [pattern, weight] of Object.entries(user.routingWeights)) {
-                if (weight === 0) {
-                    for (const t of aTags) {
-                        if (matchesPattern(pattern, t)) {
-                            return [0, Number(assignmentPriority) || 0];
-                        }
-                    }
-                }
-            }
-
-            let weightSum = 0;
-            for (const t of aTags) {
-                let matchedByRouting = false;
-                for (const [pattern, weight] of Object.entries(user.routingWeights)) {
-                    if (typeof weight === 'number' && weight > 0) {
-                        if (matchesPattern(pattern, t)) {
-                            weightSum += weight;
-                            matchedByRouting = true;
-                        }
-                    }
-                }
-                
-                // If enableDefaultMatching is true, and the tag is 'default', and it wasn't matched by any routing weight,
-                // we give it default weight 1.
-                if (this.enableDefaultMatching && t === 'default' && !matchedByRouting) {
-                     weightSum += 1;
-                }
-            }
-            const base = Number(assignmentPriority) || 0;
-            return [weightSum, base + weightSum];
-        }
-
-        // Fallback to default tag-intersection scoring
-        const userTagSet = new Set(user.tags);
-        const assignmentTagSet = new Set(aTags);
-        
-        let intersectionSize = 0;
-        for (const userTag of userTagSet) {
-            let matched = false;
-            for (const assignmentTag of assignmentTagSet) {
-                if (matchesPattern(userTag, assignmentTag)) {
-                    matched = true;
-                    break;
-                }
-            }
-            if (matched) intersectionSize++;
-        }
-
-        const score = userTagSet.size > 0 ? intersectionSize / userTagSet.size : 0;
-        const base = Number(assignmentPriority) || 0;
-        return [score || 0, base + (score || 0)];
-    }
     private async calculatePriority(...args: (Assignment | undefined)[]) {
         const [assignment] = args;
-        return new Date().getTime() - assignment?.createdAt || 0;
+        return calculateDefaultPriority(assignment?.createdAt);
     }
 
     get stats(): Promise<Stats> {
@@ -705,9 +278,9 @@ export default class AssignmentMatcher {
     }
 
     async setAssignmentPriority(id: string, priority: number) {
-        const assignmentPriorityKey = this.redisPrefix + `assignment:${id}:priority`;
+        const assignmentPriorityKey = this.keys.assignmentPriority(id);
         // Fetch tags to update per-tag indices
-        const assignmentTagsKey = this.redisPrefix + `assignment:${id}:tags`;
+        const assignmentTagsKey = this.keys.assignmentTags(id);
         const [existsRef, tagsCsv] = await this.redisClient
             .multi()
             .hExists(this.assignmentsRefKey, id)
@@ -721,7 +294,7 @@ export default class AssignmentMatcher {
             // Update global zset score and per-tag zset scores only if assignment still exists
             multi.zAdd(this.assignmentsKey, { score: Number(priority), value: id });
             for (const tag of tags) {
-                multi.zAdd(this.redisPrefix + `tag:${tag}:assignments`, { score: Number(priority), value: id });
+                multi.zAdd(this.keys.tagAssignments(tag), { score: Number(priority), value: id });
             }
         }
         await multi.exec();
@@ -741,7 +314,7 @@ export default class AssignmentMatcher {
             const multi = this.redisClient.multi();
             for (const assignment of relevantAssignments) {
                 const id = assignment.id;
-                const assignmentPriorityKey = this.redisPrefix + `assignment:${id}:priority`;
+                const assignmentPriorityKey = this.keys.assignmentPriority(id);
                 // Update the stored priority
                 multi.hSet(assignmentPriorityKey, 'priority', priority);
                 // Update global zset score
@@ -749,7 +322,7 @@ export default class AssignmentMatcher {
                 // Update per-tag zset scores
                 const idxTags = [...assignment.tags, ...(this.enableDefaultMatching ? ['default'] : [])];
                 for (const tag of idxTags) {
-                    multi.zAdd(this.redisPrefix + `tag:${tag}:assignments`, { score: Number(priority), value: id });
+                    multi.zAdd(this.keys.tagAssignments(tag), { score: Number(priority), value: id });
                 }
             }
             await multi.exec();
@@ -793,13 +366,13 @@ export default class AssignmentMatcher {
 
         if (expandedPositive.length === 0) return userAssignments;
 
-        const tempKey = this.redisPrefix + `tmp:user:${user.id}:candidates`;
-        const tempZeroKey = this.redisPrefix + `tmp:user:${user.id}:exclude`;
-        const tempFinalKey = this.redisPrefix + `tmp:user:${user.id}:final`;
-        const rejectedKey = this.redisPrefix + `user:${user.id}:rejected`;
+        const tempKey = this.keys.tempUserCandidates(user.id);
+        const tempZeroKey = this.keys.tempUserExclude(user.id);
+        const tempFinalKey = this.keys.tempUserFinal(user.id);
+        const rejectedKey = this.keys.userRejected(user.id);
 
         const unionKeysWithWeights = expandedPositive.map((pw) => ({
-            key: this.redisPrefix + `tag:${pw.tag}:assignments`,
+            key: this.keys.tagAssignments(pw.tag),
             weight: pw.weight
         }));
 
@@ -812,7 +385,7 @@ export default class AssignmentMatcher {
         const excludeKeys: string[] = [];
         // Optional exclude set for zero-weight tags
         if (finalZeroTags.length > 0) {
-            const zeroKeys = finalZeroTags.map((t) => this.redisPrefix + `tag:${t}:assignments`);
+            const zeroKeys = finalZeroTags.map((t) => this.keys.tagAssignments(t));
             multi.zUnionStore(tempZeroKey, zeroKeys as [string, ...string[]]);
             multi.expire(tempZeroKey, 5);
             excludeKeys.push(tempZeroKey);
@@ -839,10 +412,8 @@ export default class AssignmentMatcher {
         const batched = this.redisClient.multi();
         for (const entry of top) {
             const assignmentId = (entry as any).value;
-            const assignmentPriorityKey = this.redisPrefix + `assignment:${assignmentId}:priority`;
-            const assignmentTagsKey = this.redisPrefix + `assignment:${assignmentId}:tags`;
-            batched.hGet(assignmentPriorityKey, 'priority');
-            batched.hGet(assignmentTagsKey, 'tags');
+            batched.hGet(this.keys.assignmentPriority(assignmentId), 'priority');
+            batched.hGet(this.keys.assignmentTags(assignmentId), 'tags');
             // Also fetch assignment JSON to access allowedCidrs for network matching
             batched.hGet(this.assignmentsRefKey, assignmentId);
         }
@@ -872,7 +443,7 @@ export default class AssignmentMatcher {
             if (userAssignments.length >= this.maxUserBacklogSize) break;
             
             // Check CIDR restrictions: if assignment has allowedCidrs, user must have matching IP
-            if (!this.checkCidrMatch(user.ip, d.allowedCidrs)) {
+            if (!checkCidrMatch(user.ip, d.allowedCidrs)) {
                 continue; // Skip this assignment - user IP doesn't match allowed CIDRs
             }
             
@@ -896,18 +467,16 @@ export default class AssignmentMatcher {
                 const s = selected[i];
                 const json = jsons[i];
                 
-                const assignmentPriorityKey = this.redisPrefix + `assignment:${s.id}:priority`;
-                const assignmentTagsKey = this.redisPrefix + `assignment:${s.id}:tags`;
                 // Remove from reference and per-assignment hashes
                 rm.hDel(this.assignmentsRefKey, s.id);
-                rm.del(assignmentPriorityKey);
-                rm.del(assignmentTagsKey);
+                rm.del(this.keys.assignmentPriority(s.id));
+                rm.del(this.keys.assignmentTags(s.id));
                 // Remove from global zset
                 rm.zRem(this.assignmentsKey, s.id);
                 // Remove from per-tag zsets
                 const tags = (s.tags ? s.tags.split(',').filter(Boolean) : []) as string[];
                 for (const tag of tags) {
-                    rm.zRem(this.redisPrefix + `tag:${tag}:assignments`, s.id);
+                    rm.zRem(this.keys.tagAssignments(tag), s.id);
                 }
 
                 // Add to pending structures
@@ -928,7 +497,7 @@ export default class AssignmentMatcher {
             const userJson = await this.redisClient.hGet(this.usersKey, userId);
             if (!userJson) return;
             const user = JSON.parse(userJson);
-            const userMatchesCount = await this.redisClient.sCard(this.redisPrefix + `user:${user.id}:assignments`);
+            const userMatchesCount = await this.redisClient.sCard(this.keys.userAssignments(user.id));
             if (userMatchesCount >= this.maxUserBacklogSize) return;
 
             const relevantAssignments = await this.getUserRelatedAssignments(user);
@@ -937,7 +506,7 @@ export default class AssignmentMatcher {
                 .map((a) => `assignment:${a.id}`);
 
             if (relevantAssignmentKeys.length > 0) {
-                await this.redisClient.sAdd(this.redisPrefix + `user:${user.id}:assignments`, relevantAssignmentKeys);
+                await this.redisClient.sAdd(this.keys.userAssignments(user.id), relevantAssignmentKeys);
             }
             return;
         }
@@ -956,7 +525,7 @@ export default class AssignmentMatcher {
         // Process users in parallel
         await Promise.all(
             users.map(async (user) => {
-                const userMatchesCount = await this.redisClient.sCard(this.redisPrefix + `user:${user.id}:assignments`);
+                const userMatchesCount = await this.redisClient.sCard(this.keys.userAssignments(user.id));
                 if (userMatchesCount >= this.maxUserBacklogSize) {
                     return;
                 }
@@ -967,21 +536,21 @@ export default class AssignmentMatcher {
                     .map((a) => `assignment:${a.id}`);
 
                 if (relevantAssignmentKeys.length > 0) {
-                    await this.redisClient.sAdd(this.redisPrefix + `user:${user.id}:assignments`, relevantAssignmentKeys);
+                    await this.redisClient.sAdd(this.keys.userAssignments(user.id), relevantAssignmentKeys);
                 }
             }),
         );
     }
 
     async getCurrentAssignmentsForUser(userId: string): Promise<string[]> {
-        const userAssignments = await this.redisClient.sMembers(this.redisPrefix + `user:${userId}:assignments`);
+        const userAssignments = await this.redisClient.sMembers(this.keys.userAssignments(userId));
 
         return userAssignments.map((el: string) => el.split(':')[1]);
     }
 
     async acceptAssignment(userId: string, assignmentId: string): Promise<boolean> {
         const isAssigned = await this.redisClient.sIsMember(
-            this.redisPrefix + `user:${userId}:assignments`,
+            this.keys.userAssignments(userId),
             `assignment:${assignmentId}`,
         );
         if (!isAssigned) throw new Error('Assignment not found for user');
@@ -990,7 +559,7 @@ export default class AssignmentMatcher {
         const json = await this.redisClient.hGet(this.pendingAssignmentsKey, assignmentId);
 
         const multi = this.redisClient.multi();
-        multi.sRem(this.redisPrefix + `user:${userId}:assignments`, `assignment:${assignmentId}`);
+        multi.sRem(this.keys.userAssignments(userId), `assignment:${assignmentId}`);
         multi.hDel(this.pendingAssignmentsKey, assignmentId);
         multi.zRem(this.pendingAssignmentsExpiryKey, assignmentId);
         multi.hDel(this.assignmentOwnerKey, assignmentId);
@@ -1006,7 +575,7 @@ export default class AssignmentMatcher {
 
     async rejectAssignment(userId: string, assignmentId: string): Promise<boolean> {
         const isAssigned = await this.redisClient.sIsMember(
-            this.redisPrefix + `user:${userId}:assignments`,
+            this.keys.userAssignments(userId),
             `assignment:${assignmentId}`,
         );
         if (!isAssigned) throw new Error('Assignment not found for user');
@@ -1014,13 +583,13 @@ export default class AssignmentMatcher {
         const json = await this.redisClient.hGet(this.pendingAssignmentsKey, assignmentId);
         
         const multi = this.redisClient.multi();
-        multi.sRem(this.redisPrefix + `user:${userId}:assignments`, `assignment:${assignmentId}`);
+        multi.sRem(this.keys.userAssignments(userId), `assignment:${assignmentId}`);
         multi.hDel(this.pendingAssignmentsKey, assignmentId);
         multi.zRem(this.pendingAssignmentsExpiryKey, assignmentId);
         multi.hDel(this.assignmentOwnerKey, assignmentId);
         
         // Add to rejected list to prevent immediate re-assignment
-        multi.sAdd(this.redisPrefix + `user:${userId}:rejected`, assignmentId);
+        multi.sAdd(this.keys.userRejected(userId), assignmentId);
         
         await multi.exec();
 
@@ -1041,7 +610,7 @@ export default class AssignmentMatcher {
 
             const multi = this.redisClient.multi();
             if (owner) {
-                multi.sRem(this.redisPrefix + `user:${owner}:assignments`, `assignment:${id}`);
+                multi.sRem(this.keys.userAssignments(owner), `assignment:${id}`);
             }
             multi.hDel(this.pendingAssignmentsKey, id);
             multi.zRem(this.pendingAssignmentsExpiryKey, id);
