@@ -1,3 +1,6 @@
+import { randomUUID } from 'crypto';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { checkCidrMatch } from './utils/cidr';
 import { createKeyBuilders, type KeyBuilders } from './utils/keys';
 import {
@@ -11,12 +14,66 @@ import {
     type AssignmentCounts,
 } from './queries/pagination';
 import { calculateMatchScore, calculateDefaultPriority } from './scoring/match-score';
-import type { RedisClientType, User, Assignment, Stats, MatcherOptions, options } from './types/matcher';
+import { ReliabilityManager } from './managers/ReliabilityManager';
+import { TelemetryManager } from './managers/TelemetryManager';
+import { WorkflowManager, type WorkflowHost } from './managers/WorkflowManager';
+import type {
+    RedisClientType,
+    User,
+    Assignment,
+    Stats,
+    MatcherOptions,
+    options,
+    WorkflowDefinition,
+    WorkflowInstance,
+    WorkflowStep,
+    WorkflowEvent,
+    WorkflowEventType,
+    AssignmentResult,
+    ParallelBranchState,
+    DeadLetterEntry,
+    AuditEntry,
+    CircuitBreakerState,
+    WorkflowInstanceWithSnapshot,
+} from './types/matcher';
 
 // Re-export types for backwards compatibility
 export type { RedisClientType, User, Assignment, Stats, MatcherOptions, options } from './types/matcher';
+// Export workflow types
+export type {
+    WorkflowDefinition,
+    WorkflowInstance,
+    WorkflowStep,
+    WorkflowEvent,
+    WorkflowEventType,
+    AssignmentResult,
+    ParallelBranchState,
+    DeadLetterEntry,
+    AuditEntry,
+    CircuitBreakerState,
+    WorkflowInstanceWithSnapshot,
+} from './types/matcher';
 
-export default class AssignmentMatcher {
+// Load Lua scripts from files
+const LUA_SCRIPTS_DIR = join(__dirname, 'lua');
+
+/**
+ * Load a Lua script from the lua directory.
+ * Falls back to empty string if file not found.
+ */
+function loadLuaScript(filename: string): string {
+    try {
+        return readFileSync(join(LUA_SCRIPTS_DIR, filename), 'utf-8');
+    } catch {
+        console.warn(`Lua script not found: ${filename}`);
+        return '';
+    }
+}
+
+// Lua script for atomic workflow transitions
+const WORKFLOW_TRANSITION_LUA = loadLuaScript('workflow-transition.lua');
+
+export default class AssignmentMatcher implements WorkflowHost {
     relevantBatchSize: number;
     redisPrefix: string;
     assignmentsKey: string;
@@ -32,9 +89,21 @@ export default class AssignmentMatcher {
     acceptedAssignmentsKey: string;
     private keys: KeyBuilders;
 
+    // Workflow-related properties
+    private enableWorkflows: boolean;
+    private streamConsumerGroup: string;
+    private streamConsumerName: string;
+    private workflow: WorkflowManager;
+    completedAssignmentsKey: string;
+
+    // Enterprise reliability properties
+    private reliability: ReliabilityManager;
+    private telemetry: TelemetryManager;
+    private luaScriptSha: string | null = null;
+
     constructor(
         public redisClient: RedisClientType,
-        options?: options,
+        options?: MatcherOptions,
     ) {
         this.relevantBatchSize = options?.relevantBatchSize ?? 50;
         this.enableDefaultMatching = options?.enableDefaultMatching ?? true;
@@ -53,8 +122,41 @@ export default class AssignmentMatcher {
         this.assignmentOwnerKey = this.keys.assignmentOwner();
         this.allTagsKey = this.keys.allTags();
         this.acceptedAssignmentsKey = this.keys.acceptedAssignments();
+        this.completedAssignmentsKey = this.keys.completedAssignments();
         this.calculatePriority = options?.prioritizationFunction ?? this.calculatePriority;
         this.matchScore = options?.matchingFunction ?? this.defaultMatchScore.bind(this);
+
+        // Workflow options
+        this.enableWorkflows = options?.enableWorkflows ?? false;
+        this.streamConsumerGroup = options?.streamConsumerGroup ?? 'orchestrator';
+        this.streamConsumerName = options?.streamConsumerName ?? randomUUID();
+
+        // Initialize managers
+        this.reliability = new ReliabilityManager(this.redisClient, this.keys, {
+            workflowMaxRetries: options?.workflowMaxRetries ?? 3,
+            workflowIdempotencyTtlMs: options?.workflowIdempotencyTtlMs ?? 86400000,
+            workflowCircuitBreakerThreshold: options?.workflowCircuitBreakerThreshold ?? 5,
+            workflowCircuitBreakerResetMs: options?.workflowCircuitBreakerResetMs ?? 30000,
+            workflowAuditEnabled: options?.workflowAuditEnabled ?? false,
+            workflowSnapshotDefinitions: options?.workflowSnapshotDefinitions ?? true,
+            streamConsumerName: this.streamConsumerName,
+        });
+        this.telemetry = new TelemetryManager(options?.enableOpenTelemetry ?? false);
+        
+        this.workflow = new WorkflowManager(
+            this.redisClient,
+            this.keys,
+            this.reliability,
+            this.telemetry,
+            this,
+            {
+                enableWorkflows: this.enableWorkflows,
+                streamConsumerGroup: this.streamConsumerGroup,
+                streamConsumerName: this.streamConsumerName,
+                reclaimIntervalMs: options?.workflowOrphanReclaimMs ?? 60000,
+            }
+        );
+
         this.initRedis();
     }
 
@@ -64,6 +166,7 @@ export default class AssignmentMatcher {
             queued: this.assignmentsRefKey,
             pending: this.pendingAssignmentsKey,
             accepted: this.acceptedAssignmentsKey,
+            completed: this.completedAssignmentsKey,
         };
     }
 
@@ -72,7 +175,126 @@ export default class AssignmentMatcher {
         if (!this.redisClient.isOpen) {
             await this.redisClient.connect();
         }
+
+        // Initialize workflow stream consumer group if workflows are enabled
+        if (this.enableWorkflows) {
+            await this.workflow.init();
+            // Load Lua script for atomic transitions
+            await this.loadLuaScripts();
+        }
+
         return this;
+    }
+
+    /**
+     * Load Lua scripts into Redis for atomic operations.
+     */
+    private async loadLuaScripts(): Promise<void> {
+        try {
+            this.luaScriptSha = await this.redisClient.scriptLoad(WORKFLOW_TRANSITION_LUA);
+            this.workflow.setLuaScriptSha(this.luaScriptSha);
+        } catch (err) {
+            console.error('Failed to load Lua scripts:', err);
+            // Fallback to non-atomic mode
+            this.luaScriptSha = null;
+        }
+    }
+
+    async atomicWorkflowTransition(
+        instanceId: string,
+        expectedVersion: number,
+        newStatus: WorkflowInstance['status'],
+        newStepId: string | null,
+        updatedContext: Record<string, any>,
+        historyEntry?: WorkflowInstance['history'][0],
+    ): Promise<{ ok: boolean; instance?: WorkflowInstance; error?: string }> {
+        return this.workflow.atomicWorkflowTransition(
+            instanceId,
+            expectedVersion,
+            newStatus,
+            newStepId,
+            updatedContext,
+            historyEntry,
+        );
+    }
+
+    async reclaimOrphanedMessages(): Promise<number> {
+        return this.workflow.reclaimOrphanedMessages();
+    }
+
+    /**
+     * Get events from the Dead Letter Queue.
+     */
+    async getDeadLetterEvents(
+        limit: number = 100,
+        offset: number = 0,
+    ): Promise<DeadLetterEntry[]> {
+        return this.reliability.getDeadLetterEvents(limit, offset);
+    }
+
+    /**
+     * Get Dead Letter Queue size.
+     */
+    async getDeadLetterQueueSize(): Promise<number> {
+        return this.reliability.getDeadLetterQueueSize();
+    }
+
+    /**
+     * Replay a Dead Letter Queue event.
+     */
+    async replayDeadLetterEvent(eventJson: string): Promise<boolean> {
+        const entry: DeadLetterEntry = JSON.parse(eventJson);
+        // Reset retry count
+        await this.redisClient.del(this.keys.eventRetryCount(entry.event.eventId));
+        // Re-publish the event
+        await this.publishWorkflowEvent(entry.event);
+        // Remove from DLQ
+        await this.redisClient.zRem(this.keys.deadLetterQueue(), eventJson);
+        return true;
+    }
+
+    /**
+     * Clear all events from the Dead Letter Queue.
+     */
+    async clearDeadLetterQueue(): Promise<number> {
+        return this.reliability.clearDeadLetterQueue();
+    }
+
+    /**
+     * Get audit events from the audit stream.
+     */
+    async getAuditEvents(count: number = 100): Promise<AuditEntry[]> {
+        return this.reliability.getAuditEvents(count);
+    }
+
+    // ============================================================================
+    // OpenTelemetry Tracing Hooks
+    // ============================================================================
+
+    /**
+     * Set the OpenTelemetry tracer instance.
+     */
+    setTracer(tracer: any): void {
+        this.telemetry.setTracer(tracer);
+    }
+
+    /**
+     * Initialize the Redis Stream consumer group for workflow events.
+     * Creates the stream and consumer group if they don't exist.
+     */
+    private async initStreamConsumerGroup(): Promise<void> {
+        const streamKey = this.keys.eventStream();
+        try {
+            // Try to create the consumer group (and stream if needed)
+            await this.redisClient.xGroupCreate(streamKey, this.streamConsumerGroup, '0', {
+                MKSTREAM: true,
+            });
+        } catch (err: any) {
+            // Ignore "BUSYGROUP" error - group already exists
+            if (!err.message?.includes('BUSYGROUP')) {
+                throw err;
+            }
+        }
     }
 
     async addUser(user: User): Promise<User> {
@@ -332,7 +554,21 @@ export default class AssignmentMatcher {
     }
 
     private async getUserRelatedAssignments(user: User) {
-        // Build candidate assignments using per-tag zset union with user weights for scalability.
+        const userAssignments: Array<{ id: string; priority: number }> = [];
+
+        // Priority 1: Check for workflow-targeted assignments (deterministic matching)
+        if (this.enableWorkflows) {
+            const workflowAssignments = await this.getWorkflowTargetedAssignments(user.id);
+            if (workflowAssignments.length > 0) {
+                // Workflow assignments take precedence - add them first with highest priority
+                userAssignments.push(...workflowAssignments);
+                if (userAssignments.length >= this.maxUserBacklogSize) {
+                    return userAssignments;
+                }
+            }
+        }
+
+        // Priority 2: Build candidate assignments using per-tag zset union with user weights for scalability.
         const positiveWeights: Array<{ tag: string; weight: number }> = [];
         const zeroWeightTags: string[] = [];
 
@@ -354,8 +590,6 @@ export default class AssignmentMatcher {
             const defaultZero = zeroWeightTags.includes('default');
             if (!defaultInPos && !defaultZero) positiveWeights.push({ tag: 'default', weight: 1 });
         }
-
-        const userAssignments: Array<{ id: string; priority: number }> = [];
 
         if (positiveWeights.length === 0) return userAssignments;
 
@@ -600,6 +834,213 @@ export default class AssignmentMatcher {
         return true;
     }
 
+    /**
+     * Complete an assignment with a result payload.
+     * Moves the assignment from 'accepted' to 'completed' state and publishes an event
+     * for workflow orchestration.
+     * 
+     * @param userId - The user completing the assignment
+     * @param assignmentId - The assignment being completed
+     * @param result - Optional result payload for routing decisions
+     */
+    async completeAssignment(
+        userId: string,
+        assignmentId: string,
+        result?: AssignmentResult,
+    ): Promise<boolean> {
+        // Verify assignment is in accepted state
+        const json = await this.redisClient.hGet(this.acceptedAssignmentsKey, assignmentId);
+        if (!json) {
+            throw new Error('Assignment not found in accepted state');
+        }
+
+        const assignment = JSON.parse(json);
+        const now = Date.now();
+
+        // Move from accepted to completed
+        const multi = this.redisClient.multi();
+        multi.hDel(this.acceptedAssignmentsKey, assignmentId);
+        
+        // Store in completed with result metadata
+        const completedData = {
+            ...assignment,
+            _completedBy: userId,
+            _completedAt: now,
+            _result: result,
+        };
+        multi.hSet(this.completedAssignmentsKey, assignmentId, JSON.stringify(completedData));
+
+        await multi.exec();
+
+        // Publish workflow event if workflows are enabled
+        if (this.enableWorkflows) {
+            await this.publishWorkflowEvent({
+                eventId: randomUUID(),
+                type: 'COMPLETED',
+                userId,
+                assignmentId,
+                timestamp: now,
+                payload: result?.data,
+            });
+        }
+
+        return true;
+    }
+
+    /**
+     * Fail an assignment explicitly (e.g., user reports inability to complete).
+     * 
+     * @param userId - The user failing the assignment
+     * @param assignmentId - The assignment being failed
+     * @param reason - Optional reason for failure
+     */
+    async failAssignment(
+        userId: string,
+        assignmentId: string,
+        reason?: string,
+    ): Promise<boolean> {
+        const json = await this.redisClient.hGet(this.acceptedAssignmentsKey, assignmentId);
+        if (!json) {
+            throw new Error('Assignment not found in accepted state');
+        }
+
+        const assignment = JSON.parse(json);
+        const now = Date.now();
+
+        // Move from accepted to completed (with failed status)
+        const multi = this.redisClient.multi();
+        multi.hDel(this.acceptedAssignmentsKey, assignmentId);
+
+        const failedData = {
+            ...assignment,
+            _failedBy: userId,
+            _failedAt: now,
+            _failureReason: reason,
+        };
+        multi.hSet(this.completedAssignmentsKey, assignmentId, JSON.stringify(failedData));
+
+        await multi.exec();
+
+        // Publish workflow event if workflows are enabled
+        if (this.enableWorkflows) {
+            await this.publishWorkflowEvent({
+                eventId: randomUUID(),
+                type: 'FAILED',
+                userId,
+                assignmentId,
+                timestamp: now,
+                payload: { reason },
+            });
+        }
+
+        return true;
+    }
+
+    // ============================================================================
+    // Workflow Management Methods
+    // ============================================================================
+
+    /**
+     * Register a workflow definition.
+     * 
+     * @param definition - The workflow definition to register
+     */
+    /**
+     * Register a new workflow definition.
+     */
+    async registerWorkflow(definition: WorkflowDefinition): Promise<WorkflowDefinition> {
+        return this.workflow.registerWorkflow(definition);
+    }
+
+    /**
+     * Get a workflow definition by ID.
+     */
+    async getWorkflowDefinition(id: string): Promise<WorkflowDefinition | null> {
+        return this.workflow.getWorkflowDefinition(id);
+    }
+
+    /**
+     * List all registered workflow definitions.
+     */
+    async listWorkflowDefinitions(): Promise<Array<{ id: string; name: string }>> {
+        return this.workflow.listWorkflowDefinitions();
+    }
+
+    /**
+     * Start a new workflow instance for a user.
+     */
+    async startWorkflow(
+        workflowDefinitionId: string,
+        userId: string,
+        initialContext?: Record<string, any>,
+    ): Promise<WorkflowInstance> {
+        return this.workflow.startWorkflow(workflowDefinitionId, userId, initialContext);
+    }
+
+    /**
+     * Get a workflow instance by ID.
+     */
+    async getWorkflowInstance(instanceId: string): Promise<WorkflowInstance | null> {
+        return this.workflow.getWorkflowInstance(instanceId);
+    }
+
+    /**
+     * Get a workflow instance with its snapshot definition.
+     */
+    async getWorkflowInstanceWithSnapshot(instanceId: string): Promise<WorkflowInstanceWithSnapshot | null> {
+        return this.workflow.getWorkflowInstanceWithSnapshot(instanceId);
+    }
+
+    /**
+     * Get all active workflow instances for a user.
+     */
+    async getActiveWorkflowsForUser(userId: string): Promise<WorkflowInstance[]> {
+        return this.workflow.getActiveWorkflowsForUser(userId);
+    }
+
+    /**
+     * Cancel a workflow instance.
+     */
+    async cancelWorkflow(instanceId: string): Promise<boolean> {
+        return this.workflow.cancelWorkflow(instanceId);
+    }
+
+
+
+    /**
+     * Check and process expired workflow steps.
+     * Should be called periodically.
+     */
+    async processExpiredWorkflowSteps(): Promise<number> {
+        return this.workflow.processExpiredWorkflowSteps();
+    }
+
+
+    /**
+     * Publish a workflow event to the Redis Stream.
+     */
+    async publishWorkflowEvent(event: WorkflowEvent): Promise<string> {
+        return this.workflow.publishWorkflowEvent(event);
+    }
+
+    /**
+     * Start the workflow orchestrator.
+     * This listens to the event stream and processes workflow transitions.
+     */
+    async startOrchestrator(): Promise<void> {
+        return this.workflow.startOrchestrator();
+    }
+
+    /**
+     * Stop the workflow orchestrator.
+     */
+    async stopOrchestrator(): Promise<void> {
+        return this.workflow.stopOrchestrator();
+    }
+
+
+
+
     async processExpiredMatches(): Promise<number> {
         const now = Date.now();
         const expiredIds = await this.redisClient.zRangeByScore(this.pendingAssignmentsExpiryKey, '-inf', now);
@@ -616,6 +1057,17 @@ export default class AssignmentMatcher {
             multi.zRem(this.pendingAssignmentsExpiryKey, id);
             multi.hDel(this.assignmentOwnerKey, id);
             await multi.exec();
+
+            // Publish workflow expired event if workflows are enabled
+            if (this.enableWorkflows && owner) {
+                await this.workflow.publishWorkflowEvent({
+                    eventId: randomUUID(),
+                    type: 'EXPIRED',
+                    userId: owner,
+                    assignmentId: id,
+                    timestamp: now,
+                });
+            }
 
             if (json) {
                 await this.addAssignment(JSON.parse(json));
@@ -638,6 +1090,39 @@ export default class AssignmentMatcher {
             clearInterval(this.autoReleaseInterval);
             this.autoReleaseInterval = null;
         }
+    }
+
+    /**
+     * Get assignments specifically targeted at a user through active workflows.
+     * These take priority over general pool assignments for deterministic matching.
+     */
+    private async getWorkflowTargetedAssignments(
+        userId: string,
+    ): Promise<Array<{ id: string; priority: number }>> {
+        const targeted: Array<{ id: string; priority: number }> = [];
+
+        // Scan queued assignments for those with _targetUserId matching this user
+        const queuedAssignments = await this.redisClient.hGetAll(this.assignmentsRefKey);
+        
+        for (const [assignmentId, json] of Object.entries(queuedAssignments)) {
+            try {
+                const assignment = JSON.parse(json);
+                if (assignment._targetUserId === userId && assignment._workflowInstanceId) {
+                    // This is a workflow assignment targeted at this user
+                    targeted.push({
+                        id: assignmentId,
+                        priority: assignment.priority ?? 1000,
+                    });
+                }
+            } catch {
+                // Ignore parse errors
+            }
+        }
+
+        // Sort by priority (higher first)
+        targeted.sort((a, b) => b.priority - a.priority);
+
+        return targeted;
     }
 
     private async expandTagWildcards(tags: { tag: string; weight: number }[]): Promise<{ tag: string; weight: number }[]> {
