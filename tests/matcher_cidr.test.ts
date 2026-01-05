@@ -1,6 +1,7 @@
 import Matcher from '../src/matcher.class';
 import { createClient } from 'redis';
 import { expect } from 'chai';
+import { parseIPv6, isIpInCidr } from '../src/utils/cidr';
 
 describe('Matcher CIDR/Network Matching Tests', function () {
     this.timeout(5000);
@@ -24,6 +25,20 @@ describe('Matcher CIDR/Network Matching Tests', function () {
 
     after(async function () {
         await redisClient.quit();
+    });
+
+    describe('CIDR Utils Edge Cases', function () {
+        it('should reject IPv6 with multiple :: compressions', function () {
+            expect(parseIPv6('2001:db8::1::1')).to.equal(null);
+        });
+
+        it('should parse IPv4-mapped IPv6 and match CIDR', function () {
+            // IPv4-mapped IPv6 addresses are treated as IPv6 in this implementation.
+            expect(isIpInCidr('::ffff:192.168.1.1', '192.168.1.0/24')).to.equal(false);
+
+            expect(isIpInCidr('::ffff:192.168.1.1', '::ffff:192.168.1.0/120')).to.equal(true);
+            expect(isIpInCidr('::ffff:192.168.2.1', '::ffff:192.168.1.0/120')).to.equal(false);
+        });
     });
 
     describe('IPv4 CIDR Matching', function () {

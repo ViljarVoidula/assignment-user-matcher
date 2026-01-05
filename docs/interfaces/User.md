@@ -11,6 +11,7 @@
 ### Properties
 
 - [id](User.md#id)
+- [ip](User.md#ip)
 - [routingWeights](User.md#routingweights)
 - [tags](User.md#tags)
 
@@ -22,7 +23,17 @@
 
 #### Defined in
 
-[src/matcher.class.ts:5](https://github.com/ViljarVoidula/assignment-user-matcher/blob/168f33781e93bc95ab7f2c7d42219804cc882522/src/matcher.class.ts#L5)
+[src/types/matcher.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5144870af651229861c818fd76553e2e7f058aba/src/types/matcher.ts#L6)
+
+___
+
+### ip
+
+• `Optional` **ip**: `string`
+
+#### Defined in
+
+[src/types/matcher.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5144870af651229861c818fd76553e2e7f058aba/src/types/matcher.ts#L13)
 
 ___
 
@@ -32,7 +43,7 @@ ___
 
 #### Defined in
 
-[src/matcher.class.ts:9](https://github.com/ViljarVoidula/assignment-user-matcher/blob/168f33781e93bc95ab7f2c7d42219804cc882522/src/matcher.class.ts#L9)
+[src/types/matcher.ts:10](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5144870af651229861c818fd76553e2e7f058aba/src/types/matcher.ts#L10)
 
 ___
 
@@ -42,4 +53,4 @@ ___
 
 #### Defined in
 
-[src/matcher.class.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/168f33781e93bc95ab7f2c7d42219804cc882522/src/matcher.class.ts#L6)
+[src/types/matcher.ts:7](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5144870af651229861c818fd76553e2e7f058aba/src/types/matcher.ts#L7)

@@ -232,6 +232,15 @@ describe('Assignment pagination and querying tests', () => {
             expect(allFetched).to.have.lengthOf(10);
         });
 
+        it('should report hasMore when limit is 0', async () => {
+            await matcher.addAssignment({ id: 'a1', tags: ['t1'] });
+
+            const res = await matcher.getAssignmentsPaginated({ limit: 0 });
+            expect(res.assignments).to.have.lengthOf(0);
+            expect(res.hasMore).to.equal(true);
+            expect(res.nextCursor).to.equal('0:0');
+        });
+
         it('should filter by queued status', async () => {
             await matcherNoDefault.addAssignment({ id: 'q1', tags: ['q-tag'] });
             await matcherNoDefault.addAssignment({ id: 'p1', tags: ['p-tag'] });

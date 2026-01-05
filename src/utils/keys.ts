@@ -40,6 +40,29 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         tempUserCandidates: (userId: string) => `${prefix}tmp:user:${userId}:candidates`,
         tempUserExclude: (userId: string) => `${prefix}tmp:user:${userId}:exclude`,
         tempUserFinal: (userId: string) => `${prefix}tmp:user:${userId}:final`,
+
+        // Workflow keys
+        workflowDefinitions: () => `${prefix}workflows:definitions`,
+        workflowDefinition: (id: string) => `${prefix}workflow:${id}:definition`,
+        workflowInstances: () => `${prefix}workflows:instances`,
+        workflowInstance: (id: string) => `${prefix}workflow:instance:${id}`,
+        workflowInstancesByUser: (userId: string) => `${prefix}user:${userId}:workflow:instances`,
+        workflowAssignmentLink: (assignmentId: string) => `${prefix}assignment:${assignmentId}:workflow`,
+
+        // Completed assignments store
+        completedAssignments: () => `${prefix}assignments:completed`,
+
+        // Redis Streams keys
+        eventStream: () => `${prefix}events:stream`,
+        eventStreamDeadLetter: () => `${prefix}events:deadletter`,
+
+        // Workflow reliability keys
+        // Reliability and audit keys
+        deadLetterQueue: () => `${prefix}workflow:dlq`,
+        processedEvents: () => `${prefix}events:processed`,
+        eventRetryCount: (eventId: string) => `${prefix}events:retries:${eventId}`,
+        workflowStepExpiry: (instanceId: string, stepId: string) => `${prefix}workflow:${instanceId}:step:${stepId}:expiry`,
+        workflowAuditStream: () => `${prefix}workflow:audit:stream`,
     };
 }
 
