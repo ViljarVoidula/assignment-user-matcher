@@ -26,14 +26,10 @@ import type {
     options,
     WorkflowDefinition,
     WorkflowInstance,
-    WorkflowStep,
     WorkflowEvent,
-    WorkflowEventType,
     AssignmentResult,
-    ParallelBranchState,
     DeadLetterEntry,
     AuditEntry,
-    CircuitBreakerState,
     WorkflowInstanceWithSnapshot,
 } from './types/matcher';
 
