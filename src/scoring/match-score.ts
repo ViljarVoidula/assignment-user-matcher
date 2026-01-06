@@ -16,6 +16,51 @@ export function matchesPattern(pattern: string, tag: string): boolean {
 }
 
 /**
+ * Get the effective weight for a skill tag from user's routingWeights
+ * Supports wildcard patterns (e.g., 'eng*' matches 'english')
+ */
+export function getEffectiveWeight(
+    routingWeights: Record<string, number>,
+    tag: string
+): number {
+    // First check for exact match
+    if (tag in routingWeights) {
+        return routingWeights[tag];
+    }
+    // Check wildcard patterns
+    for (const [pattern, weight] of Object.entries(routingWeights)) {
+        if (matchesPattern(pattern, tag)) {
+            return weight;
+        }
+    }
+    return 0;
+}
+
+/**
+ * Check if user meets all skill thresholds
+ * Returns true if all thresholds are met, false otherwise
+ */
+export function meetsSkillThresholds(
+    routingWeights: Record<string, number> | undefined,
+    skillThresholds: Record<string, number> | undefined
+): boolean {
+    if (!skillThresholds || Object.keys(skillThresholds).length === 0) {
+        return true; // No thresholds to check
+    }
+    if (!routingWeights || Object.keys(routingWeights).length === 0) {
+        return false; // User has no weights but thresholds exist
+    }
+    
+    for (const [skill, minWeight] of Object.entries(skillThresholds)) {
+        const userWeight = getEffectiveWeight(routingWeights, skill);
+        if (userWeight < minWeight) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
  * Calculate match score between a user and assignment tags
  * Returns [score, combinedPriority]
  */
@@ -23,12 +68,18 @@ export function calculateMatchScore(
     user: User,
     assignmentTags: string,
     assignmentPriority: string | number,
-    enableDefaultMatching: boolean
+    enableDefaultMatching: boolean,
+    skillThresholds?: Record<string, number>
 ): [number, number] {
     const aTags = assignmentTags ? assignmentTags.split(',') : [];
 
     // If weighted skills are present, use them for scoring
     if (user.routingWeights && Object.keys(user.routingWeights).length > 0) {
+        // Check skill thresholds first - reject if not met
+        if (!meetsSkillThresholds(user.routingWeights, skillThresholds)) {
+            return [0, Number(assignmentPriority) || 0];
+        }
+
         // Check for exclusions (weight 0)
         for (const [pattern, weight] of Object.entries(user.routingWeights)) {
             if (weight === 0) {
@@ -60,6 +111,12 @@ export function calculateMatchScore(
         }
         const base = Number(assignmentPriority) || 0;
         return [weightSum, base + weightSum];
+    }
+
+    // For tag-based matching (no routingWeights), check thresholds
+    // If thresholds exist but user has no routingWeights, reject
+    if (skillThresholds && Object.keys(skillThresholds).length > 0) {
+        return [0, Number(assignmentPriority) || 0];
     }
 
     // Fallback to default tag-intersection scoring

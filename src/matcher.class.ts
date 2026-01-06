@@ -452,8 +452,9 @@ export default class AssignmentMatcher implements WorkflowHost {
         assignmentTags: string,
         assignmentPriority: string | number,
         _assignmentId?: string,
+        skillThresholds?: Record<string, number>,
     ): Promise<[number, number]> {
-        return Promise.resolve(calculateMatchScore(user, assignmentTags, assignmentPriority, this.enableDefaultMatching));
+        return Promise.resolve(calculateMatchScore(user, assignmentTags, assignmentPriority, this.enableDefaultMatching, skillThresholds));
     }
 
     private matchScore: (
@@ -461,6 +462,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         assignmentTags: string,
         assignmentPriority: string | number,
         assignmentId?: string,
+        skillThresholds?: Record<string, number>,
     ) => Promise<[number, number]>;
 
     private async calculatePriority(...args: (Assignment | undefined)[]) {
@@ -648,22 +650,24 @@ export default class AssignmentMatcher implements WorkflowHost {
             batched.hGet(this.assignmentsRefKey, assignmentId);
         }
         const flat = await batched.exec() as unknown as (string | null)[];
-        const details = [] as Array<{ id: string; basePriority: number; tags: string; allowedCidrs?: string[] }>;
+        const details = [] as Array<{ id: string; basePriority: number; tags: string; allowedCidrs?: string[]; skillThresholds?: Record<string, number> }>;
         for (let i = 0; i < top.length; i++) {
             const assignmentId = (top[i] as any).value;
             const priority = Number(flat[i * 3]) || 0;
             const tags = String(flat[i * 3 + 1] || '');
             const assignmentJson = flat[i * 3 + 2];
             let allowedCidrs: string[] | undefined;
+            let skillThresholds: Record<string, number> | undefined;
             if (assignmentJson) {
                 try {
                     const parsed = JSON.parse(assignmentJson);
                     allowedCidrs = parsed.allowedCidrs;
+                    skillThresholds = parsed.skillThresholds;
                 } catch {
                     // Ignore JSON parse errors
                 }
             }
-            details.push({ id: assignmentId, basePriority: priority, tags, allowedCidrs });
+            details.push({ id: assignmentId, basePriority: priority, tags, allowedCidrs, skillThresholds });
         }
         // Prefer higher base priority first to satisfy tests and practical expectations
         details.sort((a, b) => b.basePriority - a.basePriority);
@@ -677,8 +681,8 @@ export default class AssignmentMatcher implements WorkflowHost {
                 continue; // Skip this assignment - user IP doesn't match allowed CIDRs
             }
             
-            // Use custom matchScore (supports weights) for a final check and tie-break
-            const [score, combinedPriority] = await this.matchScore(user, d.tags, d.basePriority, d.id);
+            // Use custom matchScore (supports weights and thresholds) for a final check and tie-break
+            const [score, combinedPriority] = await this.matchScore(user, d.tags, d.basePriority, d.id, d.skillThresholds);
             if (score && combinedPriority) {
                 userAssignments.push({ id: d.id, priority: combinedPriority });
                 selected.push({ id: d.id, tags: d.tags });

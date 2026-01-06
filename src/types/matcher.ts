@@ -22,6 +22,10 @@ export type Assignment = {
     // If specified, only users with IPs within these ranges will be matched
     // Supports both IPv4 (e.g., '192.168.1.0/24') and IPv6 (e.g., '2001:db8::/32')
     allowedCidrs?: string[];
+    // Optional minimum skill thresholds for matchmaking
+    // If specified, user's routingWeights must meet or exceed these values for each tag
+    // Example: { english: 50, support: 30 } requires user to have at least 50 for english and 30 for support
+    skillThresholds?: Record<string, number>;
     [key: string]: any;
 };
 
@@ -43,6 +47,7 @@ export type MatcherOptions = {
         assignmentTags: string,
         assignmentPriority: number | string,
         assignmentId?: string,
+        skillThresholds?: Record<string, number>,
     ) => Promise<[number, number]>;
     /** Enable workflow orchestration features */
     enableWorkflows?: boolean;
