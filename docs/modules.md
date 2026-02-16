@@ -29,6 +29,7 @@
 - [RedisClientType](modules.md#redisclienttype)
 - [Stats](modules.md#stats)
 - [WorkflowEventType](modules.md#workfloweventtype)
+- [WorkflowTaskType](modules.md#workflowtasktype)
 - [options](modules.md#options)
 
 ## Type Aliases
@@ -48,11 +49,12 @@
 | `allowedCidrs?` | `string`[] |
 | `id` | `string` |
 | `priority?` | `number` |
+| `skillThresholds?` | `Record`\<`string`, `number`\> |
 | `tags` | `string`[] |
 
 #### Defined in
 
-[src/types/matcher.ts:17](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5144870af651229861c818fd76553e2e7f058aba/src/types/matcher.ts#L17)
+[src/types/matcher.ts:17](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cdc1577018af6ef7d6c7f890d02d0fa8460bc5d9/src/types/matcher.ts#L17)
 
 ___
 
@@ -68,7 +70,7 @@ ___
 | `enableOpenTelemetry?` | `boolean` | Enable OpenTelemetry tracing (default: false) |
 | `enableWorkflows?` | `boolean` | Enable workflow orchestration features |
 | `matchExpirationMs?` | `number` | - |
-| `matchingFunction?` | (`user`: [`User`](interfaces/User.md), `assignmentTags`: `string`, `assignmentPriority`: `number` \| `string`, `assignmentId?`: `string`) => `Promise`\<[`number`, `number`]\> | - |
+| `matchingFunction?` | (`user`: [`User`](interfaces/User.md), `assignmentTags`: `string`, `assignmentPriority`: `number` \| `string`, `assignmentId?`: `string`, `skillThresholds?`: `Record`\<`string`, `number`\>) => `Promise`\<[`number`, `number`]\> | - |
 | `maxUserBacklogSize?` | `number` | - |
 | `prioritizationFunction?` | (...`args`: ([`Assignment`](modules.md#assignment) \| `undefined`)[]) => `Promise`\<`number`\> | - |
 | `redisPrefix?` | `string` | - |
@@ -81,11 +83,12 @@ ___
 | `workflowIdempotencyTtlMs?` | `number` | TTL for idempotency keys in milliseconds (default: 86400000 = 24h) |
 | `workflowMaxRetries?` | `number` | Maximum retries for failed workflow events before moving to DLQ (default: 3) |
 | `workflowOrphanReclaimMs?` | `number` | Minimum idle time before reclaiming orphaned messages in ms (default: 60000 = 1min) |
+| `workflowReclaimPollIntervalMs?` | `number` | Polling interval for reclaim loop in ms (default: 5000) |
 | `workflowSnapshotDefinitions?` | `boolean` | Snapshot workflow definitions at instance creation for versioning (default: true) |
 
 #### Defined in
 
-[src/types/matcher.ts:34](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5144870af651229861c818fd76553e2e7f058aba/src/types/matcher.ts#L34)
+[src/types/matcher.ts:38](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cdc1577018af6ef7d6c7f890d02d0fa8460bc5d9/src/types/matcher.ts#L38)
 
 ___
 
@@ -95,7 +98,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:3](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5144870af651229861c818fd76553e2e7f058aba/src/types/matcher.ts#L3)
+[src/types/matcher.ts:3](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cdc1577018af6ef7d6c7f890d02d0fa8460bc5d9/src/types/matcher.ts#L3)
 
 ___
 
@@ -113,7 +116,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:28](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5144870af651229861c818fd76553e2e7f058aba/src/types/matcher.ts#L28)
+[src/types/matcher.ts:32](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cdc1577018af6ef7d6c7f890d02d0fa8460bc5d9/src/types/matcher.ts#L32)
 
 ___
 
@@ -125,7 +128,19 @@ Event types for workflow lifecycle
 
 #### Defined in
 
-[src/types/matcher.ts:81](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5144870af651229861c818fd76553e2e7f058aba/src/types/matcher.ts#L81)
+[src/types/matcher.ts:88](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cdc1577018af6ef7d6c7f890d02d0fa8460bc5d9/src/types/matcher.ts#L88)
+
+___
+
+### WorkflowTaskType
+
+Ƭ **WorkflowTaskType**: ``"assignment"`` \| ``"machine"``
+
+Step execution mode
+
+#### Defined in
+
+[src/types/matcher.ts:91](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cdc1577018af6ef7d6c7f890d02d0fa8460bc5d9/src/types/matcher.ts#L91)
 
 ___
 
@@ -139,4 +154,4 @@ Use MatcherOptions instead
 
 #### Defined in
 
-[src/types/matcher.ts:74](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5144870af651229861c818fd76553e2e7f058aba/src/types/matcher.ts#L74)
+[src/types/matcher.ts:81](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cdc1577018af6ef7d6c7f890d02d0fa8460bc5d9/src/types/matcher.ts#L81)
