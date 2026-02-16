@@ -420,6 +420,10 @@ The npm package only ships the compiled artifacts in `dist/`. Before publishing:
 2. Build the library: `pnpm run build`
 3. (Optional) Inspect the publish payload: `pnpm pack --dry-run`
 
+For version bump + tag release flow (including patch releases), see `RELEASE.md`.
+If you prefer a local helper, copy `scripts/release-patch-local.sh.example` to
+`scripts/release-patch-local.sh` and run it.
+
 Consumers can `import AssignmentMatcher from 'assignment-user-matcher'` or `const { AssignmentMatcher } = require('assignment-user-matcher')` without running TypeScript themselves.
 
 ## License

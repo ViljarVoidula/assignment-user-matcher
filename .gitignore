@@ -32,3 +32,4 @@ example/**
 assignment-user-matcher-*.tgz
 benchmark-wildcards.ts
 docs/prds/deterministic-workflows.md
+scripts/release-patch-local.sh

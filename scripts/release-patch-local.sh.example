@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage:
+#   cp scripts/release-patch-local.sh.example scripts/release-patch-local.sh
+#   chmod +x scripts/release-patch-local.sh
+#   ./scripts/release-patch-local.sh
+
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$repo_root"
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Working tree is not clean. Commit/stash changes first."
+  exit 1
+fi
+
+current_branch="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$current_branch" != "main" ]]; then
+  echo "You are on '$current_branch'. Switch to 'main' before release."
+  exit 1
+fi
+
+echo "Running tests..."
+pnpm test
+
+echo "Bumping patch version (creates commit + tag)..."
+pnpm version patch
+
+echo "Pushing commit + tags..."
+git push origin main --follow-tags
+
+echo "Done. Check GitHub Actions workflow for publish status."
