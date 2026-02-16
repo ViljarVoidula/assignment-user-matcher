@@ -30,7 +30,8 @@
         "build:docs": "npx typedoc --plugin typedoc-plugin-markdown",
         "prettier": "prettier --write .",
         "build": "rimraf dist && tsc",
-        "prepublishOnly": "pnpm run build"
+        "prepublishOnly": "pnpm run build",
+        "release:patch": "bash ./scripts/release-patch-local.sh.example"
     },
     "prettier": {
         "semi": true,

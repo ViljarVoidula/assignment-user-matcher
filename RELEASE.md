@@ -27,6 +27,14 @@ Workflow reference: `.github/workflows/npm-publish.yml`
 
 5. Watch the workflow run on GitHub and confirm npm publish succeeded.
 
+## If publish was skipped on a `main` push
+
+That usually means the run was branch-triggered (`refs/heads/main`) and not tag-triggered.
+Use the helper script below. It handles both cases:
+
+- If current `package.json` version is **not** on npm yet, it force-pushes the matching tag to trigger publish.
+- If current version **already exists** on npm, it auto-bumps patch and pushes the new tag.
+
 ## Optional local helper script
 
 - Copy `scripts/release-patch-local.sh.example` to `scripts/release-patch-local.sh`.
@@ -37,3 +45,9 @@ Workflow reference: `.github/workflows/npm-publish.yml`
   ```
 
 The local script is intentionally gitignored.
+
+You can also run the tracked template directly:
+
+```bash
+bash ./scripts/release-patch-local.sh.example
+```

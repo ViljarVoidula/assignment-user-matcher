@@ -9,6 +9,10 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
+pkg_name="$(node -p "require('./package.json').name")"
+pkg_version="$(node -p "require('./package.json').version")"
+tag="v${pkg_version}"
+
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "Working tree is not clean. Commit/stash changes first."
   exit 1
@@ -23,10 +27,21 @@ fi
 echo "Running tests..."
 pnpm test
 
-echo "Bumping patch version (creates commit + tag)..."
-pnpm version patch
+echo "Checking npm for ${pkg_name}@${pkg_version}..."
+if npm view "${pkg_name}@${pkg_version}" version >/dev/null 2>&1; then
+  echo "${pkg_name}@${pkg_version} already exists on npm."
+  echo "Creating a new patch release..."
+  pnpm version patch
+  echo "Pushing commit + tags..."
+  git push origin main --follow-tags
+  echo "Done. A new patch tag was pushed."
+  exit 0
+fi
 
-echo "Pushing commit + tags..."
-git push origin main --follow-tags
+echo "${pkg_name}@${pkg_version} is not on npm yet."
+echo "Ensuring tag ${tag} points to current HEAD and pushing it..."
+git tag -f "${tag}"
+git push origin main
+git push origin -f "refs/tags/${tag}"
 
-echo "Done. Check GitHub Actions workflow for publish status."
+echo "Done. This should trigger publish for ${tag}."
