@@ -238,7 +238,7 @@ describe('Skill Thresholds - Integration Tests', function () {
         await matcher.addUser({
             id: 'user6',
             tags: ['support'],
-            routingWeights: { english: 80, spanish: 70, technical: 60 },
+            routingWeights: { support: 100, english: 80, spanish: 70, technical: 60 },
         });
 
         // Assignment with multiple thresholds

@@ -63,6 +63,8 @@ export type MatcherOptions = {
     workflowIdempotencyTtlMs?: number;
     /** Minimum idle time before reclaiming orphaned messages in ms (default: 60000 = 1min) */
     workflowOrphanReclaimMs?: number;
+    /** Polling interval for reclaim loop in ms (default: 5000) */
+    workflowReclaimPollIntervalMs?: number;
     /** Number of failures before circuit breaker opens (default: 5) */
     workflowCircuitBreakerThreshold?: number;
     /** Time to wait before attempting to close circuit breaker in ms (default: 30000) */
@@ -84,6 +86,9 @@ export type options = MatcherOptions;
 
 /** Event types for workflow lifecycle */
 export type WorkflowEventType = 'STARTED' | 'COMPLETED' | 'REJECTED' | 'EXPIRED' | 'FAILED';
+
+/** Step execution mode */
+export type WorkflowTaskType = 'assignment' | 'machine';
 
 /** Event published to Redis Streams for workflow orchestration */
 export interface WorkflowEvent {
@@ -111,10 +116,19 @@ export interface WorkflowStep {
     id: string;
     /** Human-readable name */
     name: string;
+    /** Step execution mode (default: 'assignment') */
+    taskType?: WorkflowTaskType;
     /** Assignment template - merged with workflow context when creating the assignment */
-    assignmentTemplate: Partial<Assignment>;
+    assignmentTemplate?: Partial<Assignment>;
     /** Target user selector: 'initiator' | 'previous' | specific userId | tag-based selector */
-    targetUser: 'initiator' | 'previous' | string | { tag: string };
+    targetUser?: 'initiator' | 'previous' | string | { tag: string };
+    /** Machine task metadata used for code/task worker execution */
+    machineTask?: {
+        /** Machine handler identifier (resolver-specific) */
+        handler: string;
+        /** Optional static input merged with workflow context */
+        input?: Record<string, any>;
+    };
     /** Routing rules for branching (evaluated in order, first match wins) */
     routing?: WorkflowRouting[];
     /** Default next step if no routing condition matches (null = end workflow) */
@@ -267,8 +281,12 @@ export interface WorkflowInstanceWithSnapshot extends WorkflowInstance {
 export interface WorkflowStepBuilder {
     /** Set the step name */
     name(name: string): WorkflowStepBuilder;
+    /** Set the execution task type */
+    taskType(type: WorkflowTaskType): WorkflowStepBuilder;
     /** Set the assignment template */
     assignment(template: Partial<Assignment>): WorkflowStepBuilder;
+    /** Configure machine task metadata */
+    machineTask(handler: string, input?: Record<string, any>): WorkflowStepBuilder;
     /** Set the target user */
     targetUser(target: 'initiator' | 'previous' | string | { tag: string }): WorkflowStepBuilder;
     /** Add a routing condition */

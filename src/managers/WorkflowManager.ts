@@ -7,6 +7,11 @@ import { TelemetryManager } from './TelemetryManager';
 export interface WorkflowHost {
     addAssignment(assignment: Assignment): Promise<Assignment>;
     matchUsersAssignments(userId: string): Promise<any>;
+    executeMachineTask?(args: {
+        instance: WorkflowInstance;
+        step: WorkflowStep;
+        definition: WorkflowDefinition;
+    }): Promise<Record<string, any> | void>;
 }
 
 export class WorkflowManager {
@@ -26,6 +31,7 @@ export class WorkflowManager {
             streamConsumerGroup: string;
             streamConsumerName: string;
             reclaimIntervalMs: number;
+            reclaimMinIdleMs?: number;
         }
     ) {}
 
@@ -201,36 +207,129 @@ export class WorkflowManager {
         const expectedVersion = instance.version;
         if (step.parallelStepIds && step.parallelStepIds.length > 0) {
             const branches: ParallelBranchState[] = [];
+            const machineParallelSteps: Array<{ stepId: string; assignmentId: string }> = [];
 
             for (const parallelStepId of step.parallelStepIds) {
                 const parallelStep = definition.steps.find((s) => s.id === parallelStepId);
                 if (!parallelStep) continue;
 
-                const assignment = await this.createWorkflowAssignment(instance, parallelStep, definition);
-                branches.push({
-                    stepId: parallelStepId,
-                    assignmentId: assignment.id,
-                    status: 'pending',
-                });
+                const taskType = parallelStep.taskType ?? 'assignment';
+                if (taskType === 'machine') {
+                    if (!parallelStep.machineTask?.handler) {
+                        throw new Error(`Machine step "${parallelStep.id}" is missing machineTask.handler`);
+                    }
 
-                if (parallelStep.timeoutMs) {
-                    await this.setStepTimeout(instance.id, parallelStepId, parallelStep.timeoutMs);
+                    const syntheticAssignmentId = randomUUID();
+                    machineParallelSteps.push({ stepId: parallelStepId, assignmentId: syntheticAssignmentId });
+                    branches.push({
+                        stepId: parallelStepId,
+                        assignmentId: syntheticAssignmentId,
+                        status: 'pending',
+                    });
+                } else {
+                    const assignment = await this.createWorkflowAssignment(instance, parallelStep, definition);
+                    branches.push({
+                        stepId: parallelStepId,
+                        assignmentId: assignment.id,
+                        status: 'pending',
+                    });
+                }
+
+                const timeoutMs = parallelStep.timeoutMs ?? definition.defaultTimeoutMs;
+                if (timeoutMs) {
+                    await this.setStepTimeout(instance.id, parallelStepId, timeoutMs);
                 }
             }
 
             instance.parallelBranches = branches;
             instance.currentStepId = null;
-        } else {
-            const assignment = await this.createWorkflowAssignment(instance, step, definition);
-            instance.currentAssignmentId = assignment.id;
+            instance.currentAssignmentId = undefined;
+            await this.saveInstance(instance, expectedVersion);
+
+            for (const machineStep of machineParallelSteps) {
+                const parallelStep = definition.steps.find((s) => s.id === machineStep.stepId);
+                if (!parallelStep) continue;
+                await this.executeMachineStep(instance, parallelStep, definition, machineStep.assignmentId);
+            }
+
+            return;
+        }
+
+        const taskType = step.taskType ?? 'assignment';
+        if (taskType === 'machine') {
+            if (!step.machineTask?.handler) {
+                throw new Error(`Machine step "${step.id}" is missing machineTask.handler`);
+            }
+
+            instance.currentAssignmentId = undefined;
             instance.currentStepId = stepId;
 
-            if (step.timeoutMs) {
-                await this.setStepTimeout(instance.id, stepId, step.timeoutMs);
+            const timeoutMs = step.timeoutMs ?? definition.defaultTimeoutMs;
+            if (timeoutMs) {
+                await this.setStepTimeout(instance.id, stepId, timeoutMs);
             }
+
+            await this.saveInstance(instance, expectedVersion);
+            await this.executeMachineStep(instance, step, definition);
+            return;
+        }
+
+        const assignment = await this.createWorkflowAssignment(instance, step, definition);
+        instance.currentAssignmentId = assignment.id;
+        instance.currentStepId = stepId;
+
+        const timeoutMs = step.timeoutMs ?? definition.defaultTimeoutMs;
+        if (timeoutMs) {
+            await this.setStepTimeout(instance.id, stepId, timeoutMs);
         }
 
         await this.saveInstance(instance, expectedVersion);
+    }
+
+    private async executeMachineStep(
+        instance: WorkflowInstance,
+        step: WorkflowStep,
+        definition: WorkflowDefinition,
+        assignmentId?: string,
+    ): Promise<void> {
+        const syntheticAssignmentId = assignmentId ?? randomUUID();
+        const eventBase: WorkflowEvent = {
+            eventId: randomUUID(),
+            type: 'COMPLETED',
+            userId: instance.initiatorUserId,
+            assignmentId: syntheticAssignmentId,
+            workflowInstanceId: instance.id,
+            stepId: step.id,
+            timestamp: Date.now(),
+        };
+
+        try {
+            if (!this.host.executeMachineTask) {
+                throw new Error(
+                    `Machine task executor not configured for step "${step.id}" (handler: ${step.machineTask?.handler ?? 'unknown'})`,
+                );
+            }
+
+            const result = await this.host.executeMachineTask({
+                instance,
+                step,
+                definition,
+            });
+
+            await this.processWorkflowEvent({
+                ...eventBase,
+                type: 'COMPLETED',
+                payload: result ? { ...result } : undefined,
+            });
+        } catch (err: any) {
+            await this.processWorkflowEvent({
+                ...eventBase,
+                type: 'FAILED',
+                payload: {
+                    error: err?.message ?? String(err),
+                },
+            });
+        }
     }
 
     private async setStepTimeout(instanceId: string, stepId: string, timeoutMs: number): Promise<void> {
@@ -260,7 +359,8 @@ export class WorkflowManager {
                 if (!definition) continue;
 
                 const step = definition.steps.find((s) => s.id === currentStepId);
-                if (!step?.timeoutMs) continue;
+                const timeoutMs = step?.timeoutMs ?? definition.defaultTimeoutMs;
+                if (!timeoutMs) continue;
 
                 await this.publishWorkflowEvent({
                     eventId: randomUUID(),
@@ -284,16 +384,21 @@ export class WorkflowManager {
         step: WorkflowStep,
         definition: WorkflowDefinition,
     ): Promise<Assignment> {
+        if (!step.assignmentTemplate) {
+            throw new Error(`Assignment step "${step.id}" is missing assignmentTemplate`);
+        }
+
+        const targetUserSelector = step.targetUser ?? 'initiator';
         let targetUserId: string;
-        if (step.targetUser === 'initiator') {
+        if (targetUserSelector === 'initiator') {
             targetUserId = instance.initiatorUserId;
-        } else if (step.targetUser === 'previous') {
+        } else if (targetUserSelector === 'previous') {
             const lastEntry = instance.history[instance.history.length - 1];
             targetUserId = lastEntry?.userId ?? instance.initiatorUserId;
-        } else if (typeof step.targetUser === 'object' && 'tag' in step.targetUser) {
+        } else if (typeof targetUserSelector === 'object' && 'tag' in targetUserSelector) {
             targetUserId = '';
         } else {
-            targetUserId = step.targetUser as string;
+            targetUserId = targetUserSelector as string;
         }
 
         const assignmentId = randomUUID();
@@ -689,7 +794,7 @@ export class WorkflowManager {
                 streamKey,
                 this.options.streamConsumerGroup,
                 this.options.streamConsumerName,
-                this.options.reclaimIntervalMs,
+                this.options.reclaimMinIdleMs ?? this.options.reclaimIntervalMs,
                 '0-0',
                 { COUNT: 100 },
             );

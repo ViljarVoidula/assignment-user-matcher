@@ -7,6 +7,7 @@ export type {
     WorkflowDefinition,
     WorkflowInstance,
     WorkflowStep,
+    WorkflowTaskType,
     WorkflowEvent,
     WorkflowEventType,
     AssignmentResult,

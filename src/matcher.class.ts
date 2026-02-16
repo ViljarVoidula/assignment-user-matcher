@@ -40,6 +40,7 @@ export type {
     WorkflowDefinition,
     WorkflowInstance,
     WorkflowStep,
+    WorkflowTaskType,
     WorkflowEvent,
     WorkflowEventType,
     AssignmentResult,
@@ -96,6 +97,7 @@ export default class AssignmentMatcher implements WorkflowHost {
     private reliability: ReliabilityManager;
     private telemetry: TelemetryManager;
     private luaScriptSha: string | null = null;
+    private usingDefaultMatchScore: boolean;
 
     constructor(
         public redisClient: RedisClientType,
@@ -120,6 +122,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         this.acceptedAssignmentsKey = this.keys.acceptedAssignments();
         this.completedAssignmentsKey = this.keys.completedAssignments();
         this.calculatePriority = options?.prioritizationFunction ?? this.calculatePriority;
+        this.usingDefaultMatchScore = !options?.matchingFunction;
         this.matchScore = options?.matchingFunction ?? this.defaultMatchScore.bind(this);
 
         // Workflow options
@@ -149,7 +152,8 @@ export default class AssignmentMatcher implements WorkflowHost {
                 enableWorkflows: this.enableWorkflows,
                 streamConsumerGroup: this.streamConsumerGroup,
                 streamConsumerName: this.streamConsumerName,
-                reclaimIntervalMs: options?.workflowOrphanReclaimMs ?? 60000,
+                reclaimIntervalMs: options?.workflowReclaimPollIntervalMs ?? 5000,
+                reclaimMinIdleMs: options?.workflowOrphanReclaimMs ?? 60000,
             }
         );
 
@@ -553,6 +557,8 @@ export default class AssignmentMatcher implements WorkflowHost {
 
     private async getUserRelatedAssignments(user: User) {
         const userAssignments: Array<{ id: string; priority: number }> = [];
+        const routingWeights = user.routingWeights;
+        const hasRoutingWeights = Boolean(routingWeights && Object.keys(routingWeights).length > 0);
 
         // Priority 1: Check for workflow-targeted assignments (deterministic matching)
         if (this.enableWorkflows) {
@@ -570,8 +576,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         const positiveWeights: Array<{ tag: string; weight: number }> = [];
         const zeroWeightTags: string[] = [];
 
-        if (user.routingWeights && Object.keys(user.routingWeights).length > 0) {
-            for (const [tag, w] of Object.entries(user.routingWeights)) {
+        if (hasRoutingWeights) {
+            for (const [tag, w] of Object.entries(routingWeights!)) {
                 if (typeof w === 'number' && w > 0) positiveWeights.push({ tag, weight: w });
                 else if (w === 0) zeroWeightTags.push(tag);
             }
@@ -582,18 +588,27 @@ export default class AssignmentMatcher implements WorkflowHost {
             }
         }
 
-        // Ensure default tag is included if enabled and not explicitly weighted to zero
-        if (this.enableDefaultMatching) {
+        // Ensure default tag is included for unweighted users.
+        // In weighted + default scoring path, only explicit positive weights may match.
+        if (this.enableDefaultMatching && !hasRoutingWeights) {
             const defaultInPos = positiveWeights.find((t) => t.tag === 'default');
-            const defaultZero = zeroWeightTags.includes('default');
+            const defaultZero = zeroWeightTags.some((tag) => tag === 'default' || (tag.endsWith('*') && 'default'.startsWith(tag.slice(0, -1))));
             if (!defaultInPos && !defaultZero) positiveWeights.push({ tag: 'default', weight: 1 });
+        }
+
+        // In weighted default matching, users must define at least one positive weight.
+        // If they don't, nothing should be assigned and queue remains intact.
+        if (hasRoutingWeights && this.usingDefaultMatchScore && positiveWeights.length === 0) {
+            return userAssignments;
         }
 
         if (positiveWeights.length === 0) return userAssignments;
 
         // Expand wildcards
         const expandedPositive = await this.expandTagWildcards(positiveWeights);
-        const expandedZero = await this.expandTagWildcards(zeroWeightTags.map((t) => ({ tag: t, weight: 0 })));
+        const expandedZero = this.usingDefaultMatchScore
+            ? await this.expandTagWildcards(zeroWeightTags.map((t) => ({ tag: t, weight: 0 })))
+            : [];
         const finalZeroTags = expandedZero.map((t) => t.tag);
 
         if (expandedPositive.length === 0) return userAssignments;

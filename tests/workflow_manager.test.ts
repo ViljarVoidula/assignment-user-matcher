@@ -211,6 +211,106 @@ describe('WorkflowManager', function () {
             expect(createdAssignments.map((a) => a.tags[0])).to.include('s2');
             expect(createdAssignments.map((a) => a.tags[0])).to.not.include('s3');
         });
+
+        it('should execute machine task step and continue to next assignment step', async function () {
+            const createdAssignments: Assignment[] = [];
+            const host: WorkflowHost = {
+                async addAssignment(a: Assignment) {
+                    createdAssignments.push(a);
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
+                async executeMachineTask() {
+                    return { generated: true, score: 99 };
+                },
+            };
+
+            const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
+                enableWorkflows: true,
+                streamConsumerGroup: 'machine-group',
+                streamConsumerName: 'machine-consumer',
+                reclaimIntervalMs: 1000,
+            });
+            await mgr.init();
+
+            const def: WorkflowDefinition = {
+                id: 'wf-machine-1',
+                name: 'Machine then Human',
+                version: 1,
+                initialStepId: 'machine-step',
+                steps: [
+                    {
+                        id: 'machine-step',
+                        name: 'Compute',
+                        taskType: 'machine',
+                        machineTask: { handler: 'compute.score' },
+                        defaultNextStepId: 'human-step',
+                    },
+                    {
+                        id: 'human-step',
+                        name: 'Review',
+                        assignmentTemplate: { tags: ['human-review'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: null,
+                    },
+                ],
+            };
+
+            await mgr.registerWorkflow(def);
+            const started = await mgr.startWorkflow(def.id, 'user-machine-1');
+            const current = await mgr.getWorkflowInstance(started.id);
+
+            expect(current?.status).to.equal('active');
+            expect(current?.currentStepId).to.equal('human-step');
+            expect(current?.history).to.have.lengthOf(1);
+            expect(current?.history[0].stepId).to.equal('machine-step');
+            expect(createdAssignments).to.have.lengthOf(1);
+            expect(createdAssignments[0].tags).to.deep.equal(['human-review']);
+        });
+
+        it('should fail machine task step when executor is not configured', async function () {
+            const host: WorkflowHost = {
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
+            };
+
+            const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
+                enableWorkflows: true,
+                streamConsumerGroup: 'machine-fail-group',
+                streamConsumerName: 'machine-fail-consumer',
+                reclaimIntervalMs: 1000,
+            });
+            await mgr.init();
+
+            const def: WorkflowDefinition = {
+                id: 'wf-machine-fail',
+                name: 'Machine Fails',
+                version: 1,
+                initialStepId: 'machine-step',
+                steps: [
+                    {
+                        id: 'machine-step',
+                        name: 'Compute',
+                        taskType: 'machine',
+                        machineTask: { handler: 'compute.score' },
+                        defaultNextStepId: null,
+                    },
+                ],
+            };
+
+            await mgr.registerWorkflow(def);
+            const started = await mgr.startWorkflow(def.id, 'user-machine-2');
+            const current = await mgr.getWorkflowInstance(started.id);
+
+            expect(current?.status).to.equal('failed');
+            expect(current?.history).to.have.lengthOf(0);
+        });
     });
 
     describe('Condition Evaluation', function () {

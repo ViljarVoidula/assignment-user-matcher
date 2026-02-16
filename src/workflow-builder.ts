@@ -41,8 +41,8 @@
 import type {
     WorkflowDefinition,
     WorkflowStep,
-    WorkflowRouting,
     Assignment,
+    WorkflowTaskType,
 } from './types/matcher';
 
 /**
@@ -57,9 +57,18 @@ export class WorkflowStepBuilder {
         this.step = {
             id,
             name: id,
+            taskType: 'assignment',
             assignmentTemplate: {},
             targetUser: 'initiator',
         };
+    }
+
+    /**
+     * Set execution mode for this step.
+     */
+    taskType(type: WorkflowTaskType): this {
+        this.step.taskType = type;
+        return this;
     }
 
     /**
@@ -75,6 +84,15 @@ export class WorkflowStepBuilder {
      */
     assignment(template: Partial<Assignment>): this {
         this.step.assignmentTemplate = template;
+        return this;
+    }
+
+    /**
+     * Configure this step as a machine/code task.
+     */
+    machineTask(handler: string, input?: Record<string, any>): this {
+        this.step.taskType = 'machine';
+        this.step.machineTask = { handler, input };
         return this;
     }
 
@@ -154,6 +172,10 @@ export class WorkflowStepBuilder {
      * Finish configuring this step and return to the parent builder.
      */
     done(): WorkflowBuilder {
+        if ((this.step.taskType ?? 'assignment') === 'machine' && !this.step.machineTask?.handler) {
+            throw new Error(`Machine step "${this.step.id}" requires machineTask(handler)`);
+        }
+
         this.parentBuilder._addStep(this.step);
         return this.parentBuilder;
     }
@@ -274,6 +296,11 @@ export class WorkflowBuilder {
 
         // Validate all referenced step IDs exist
         for (const step of this.steps) {
+            const taskType = step.taskType ?? 'assignment';
+            if (taskType === 'machine' && !step.machineTask?.handler) {
+                throw new Error(`Step "${step.id}" has taskType "machine" but no machineTask.handler`);
+            }
+
             if (step.routing) {
                 for (const route of step.routing) {
                     if (!this.steps.find(s => s.id === route.targetStepId)) {
@@ -332,6 +359,11 @@ export function linearWorkflow(
         name: string;
         assignment: Partial<Assignment>;
         targetUser?: 'initiator' | 'previous' | string | { tag: string };
+        taskType?: WorkflowTaskType;
+        machineTask?: {
+            handler: string;
+            input?: Record<string, any>;
+        };
         timeoutMs?: number;
     }>
 ): WorkflowDefinition {
@@ -342,8 +374,10 @@ export function linearWorkflow(
     const workflowSteps: WorkflowStep[] = steps.map((step, index) => ({
         id: step.id,
         name: step.name,
+        taskType: step.taskType ?? 'assignment',
         assignmentTemplate: step.assignment,
         targetUser: step.targetUser ?? 'initiator',
+        machineTask: step.machineTask,
         defaultNextStepId: index < steps.length - 1 ? steps[index + 1].id : null,
         timeoutMs: step.timeoutMs,
     }));

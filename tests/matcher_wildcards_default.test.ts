@@ -49,15 +49,14 @@ describe('Matcher Wildcard with Default Matching Tests', async function () {
         expect(assignments).to.include('a2');
     });
 
-    it('Should match default tag when routingWeights are present and enableDefaultMatching is true', async function () {
-        // Assignment with ONLY default tag (effectively)
+    it('Should keep assignment queued when routingWeights have no positive values', async function () {
         await matcher.addAssignment({ id: 'a_default', tags: ['some:other'], priority: 10 });
 
         const user = {
             id: 'u_weighted',
             tags: [],
             routingWeights: {
-                'my:tag': 100
+                'my:*': 0,
             }
         };
         await matcher.addUser(user);
@@ -65,7 +64,46 @@ describe('Matcher Wildcard with Default Matching Tests', async function () {
         await matcher.matchUsersAssignments('u_weighted');
         const assignments = await matcher.getCurrentAssignmentsForUser('u_weighted');
 
-        // Should match because of default tag, even though routingWeights doesn't have it
-        expect(assignments).to.include('a_default');
+        expect(assignments).to.have.lengthOf(0);
+
+        const counts = await matcher.getAssignmentCounts();
+        expect(counts.queued).to.equal(1);
+        expect(counts.pending).to.equal(0);
+    });
+
+    it('Should hard-veto default tag with exact zero weight', async function () {
+        await matcher.addAssignment({ id: 'a_exact_zero', tags: ['my:tag'], priority: 10 });
+
+        const user = {
+            id: 'u_exact_zero',
+            tags: [],
+            routingWeights: {
+                'my:tag': 100,
+                default: 0,
+            }
+        };
+        await matcher.addUser(user);
+
+        await matcher.matchUsersAssignments('u_exact_zero');
+        const assignments = await matcher.getCurrentAssignmentsForUser('u_exact_zero');
+        expect(assignments).to.have.lengthOf(0);
+    });
+
+    it('Should hard-veto default tag with wildcard zero weight', async function () {
+        await matcher.addAssignment({ id: 'a_wild_zero', tags: ['my:tag'], priority: 10 });
+
+        const user = {
+            id: 'u_wild_zero',
+            tags: [],
+            routingWeights: {
+                'my:tag': 100,
+                'def*': 0,
+            }
+        };
+        await matcher.addUser(user);
+
+        await matcher.matchUsersAssignments('u_wild_zero');
+        const assignments = await matcher.getCurrentAssignmentsForUser('u_wild_zero');
+        expect(assignments).to.have.lengthOf(0);
     });
 });

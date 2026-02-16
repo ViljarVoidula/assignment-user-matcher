@@ -191,4 +191,62 @@ describe('Matcher Wildcard Tests', async function () {
         expect(assignments[0]).to.equal('a1');
         expect(assignments[1]).to.equal('a2');
     });
+
+    it('Should apply exact zero as hard veto over wildcard positive', async function () {
+        await matcher.addAssignment({ id: 'a1', tags: ['skill:special'], priority: 10 });
+        await matcher.addAssignment({ id: 'a2', tags: ['skill:other'], priority: 10 });
+
+        const user = {
+            id: 'u_exact_veto',
+            tags: [],
+            routingWeights: {
+                'skill:*': 10,
+                'skill:special': 0,
+            }
+        };
+
+        await matcher.addUser(user);
+        await matcher.matchUsersAssignments('u_exact_veto');
+
+        const assignments = await matcher.getCurrentAssignmentsForUser('u_exact_veto');
+        expect(assignments).to.include('a2');
+        expect(assignments).to.not.include('a1');
+    });
+
+    it('Should apply wildcard zero as hard veto over exact positive', async function () {
+        await matcher.addAssignment({ id: 'a1', tags: ['skill:special'], priority: 10 });
+
+        const user = {
+            id: 'u_wild_veto',
+            tags: [],
+            routingWeights: {
+                'skill:special': 100,
+                'skill:*': 0,
+            }
+        };
+
+        await matcher.addUser(user);
+        await matcher.matchUsersAssignments('u_wild_veto');
+
+        const assignments = await matcher.getCurrentAssignmentsForUser('u_wild_veto');
+        expect(assignments).to.have.lengthOf(0);
+    });
+
+    it('Should use suffix-only wildcard matching', async function () {
+        await matcher.addAssignment({ id: 'a1', tags: ['skill:js:node'], priority: 10 });
+
+        const user = {
+            id: 'u_suffix_only',
+            tags: [],
+            routingWeights: {
+                'skill:*:node': 100,
+            }
+        };
+
+        await matcher.addUser(user);
+        await matcher.matchUsersAssignments('u_suffix_only');
+
+        const assignments = await matcher.getCurrentAssignmentsForUser('u_suffix_only');
+        expect(assignments).to.have.lengthOf(0);
+    });
 });

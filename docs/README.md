@@ -53,6 +53,12 @@ Traditional matching systems can become bottlenecks, leading to delays, suboptim
 2.  **Matching via Tag Intersection:**
     The core matching logic finds users whose tags have a common intersection with an assignment's tags.
 
+  When using `routingWeights` with the built-in matcher:
+  - Only **positive** weights (`> 0`) make assignments eligible.
+  - Weight `0` is a **hard veto** (exact tag or suffix wildcard like `lang:*`).
+  - Wildcards are **suffix-only** (`prefix*`). Patterns like `skill:*:node` are not treated as wildcards.
+  - If a user has `routingWeights` but no positive entries, assignments stay queued.
+
 3.  **Prioritization Engine:**
     Assignments are typically processed in the order they are received or by a custom prioritization function you can provide. This ensures that older or more critical assignments get attention first. The library aims to match the highest priority assignments to available, suitable users.
 
@@ -215,8 +221,12 @@ type Options = {
     // until some are completed or removed.
     maxUserBacklogSize?: number; // Default: 9
 
-    // Whether to enable the default tag-based matching logic.
-    // If set to false, you MUST provide a custom `matchingFunction`.
+    // Whether to enable default tag injection/matching behavior.
+    // Notes for built-in weighted matching (`routingWeights`):
+    // - only weights > 0 are eligible
+    // - weight 0 is a hard veto (exact and suffix wildcard)
+    // - if no positive weights exist, no assignment is pulled from queue
+    // If set to false, you should provide a custom `matchingFunction`.
     enableDefaultMatching?: boolean; // Default: true
 
     // A custom function to determine the priority of an assignment.
@@ -230,6 +240,8 @@ type Options = {
     // If `enableDefaultMatching` is true, this function can augment or override the default logic.
     // If `enableDefaultMatching` is false, this function is solely responsible for matching.
     // It should return a tuple: `[matchRank, userCost]`.
+    // Important: built-in hard-veto/positive-only weighted semantics apply to the
+    // built-in matcher. With a custom matchingFunction, you own final scoring logic.
     // - `matchRank`: A score indicating the quality of the match (higher is better).
     //                A rank of 0 or less means no match.
     // - `userCost`: A score indicating the "cost" of assigning this task to this user
