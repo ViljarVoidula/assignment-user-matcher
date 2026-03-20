@@ -90,6 +90,17 @@ export type WorkflowEventType = 'STARTED' | 'COMPLETED' | 'REJECTED' | 'EXPIRED'
 /** Step execution mode */
 export type WorkflowTaskType = 'assignment' | 'machine';
 
+/** Target user selector for workflow assignment steps */
+export type WorkflowTargetUser = 'initiator' | 'previous' | string | { tag: string };
+
+/** Machine task metadata for code-driven workflow steps */
+export interface WorkflowMachineTask {
+    /** Machine handler identifier (resolver-specific) */
+    handler: string;
+    /** Optional static input merged with workflow context */
+    input?: Record<string, any>;
+}
+
 /** Event published to Redis Streams for workflow orchestration */
 export interface WorkflowEvent {
     eventId: string;
@@ -121,14 +132,9 @@ export interface WorkflowStep {
     /** Assignment template - merged with workflow context when creating the assignment */
     assignmentTemplate?: Partial<Assignment>;
     /** Target user selector: 'initiator' | 'previous' | specific userId | tag-based selector */
-    targetUser?: 'initiator' | 'previous' | string | { tag: string };
+    targetUser?: WorkflowTargetUser;
     /** Machine task metadata used for code/task worker execution */
-    machineTask?: {
-        /** Machine handler identifier (resolver-specific) */
-        handler: string;
-        /** Optional static input merged with workflow context */
-        input?: Record<string, any>;
-    };
+    machineTask?: WorkflowMachineTask;
     /** Routing rules for branching (evaluated in order, first match wins) */
     routing?: WorkflowRouting[];
     /** Default next step if no routing condition matches (null = end workflow) */
@@ -161,6 +167,30 @@ export interface WorkflowDefinition {
     defaultTimeoutMs?: number;
     /** Metadata for the workflow */
     metadata?: Record<string, any>;
+}
+
+/** User-friendly input shape for registering or executing workflows */
+export interface WorkflowDefinitionInput {
+    /** Unique identifier for this workflow definition */
+    id: string;
+    /** Human-readable name */
+    name: string;
+    /** Version for schema evolution (defaults to 1) */
+    version?: number;
+    /** The entry point step ID (defaults to the first step ID) */
+    initialStepId?: string;
+    /** All steps in this workflow */
+    steps: WorkflowStep[];
+    /** Default timeout for steps in milliseconds */
+    defaultTimeoutMs?: number;
+    /** Metadata for the workflow */
+    metadata?: Record<string, any>;
+}
+
+/** Compact workflow metadata returned by list endpoints */
+export interface WorkflowDefinitionSummary {
+    id: string;
+    name: string;
 }
 
 /** Status of a workflow instance */

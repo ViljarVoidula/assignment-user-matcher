@@ -25,6 +25,8 @@ import type {
     MatcherOptions,
     options,
     WorkflowDefinition,
+    WorkflowDefinitionInput,
+    WorkflowDefinitionSummary,
     WorkflowInstance,
     WorkflowEvent,
     AssignmentResult,
@@ -38,8 +40,12 @@ export type { RedisClientType, User, Assignment, Stats, MatcherOptions, options 
 // Export workflow types
 export type {
     WorkflowDefinition,
+    WorkflowDefinitionInput,
+    WorkflowDefinitionSummary,
     WorkflowInstance,
     WorkflowStep,
+    WorkflowTargetUser,
+    WorkflowMachineTask,
     WorkflowTaskType,
     WorkflowEvent,
     WorkflowEventType,
@@ -98,6 +104,7 @@ export default class AssignmentMatcher implements WorkflowHost {
     private telemetry: TelemetryManager;
     private luaScriptSha: string | null = null;
     private usingDefaultMatchScore: boolean;
+    private readonly readyPromise: Promise<this>;
 
     constructor(
         public redisClient: RedisClientType,
@@ -157,7 +164,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             }
         );
 
-        this.initRedis();
+        this.readyPromise = this.initRedis();
     }
 
     /** Keys for the three assignment stores (used by pagination queries) */
@@ -187,6 +194,13 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     /**
+     * Wait until the matcher has connected and initialized workflow internals.
+     */
+    async waitUntilReady(): Promise<this> {
+        return this.readyPromise;
+    }
+
+    /**
      * Load Lua scripts into Redis for atomic operations.
      */
     private async loadLuaScripts(): Promise<void> {
@@ -208,6 +222,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         updatedContext: Record<string, any>,
         historyEntry?: WorkflowInstance['history'][0],
     ): Promise<{ ok: boolean; instance?: WorkflowInstance; error?: string }> {
+        await this.readyPromise;
+
         return this.workflow.atomicWorkflowTransition(
             instanceId,
             expectedVersion,
@@ -219,6 +235,7 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     async reclaimOrphanedMessages(): Promise<number> {
+        await this.readyPromise;
         return this.workflow.reclaimOrphanedMessages();
     }
 
@@ -229,6 +246,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         limit: number = 100,
         offset: number = 0,
     ): Promise<DeadLetterEntry[]> {
+        await this.readyPromise;
         return this.reliability.getDeadLetterEvents(limit, offset);
     }
 
@@ -236,6 +254,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Get Dead Letter Queue size.
      */
     async getDeadLetterQueueSize(): Promise<number> {
+        await this.readyPromise;
         return this.reliability.getDeadLetterQueueSize();
     }
 
@@ -243,6 +262,8 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Replay a Dead Letter Queue event.
      */
     async replayDeadLetterEvent(eventJson: string): Promise<boolean> {
+        await this.readyPromise;
+
         const entry: DeadLetterEntry = JSON.parse(eventJson);
         // Reset retry count
         await this.redisClient.del(this.keys.eventRetryCount(entry.event.eventId));
@@ -257,6 +278,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Clear all events from the Dead Letter Queue.
      */
     async clearDeadLetterQueue(): Promise<number> {
+        await this.readyPromise;
         return this.reliability.clearDeadLetterQueue();
     }
 
@@ -264,6 +286,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Get audit events from the audit stream.
      */
     async getAuditEvents(count: number = 100): Promise<AuditEntry[]> {
+        await this.readyPromise;
         return this.reliability.getAuditEvents(count);
     }
 
@@ -298,6 +321,8 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     async addUser(user: User): Promise<User> {
+        await this.readyPromise;
+
         await this.redisClient.hSet(
             this.usersKey,
             user.id,
@@ -311,6 +336,8 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     async addAssignment(assignment: Assignment) {
+        await this.readyPromise;
+
         let { id, tags, priority, latitude, longitude } = assignment;
         if (!priority) priority = await this.calculatePriority(assignment);
 
@@ -354,6 +381,8 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     async removeAssignment(id: string) {
+        await this.readyPromise;
+
         const assignmentPriorityKey = this.keys.assignmentPriority(id);
         const assignmentTagsKey = this.keys.assignmentTags(id);
         const assignmentGeoKey = this.keys.assignmentsGeo();
@@ -397,6 +426,8 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     async removeUser(userId: string): Promise<string> {
+        await this.readyPromise;
+
         const multi = this.redisClient
             .multi()
             .del(this.keys.userAssignments(userId))
@@ -412,6 +443,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * For large datasets, prefer using getAssignmentsPaginated() instead.
      */
     async getAllAssignments(): Promise<Assignment[]> {
+        await this.readyPromise;
         return getAllAssignmentsFromStores(this.redisClient, this.assignmentStoreKeys);
     }
 
@@ -425,6 +457,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * @param options.includeTotal - Whether to include total count (slower for large datasets)
      */
     async getAssignmentsPaginated(options?: PaginationOptions): Promise<PaginationResult> {
+        await this.readyPromise;
         return getAssignmentsPaginatedFromStores(this.redisClient, this.assignmentStoreKeys, options);
     }
 
@@ -433,6 +466,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Efficient for dashboards and monitoring.
      */
     async getAssignmentCounts(): Promise<AssignmentCounts> {
+        await this.readyPromise;
         return getAssignmentCountsFromStores(this.redisClient, this.assignmentStoreKeys);
     }
 
@@ -440,6 +474,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Get a single assignment by ID from any status.
      */
     async getAssignment(id: string): Promise<(Assignment & { _status?: string }) | null> {
+        await this.readyPromise;
         return getAssignmentById(this.redisClient, this.assignmentStoreKeys, id);
     }
 
@@ -447,6 +482,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Get multiple assignments by IDs efficiently.
      */
     async getAssignmentsByIds(ids: string[]): Promise<Assignment[]> {
+        await this.readyPromise;
         return getAssignmentsByIdsBatch(this.redisClient, this.assignmentStoreKeys, ids);
     }
 
@@ -741,6 +777,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         return userAssignments;
     }
     async matchUsersAssignments(userId?: string): Promise<void> {
+        await this.readyPromise;
+
         // If a specific userId is provided, process only that user for precise per-user matching.
         if (userId) {
             const userJson = await this.redisClient.hGet(this.usersKey, userId);
@@ -792,12 +830,16 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     async getCurrentAssignmentsForUser(userId: string): Promise<string[]> {
+        await this.readyPromise;
+
         const userAssignments = await this.redisClient.sMembers(this.keys.userAssignments(userId));
 
         return userAssignments.map((el: string) => el.split(':')[1]);
     }
 
     async acceptAssignment(userId: string, assignmentId: string): Promise<boolean> {
+        await this.readyPromise;
+
         const isAssigned = await this.redisClient.sIsMember(
             this.keys.userAssignments(userId),
             `assignment:${assignmentId}`,
@@ -823,6 +865,8 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     async rejectAssignment(userId: string, assignmentId: string): Promise<boolean> {
+        await this.readyPromise;
+
         const isAssigned = await this.redisClient.sIsMember(
             this.keys.userAssignments(userId),
             `assignment:${assignmentId}`,
@@ -863,6 +907,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         assignmentId: string,
         result?: AssignmentResult,
     ): Promise<boolean> {
+        await this.readyPromise;
+
         // Verify assignment is in accepted state
         const json = await this.redisClient.hGet(this.acceptedAssignmentsKey, assignmentId);
         if (!json) {
@@ -914,6 +960,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         assignmentId: string,
         reason?: string,
     ): Promise<boolean> {
+        await this.readyPromise;
+
         const json = await this.redisClient.hGet(this.acceptedAssignmentsKey, assignmentId);
         if (!json) {
             throw new Error('Assignment not found in accepted state');
@@ -963,7 +1011,10 @@ export default class AssignmentMatcher implements WorkflowHost {
     /**
      * Register a new workflow definition.
      */
-    async registerWorkflow(definition: WorkflowDefinition): Promise<WorkflowDefinition> {
+    async registerWorkflow(
+        definition: WorkflowDefinitionInput | WorkflowDefinition,
+    ): Promise<WorkflowDefinition> {
+        await this.readyPromise;
         return this.workflow.registerWorkflow(definition);
     }
 
@@ -971,14 +1022,34 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Get a workflow definition by ID.
      */
     async getWorkflowDefinition(id: string): Promise<WorkflowDefinition | null> {
+        await this.readyPromise;
         return this.workflow.getWorkflowDefinition(id);
     }
 
     /**
      * List all registered workflow definitions.
      */
-    async listWorkflowDefinitions(): Promise<Array<{ id: string; name: string }>> {
+    async listWorkflowDefinitions(): Promise<WorkflowDefinitionSummary[]> {
+        await this.readyPromise;
         return this.workflow.listWorkflowDefinitions();
+    }
+
+    /**
+     * Register and start a workflow in one call, or start an already-registered workflow by ID.
+     */
+    async executeWorkflow(
+        workflowOrId: WorkflowDefinitionInput | WorkflowDefinition | string,
+        userId: string,
+        initialContext?: Record<string, any>,
+    ): Promise<WorkflowInstance> {
+        await this.readyPromise;
+
+        if (typeof workflowOrId === 'string') {
+            return this.workflow.startWorkflow(workflowOrId, userId, initialContext);
+        }
+
+        const definition = await this.workflow.registerWorkflow(workflowOrId);
+        return this.workflow.startWorkflow(definition.id, userId, initialContext);
     }
 
     /**
@@ -989,6 +1060,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         userId: string,
         initialContext?: Record<string, any>,
     ): Promise<WorkflowInstance> {
+        await this.readyPromise;
         return this.workflow.startWorkflow(workflowDefinitionId, userId, initialContext);
     }
 
@@ -996,6 +1068,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Get a workflow instance by ID.
      */
     async getWorkflowInstance(instanceId: string): Promise<WorkflowInstance | null> {
+        await this.readyPromise;
         return this.workflow.getWorkflowInstance(instanceId);
     }
 
@@ -1003,6 +1076,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Get a workflow instance with its snapshot definition.
      */
     async getWorkflowInstanceWithSnapshot(instanceId: string): Promise<WorkflowInstanceWithSnapshot | null> {
+        await this.readyPromise;
         return this.workflow.getWorkflowInstanceWithSnapshot(instanceId);
     }
 
@@ -1010,6 +1084,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Get all active workflow instances for a user.
      */
     async getActiveWorkflowsForUser(userId: string): Promise<WorkflowInstance[]> {
+        await this.readyPromise;
         return this.workflow.getActiveWorkflowsForUser(userId);
     }
 
@@ -1017,6 +1092,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Cancel a workflow instance.
      */
     async cancelWorkflow(instanceId: string): Promise<boolean> {
+        await this.readyPromise;
         return this.workflow.cancelWorkflow(instanceId);
     }
 
@@ -1027,6 +1103,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Should be called periodically.
      */
     async processExpiredWorkflowSteps(): Promise<number> {
+        await this.readyPromise;
         return this.workflow.processExpiredWorkflowSteps();
     }
 
@@ -1035,6 +1112,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Publish a workflow event to the Redis Stream.
      */
     async publishWorkflowEvent(event: WorkflowEvent): Promise<string> {
+        await this.readyPromise;
         return this.workflow.publishWorkflowEvent(event);
     }
 
@@ -1043,6 +1121,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * This listens to the event stream and processes workflow transitions.
      */
     async startOrchestrator(): Promise<void> {
+        await this.readyPromise;
         return this.workflow.startOrchestrator();
     }
 
@@ -1050,6 +1129,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Stop the workflow orchestrator.
      */
     async stopOrchestrator(): Promise<void> {
+        await this.readyPromise;
         return this.workflow.stopOrchestrator();
     }
 
@@ -1057,6 +1137,8 @@ export default class AssignmentMatcher implements WorkflowHost {
 
 
     async processExpiredMatches(): Promise<number> {
+        await this.readyPromise;
+
         const now = Date.now();
         const expiredIds = await this.redisClient.zRangeByScore(this.pendingAssignmentsExpiryKey, '-inf', now);
 

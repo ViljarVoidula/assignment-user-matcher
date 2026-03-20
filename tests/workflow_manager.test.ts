@@ -362,6 +362,315 @@ describe('WorkflowManager', function () {
             await workflowManager.init();
             await workflowManager.init();
         });
+
+        it('should skip consumer group init when workflows are disabled', async function () {
+            const xGroupCreateSpy = sinon.spy(redisClient, 'xGroupCreate');
+            const host: WorkflowHost = {
+                async addAssignment(a: Assignment) { return a; },
+                async matchUsersAssignments() { return []; },
+            };
+
+            const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
+                enableWorkflows: false,
+                streamConsumerGroup: 'disabled-init-group',
+                streamConsumerName: 'disabled-init-consumer',
+                reclaimIntervalMs: 1000,
+            });
+
+            await mgr.init();
+            expect(xGroupCreateSpy.called).to.equal(false);
+            xGroupCreateSpy.restore();
+        });
+    });
+
+    describe('Validation & Internal Branches', function () {
+        it('should reject blank workflow definition ID and blank user ID', async function () {
+            try {
+                await workflowManager.startWorkflow('   ', 'u1');
+                expect.fail('Should have thrown for blank workflow definition ID');
+            } catch (err: any) {
+                expect(err.message).to.equal('Workflow definition ID is required');
+            }
+
+            try {
+                await workflowManager.startWorkflow('wf-id', '   ');
+                expect.fail('Should have thrown for blank user ID');
+            } catch (err: any) {
+                expect(err.message).to.equal('Workflow user ID is required');
+            }
+        });
+
+        it('should throw when cancelling a missing workflow instance', async function () {
+            try {
+                await workflowManager.cancelWorkflow('missing-instance');
+                expect.fail('Should have thrown for missing workflow instance');
+            } catch (err: any) {
+                expect(err.message).to.equal('Workflow instance not found: missing-instance');
+            }
+        });
+
+        it('should throw when executing a missing workflow step', async function () {
+            const instance: any = {
+                id: 'inst-missing-step',
+                workflowDefinitionId: 'wf-missing-step',
+                initiatorUserId: 'u1',
+                status: 'active',
+                currentStepId: 'missing',
+                context: {},
+                history: [],
+                retryCount: 0,
+                version: 1,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            };
+
+            try {
+                await (workflowManager as any).executeWorkflowStep(instance, 'missing', {
+                    id: 'wf-missing-step',
+                    name: 'Missing Step',
+                    version: 1,
+                    initialStepId: 'missing',
+                    steps: [],
+                });
+                expect.fail('Should have thrown for missing step');
+            } catch (err: any) {
+                expect(err.message).to.equal('Step not found: missing in workflow wf-missing-step');
+            }
+        });
+
+        it('should throw when a parallel machine step is missing a handler', async function () {
+            const host: WorkflowHost = {
+                async addAssignment(a: Assignment) { return a; },
+                async matchUsersAssignments() { return []; },
+            };
+
+            const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
+                enableWorkflows: true,
+                streamConsumerGroup: 'par-machine-invalid-group',
+                streamConsumerName: 'par-machine-invalid-consumer',
+                reclaimIntervalMs: 1000,
+            });
+            await mgr.init();
+
+            await redisClient.set(
+                keys.workflowDefinition('wf-par-machine-invalid'),
+                JSON.stringify({
+                    id: 'wf-par-machine-invalid',
+                    name: 'Invalid Parallel Machine',
+                    version: 1,
+                    initialStepId: 'join',
+                    steps: [
+                        {
+                            id: 'join',
+                            name: 'Join',
+                            assignmentTemplate: { tags: ['join'] },
+                            targetUser: 'initiator',
+                            parallelStepIds: ['machine-1'],
+                        },
+                        {
+                            id: 'machine-1',
+                            name: 'Machine 1',
+                            taskType: 'machine',
+                            defaultNextStepId: null,
+                        },
+                    ],
+                }),
+            );
+            await redisClient.hSet(keys.workflowDefinitions(), 'wf-par-machine-invalid', 'Invalid Parallel Machine');
+
+            try {
+                await mgr.startWorkflow('wf-par-machine-invalid', 'u1');
+                expect.fail('Should have thrown for missing machineTask handler');
+            } catch (err: any) {
+                expect(err.message).to.equal('Machine step "machine-1" is missing machineTask.handler');
+            }
+        });
+
+        it('should build assignment steps with explicit target user and defaults', async function () {
+            const createdAssignments: Assignment[] = [];
+            const matchedUsers: string[] = [];
+            const host: WorkflowHost = {
+                async addAssignment(a: Assignment) {
+                    createdAssignments.push(a);
+                    return a;
+                },
+                async matchUsersAssignments(userId: string) {
+                    matchedUsers.push(userId);
+                    return [];
+                },
+            };
+
+            const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
+                enableWorkflows: true,
+                streamConsumerGroup: 'target-user-group',
+                streamConsumerName: 'target-user-consumer',
+                reclaimIntervalMs: 1000,
+            });
+            await mgr.init();
+
+            const instance: any = {
+                id: 'inst-target-user',
+                workflowDefinitionId: 'wf-target-user',
+                initiatorUserId: 'initiator-1',
+                status: 'active',
+                currentStepId: 's1',
+                context: { source: 'manual' },
+                history: [],
+                retryCount: 0,
+                version: 1,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            };
+
+            const assignment = await (mgr as any).createWorkflowAssignment(
+                instance,
+                {
+                    id: 's1',
+                    name: 'S1',
+                    assignmentTemplate: {},
+                    targetUser: 'specific-user',
+                    defaultNextStepId: null,
+                },
+                {
+                    id: 'wf-target-user',
+                    name: 'Target User',
+                    version: 1,
+                    initialStepId: 's1',
+                    steps: [],
+                },
+            );
+
+            expect(assignment.tags).to.deep.equal(['workflow']);
+            expect(assignment.priority).to.equal(1000);
+            expect((assignment as any)._targetUserId).to.equal('specific-user');
+            expect(createdAssignments).to.have.lengthOf(1);
+            expect(matchedUsers).to.deep.equal(['specific-user']);
+        });
+
+        it('should return early when completion or failure events are missing step context', async function () {
+            const now = Date.now();
+            const definition: WorkflowDefinition = {
+                id: 'wf-early-returns',
+                name: 'Early Returns',
+                version: 1,
+                initialStepId: 's1',
+                steps: [
+                    {
+                        id: 's1',
+                        name: 'S1',
+                        assignmentTemplate: { tags: ['s1'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: null,
+                    },
+                ],
+            };
+
+            const instance: any = {
+                id: 'wf-early-returns-inst',
+                workflowDefinitionId: 'wf-early-returns',
+                initiatorUserId: 'u1',
+                status: 'active',
+                currentStepId: 's1',
+                currentAssignmentId: 'a1',
+                context: {},
+                history: [],
+                retryCount: 0,
+                version: 1,
+                createdAt: now,
+                updatedAt: now,
+                definitionSnapshot: definition,
+            };
+
+            await redisClient.hSet(keys.workflowInstance(instance.id), 'data', JSON.stringify(instance));
+
+            await (workflowManager as any).handleStepCompletion(instance, definition, {
+                eventId: 'evt-no-step-id',
+                type: 'COMPLETED',
+                userId: 'u1',
+                assignmentId: 'a1',
+                workflowInstanceId: instance.id,
+                timestamp: Date.now(),
+            });
+
+            await (workflowManager as any).handleStepFailure(instance, definition, {
+                eventId: 'evt-no-failure-step-id',
+                type: 'FAILED',
+                userId: 'u1',
+                assignmentId: 'a1',
+                workflowInstanceId: instance.id,
+                timestamp: Date.now(),
+            });
+
+            const saved = await workflowManager.getWorkflowInstance(instance.id);
+            expect(saved?.history).to.have.lengthOf(0);
+            expect(saved?.status).to.equal('active');
+        });
+
+        it('should keep waiting on parallel failure with continue policy until all branches finish', async function () {
+            const host: WorkflowHost = {
+                async addAssignment(a: Assignment) { return a; },
+                async matchUsersAssignments() { return []; },
+            };
+
+            const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
+                enableWorkflows: true,
+                streamConsumerGroup: 'par-continue-wait-group',
+                streamConsumerName: 'par-continue-wait-consumer',
+                reclaimIntervalMs: 1000,
+            });
+            await mgr.init();
+
+            const def: WorkflowDefinition = {
+                id: 'wf-par-continue-wait',
+                name: 'Parallel Continue Wait',
+                version: 1,
+                initialStepId: 'join',
+                steps: [
+                    {
+                        id: 'join',
+                        name: 'Join',
+                        assignmentTemplate: { tags: ['join'] },
+                        targetUser: 'initiator',
+                        parallelStepIds: ['a', 'b'],
+                    },
+                    {
+                        id: 'a',
+                        name: 'A',
+                        assignmentTemplate: { tags: ['a'] },
+                        targetUser: 'initiator',
+                        failurePolicy: 'continue',
+                        defaultNextStepId: null,
+                    },
+                    {
+                        id: 'b',
+                        name: 'B',
+                        assignmentTemplate: { tags: ['b'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: null,
+                    },
+                ],
+            };
+
+            await mgr.registerWorkflow(def);
+            const started = await mgr.startWorkflow(def.id, 'u1');
+            const current = await mgr.getWorkflowInstance(started.id);
+            const aAsgn = current!.parallelBranches!.find((x) => x.stepId === 'a')!.assignmentId;
+
+            await (mgr as any).processWorkflowEvent({
+                eventId: 'evt-par-continue-wait',
+                type: 'FAILED',
+                userId: 'u1',
+                assignmentId: aAsgn,
+                workflowInstanceId: started.id,
+                stepId: 'a',
+                timestamp: Date.now(),
+            });
+
+            const updated = await mgr.getWorkflowInstance(started.id);
+            expect(updated?.status).to.equal('active');
+            expect(updated?.parallelBranches).to.have.lengthOf(2);
+            expect(updated?.parallelBranches?.find((x) => x.stepId === 'a')?.status).to.equal('failed');
+        });
     });
 
     describe('Event Publishing', function () {
@@ -1431,6 +1740,41 @@ describe('WorkflowManager', function () {
 
             consoleStub.restore();
         });
+
+        it('should handle XAUTOCLAIM errors and null reclaimed messages gracefully', async function () {
+            const consoleStub = sinon.stub(console, 'error');
+            const host: WorkflowHost = {
+                async addAssignment(a: Assignment) { return a; },
+                async matchUsersAssignments() { return []; },
+            };
+
+            const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
+                enableWorkflows: true,
+                streamConsumerGroup: 'reclaim-error-group',
+                streamConsumerName: 'reclaim-error-consumer',
+                reclaimIntervalMs: 1,
+            });
+            await mgr.init();
+
+            const subscriber = redisClient.duplicate();
+            await subscriber.connect();
+            (mgr as any).subscriberClient = subscriber;
+
+            const xAutoClaimStub = sinon.stub(subscriber, 'xAutoClaim');
+            xAutoClaimStub.onFirstCall().rejects(new Error('xautoclaim failed'));
+            xAutoClaimStub.onSecondCall().resolves({ nextId: '0-0', messages: [null] } as any);
+
+            const first = await mgr.reclaimOrphanedMessages();
+            const second = await mgr.reclaimOrphanedMessages();
+
+            expect(first).to.equal(0);
+            expect(second).to.equal(0);
+            expect(consoleStub.called).to.equal(true);
+
+            xAutoClaimStub.restore();
+            await subscriber.quit();
+            consoleStub.restore();
+        });
     });
 
     describe('Lua Transitions', function () {
@@ -1542,6 +1886,31 @@ describe('WorkflowManager', function () {
                 threw = true;
             }
             expect(threw).to.equal(true);
+        });
+
+        it('should return early when starting orchestrator twice and stop cleanly without an open subscriber', async function () {
+            const host: WorkflowHost = {
+                async addAssignment(a: Assignment) { return a; },
+                async matchUsersAssignments() { return []; },
+            };
+
+            const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
+                enableWorkflows: true,
+                streamConsumerGroup: 'orch-idempotent-group',
+                streamConsumerName: 'orch-idempotent-consumer',
+                reclaimIntervalMs: 1000,
+            });
+            await mgr.init();
+
+            await mgr.startOrchestrator();
+            const firstSubscriber = (mgr as any).subscriberClient;
+
+            await mgr.startOrchestrator();
+            expect((mgr as any).subscriberClient).to.equal(firstSubscriber);
+
+            await firstSubscriber.disconnect();
+            await mgr.stopOrchestrator();
+            expect((mgr as any).subscriberClient).to.equal(firstSubscriber);
         });
 
         it('should process a COMPLETED event via orchestrator loop', async function () {

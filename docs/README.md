@@ -59,6 +59,23 @@ Traditional matching systems can become bottlenecks, leading to delays, suboptim
   - Wildcards are **suffix-only** (`prefix*`). Patterns like `skill:*:node` are not treated as wildcards.
   - If a user has `routingWeights` but no positive entries, assignments stay queued.
 
+  Hard veto configuration example:
+
+  ```ts
+  await assignmentMatcher.addUser({
+    id: 'agent_1',
+    tags: [],
+    routingWeights: {
+      'support:*': 100, // eligible
+      'lang:*': 0, // hard veto for all language-tagged assignments
+      default: 0, // hard veto for default matching fallback
+    },
+  });
+  ```
+
+  Note: `usingDefaultMatchScore` is an internal implementation detail and is **not** a public option.
+  Configure hard veto behavior only through `routingWeights` values.
+
 3.  **Prioritization Engine:**
     Assignments are typically processed in the order they are received or by a custom prioritization function you can provide. This ensures that older or more critical assignments get attention first. The library aims to match the highest priority assignments to available, suitable users.
 
@@ -151,6 +168,52 @@ async function runExample() {
 runExample().catch(console.error);
 ```
 
+### 3. Workflow Quick Start
+
+Workflows are easiest to use with the builder helpers and the `executeWorkflow()` convenience method.
+
+```typescript
+import AssignmentMatcher, { workflow } from 'assignment-user-matcher';
+
+const matcher = new AssignmentMatcher(redisClient, {
+  enableWorkflows: true,
+  redisPrefix: 'exampleApp:',
+});
+
+// Optional if your Redis client is already connected.
+// Useful when the matcher is created with a closed client.
+await matcher.waitUntilReady();
+
+const onboardingWorkflow = workflow('onboarding', 'Onboarding')
+  .step('profile')
+    .name('Complete profile')
+    .assignment({ tags: ['profile'], title: 'Complete your profile' })
+    .targetUser('initiator')
+    .defaultNext('review')
+    .done()
+  .step('review')
+    .name('Manager review')
+    .assignment({ tags: ['review'], title: 'Review onboarding' })
+    .targetUser({ tag: 'managers' })
+    .defaultNext(null)
+    .done()
+  .build();
+
+const instance = await matcher.executeWorkflow(onboardingWorkflow, 'agent_007', {
+  source: 'signup',
+});
+
+console.log(instance.id, instance.currentStepId);
+```
+
+You can still call `registerWorkflow()` and `startWorkflow()` separately if you want explicit lifecycle control.
+
+Plain object workflow definitions are also accepted. The library fills in sensible defaults:
+
+- `version` defaults to `1`
+- `initialStepId` defaults to the first step ID
+- invalid definitions fail early during registration with clear validation errors
+
 ## API Reference
 
 The main class provided is `AssignmentMatcher`.
@@ -201,6 +264,17 @@ Removes a specific assignment from the system. Requires tags to efficiently loca
 ### `completeAssignmentForUser(userId: string, assignmentId: string): Promise<void>`
 
 Marks an assignment as completed by a user, removing it from their backlog and potentially making them available for new assignments.
+
+### `waitUntilReady(): Promise<AssignmentMatcher>`
+
+Waits for the matcher to finish connecting and initializing internal Redis and workflow resources.
+
+### `executeWorkflow(workflowOrId, userId, initialContext?): Promise<WorkflowInstance>`
+
+The simplest workflow entrypoint.
+
+- Pass a workflow ID to start an already-registered workflow.
+- Pass a workflow definition or builder-produced definition to register it and start it in one call.
 
 ## Options
 

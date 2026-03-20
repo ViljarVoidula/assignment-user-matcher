@@ -24,12 +24,7 @@ describe('Matcher Coverage Tests', async function () {
         expect(redisClient.isOpen).to.be.false;
         
         matcher = new Matcher(redisClient);
-        // Constructor calls initRedis, which should connect
-        // But initRedis is async and not awaited in constructor.
-        // We need to wait a bit or check if it connects.
-        
-        // Wait for connection
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await matcher.waitUntilReady();
         
         expect(redisClient.isOpen).to.be.true;
     });

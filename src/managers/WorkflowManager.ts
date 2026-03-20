@@ -1,8 +1,21 @@
 import { randomUUID } from 'crypto';
-import { RedisClientType, WorkflowDefinition, WorkflowInstance, WorkflowStep, WorkflowEvent, WorkflowEventType, Assignment, WorkflowInstanceWithSnapshot, ParallelBranchState } from '../types/matcher';
+import {
+    RedisClientType,
+    WorkflowDefinition,
+    WorkflowDefinitionInput,
+    WorkflowDefinitionSummary,
+    WorkflowInstance,
+    WorkflowStep,
+    WorkflowEvent,
+    WorkflowEventType,
+    Assignment,
+    WorkflowInstanceWithSnapshot,
+    ParallelBranchState,
+} from '../types/matcher';
 import { KeyBuilders } from '../utils/keys';
 import { ReliabilityManager } from './ReliabilityManager';
 import { TelemetryManager } from './TelemetryManager';
+import { normalizeWorkflowDefinition } from '../workflow-validation';
 
 export interface WorkflowHost {
     addAssignment(assignment: Assignment): Promise<Assignment>;
@@ -58,11 +71,18 @@ export class WorkflowManager {
         this.luaScriptSha = sha;
     }
 
-    async registerWorkflow(definition: WorkflowDefinition): Promise<WorkflowDefinition> {
-        const key = this.keys.workflowDefinition(definition.id);
-        await this.redisClient.set(key, JSON.stringify(definition));
-        await this.redisClient.hSet(this.keys.workflowDefinitions(), definition.id, definition.name);
-        return definition;
+    async registerWorkflow(
+        definition: WorkflowDefinitionInput | WorkflowDefinition,
+    ): Promise<WorkflowDefinition> {
+        const normalizedDefinition = normalizeWorkflowDefinition(definition);
+        const key = this.keys.workflowDefinition(normalizedDefinition.id);
+        await this.redisClient.set(key, JSON.stringify(normalizedDefinition));
+        await this.redisClient.hSet(
+            this.keys.workflowDefinitions(),
+            normalizedDefinition.id,
+            normalizedDefinition.name,
+        );
+        return normalizedDefinition;
     }
 
     async getWorkflowDefinition(id: string): Promise<WorkflowDefinition | null> {
@@ -71,7 +91,7 @@ export class WorkflowManager {
         return json ? JSON.parse(json) : null;
     }
 
-    async listWorkflowDefinitions(): Promise<Array<{ id: string; name: string }>> {
+    async listWorkflowDefinitions(): Promise<WorkflowDefinitionSummary[]> {
         const definitions = await this.redisClient.hGetAll(this.keys.workflowDefinitions());
         return Object.entries(definitions).map(([id, name]) => ({ id, name }));
     }
@@ -81,6 +101,13 @@ export class WorkflowManager {
         userId: string,
         initialContext?: Record<string, any>,
     ): Promise<WorkflowInstance> {
+        if (!workflowDefinitionId.trim()) {
+            throw new Error('Workflow definition ID is required');
+        }
+        if (!userId.trim()) {
+            throw new Error('Workflow user ID is required');
+        }
+
         const { span, end: endSpan } = this.telemetry.startSpan('workflow.start', {
             'workflow.definition_id': workflowDefinitionId,
             'workflow.user_id': userId,
@@ -722,6 +749,8 @@ export class WorkflowManager {
                             ...event,
                             type: 'COMPLETED',
                         });
+                    } else {
+                        await this.saveInstance(instance, expectedVersion);
                     }
                     return;
                 }

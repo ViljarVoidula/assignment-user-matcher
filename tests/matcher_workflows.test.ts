@@ -1,7 +1,7 @@
 import Matcher from '../src/matcher.class';
 import { createClient } from 'redis';
 import { expect } from 'chai';
-import type { WorkflowDefinition } from '../src/types/matcher';
+import type { WorkflowDefinition, WorkflowDefinitionInput } from '../src/types/matcher';
 
 describe('Workflow Tests', function () {
     this.timeout(10000);
@@ -60,6 +60,62 @@ describe('Workflow Tests', function () {
             expect(result).to.deep.equal(definition);
         });
 
+        it('Should normalize workflow definitions with default version and initial step', async function () {
+            const definition: WorkflowDefinitionInput = {
+                id: 'simple-review',
+                name: 'Simple Review',
+                steps: [
+                    {
+                        id: 'draft',
+                        name: 'Draft',
+                        assignmentTemplate: { tags: ['draft'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: 'publish',
+                    },
+                    {
+                        id: 'publish',
+                        name: 'Publish',
+                        assignmentTemplate: { tags: ['publish'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: null,
+                    },
+                ],
+            };
+
+            const result = await matcher.registerWorkflow(definition);
+
+            expect(result.version).to.equal(1);
+            expect(result.initialStepId).to.equal('draft');
+        });
+
+        it('Should reject duplicate workflow step IDs', async function () {
+            const invalidDefinition: WorkflowDefinitionInput = {
+                id: 'invalid-duplicate-steps',
+                name: 'Invalid Duplicate Steps',
+                steps: [
+                    {
+                        id: 'duplicate',
+                        name: 'First',
+                        assignmentTemplate: { tags: ['one'] },
+                        targetUser: 'initiator',
+                    },
+                    {
+                        id: 'duplicate',
+                        name: 'Second',
+                        assignmentTemplate: { tags: ['two'] },
+                        targetUser: 'initiator',
+                    },
+                ],
+            };
+
+            try {
+                await matcher.registerWorkflow(invalidDefinition);
+                expect.fail('Should have thrown an error');
+            } catch (err: any) {
+                expect(err.message).to.equal('Duplicate workflow step ID "duplicate"');
+            }
+        });
+
         it('Should retrieve a registered workflow definition', async function () {
             const definition = await matcher.getWorkflowDefinition('onboarding-v1');
             expect(definition).to.not.be.null;
@@ -102,6 +158,34 @@ describe('Workflow Tests', function () {
             expect(instance.status).to.equal('active');
             expect(instance.currentStepId).to.equal('step-1');
             expect(instance.context.source).to.equal('test');
+        });
+
+        it('Should execute a workflow definition directly', async function () {
+            const instance = await matcher.executeWorkflow(
+                {
+                    id: 'direct-execution',
+                    name: 'Direct Execution',
+                    steps: [
+                        {
+                            id: 'first',
+                            name: 'First',
+                            assignmentTemplate: { tags: ['onboarding'] },
+                            targetUser: 'initiator',
+                            defaultNextStepId: null,
+                        },
+                    ],
+                },
+                'user-workflow-1',
+                { source: 'executeWorkflow' },
+            );
+
+            expect(instance.workflowDefinitionId).to.equal('direct-execution');
+            expect(instance.currentStepId).to.equal('first');
+            expect(instance.context.source).to.equal('executeWorkflow');
+
+            const definition = await matcher.getWorkflowDefinition('direct-execution');
+            expect(definition?.version).to.equal(1);
+            expect(definition?.initialStepId).to.equal('first');
         });
 
         it('Should retrieve a workflow instance', async function () {

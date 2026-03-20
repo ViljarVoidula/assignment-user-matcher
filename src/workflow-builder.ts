@@ -40,10 +40,13 @@
 
 import type {
     WorkflowDefinition,
+    WorkflowDefinitionInput,
     WorkflowStep,
     Assignment,
     WorkflowTaskType,
+    WorkflowTargetUser,
 } from './types/matcher';
+import { normalizeWorkflowDefinition } from './workflow-validation';
 
 /**
  * Builder for individual workflow steps.
@@ -100,7 +103,7 @@ export class WorkflowStepBuilder {
      * Set the target user for this step.
      * @param target - 'initiator' | 'previous' | userId | { tag: string }
      */
-    targetUser(target: 'initiator' | 'previous' | string | { tag: string }): this {
+    targetUser(target: WorkflowTargetUser): this {
         this.step.targetUser = target;
         return this;
     }
@@ -192,7 +195,7 @@ export class WorkflowStepBuilder {
  * Builder for workflow definitions.
  */
 export class WorkflowBuilder {
-    private definition: Partial<WorkflowDefinition>;
+    private definition: Partial<WorkflowDefinitionInput>;
     private steps: WorkflowStep[] = [];
 
     private constructor(id: string, name: string) {
@@ -273,68 +276,15 @@ export class WorkflowBuilder {
      * @throws Error if the workflow is invalid
      */
     build(): WorkflowDefinition {
-        // Validate
-        if (!this.definition.id) {
-            throw new Error('Workflow ID is required');
-        }
-        if (!this.definition.name) {
-            throw new Error('Workflow name is required');
-        }
-        if (this.steps.length === 0) {
-            throw new Error('Workflow must have at least one step');
-        }
-        if (!this.definition.initialStepId) {
-            // Default to first step if not specified
-            this.definition.initialStepId = this.steps[0].id;
-        }
-
-        // Validate initial step exists
-        const initialStep = this.steps.find(s => s.id === this.definition.initialStepId);
-        if (!initialStep) {
-            throw new Error(`Initial step "${this.definition.initialStepId}" not found`);
-        }
-
-        // Validate all referenced step IDs exist
-        for (const step of this.steps) {
-            const taskType = step.taskType ?? 'assignment';
-            if (taskType === 'machine' && !step.machineTask?.handler) {
-                throw new Error(`Step "${step.id}" has taskType "machine" but no machineTask.handler`);
-            }
-
-            if (step.routing) {
-                for (const route of step.routing) {
-                    if (!this.steps.find(s => s.id === route.targetStepId)) {
-                        throw new Error(
-                            `Step "${step.id}" references non-existent step "${route.targetStepId}" in routing`
-                        );
-                    }
-                }
-            }
-            if (step.defaultNextStepId && !this.steps.find(s => s.id === step.defaultNextStepId)) {
-                throw new Error(
-                    `Step "${step.id}" references non-existent step "${step.defaultNextStepId}" as default next`
-                );
-            }
-            if (step.parallelStepIds) {
-                for (const parallelId of step.parallelStepIds) {
-                    if (!this.steps.find(s => s.id === parallelId)) {
-                        throw new Error(
-                            `Step "${step.id}" references non-existent parallel step "${parallelId}"`
-                        );
-                    }
-                }
-            }
-        }
-
-        return {
+        return normalizeWorkflowDefinition({
             id: this.definition.id!,
             name: this.definition.name!,
-            version: this.definition.version ?? 1,
-            initialStepId: this.definition.initialStepId!,
+            version: this.definition.version,
+            initialStepId: this.definition.initialStepId,
             steps: this.steps,
             defaultTimeoutMs: this.definition.defaultTimeoutMs,
             metadata: this.definition.metadata,
-        };
+        });
     }
 }
 

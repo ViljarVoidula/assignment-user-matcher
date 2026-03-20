@@ -5,8 +5,12 @@ export type { Assignment, options, Stats, User } from './matcher.class';
 // Workflow type exports
 export type {
     WorkflowDefinition,
+    WorkflowDefinitionInput,
+    WorkflowDefinitionSummary,
     WorkflowInstance,
     WorkflowStep,
+    WorkflowTargetUser,
+    WorkflowMachineTask,
     WorkflowTaskType,
     WorkflowEvent,
     WorkflowEventType,
@@ -26,6 +30,7 @@ export {
     linearWorkflow,
     approvalWorkflow,
 } from './workflow-builder';
+export { normalizeWorkflowDefinition, validateWorkflowDefinition } from './workflow-validation';
 
 // Utility exports for advanced usage
 export * from './utils/cidr';
