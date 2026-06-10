@@ -24,6 +24,7 @@ import type {
     User,
     Assignment,
     Stats,
+    PendingAssignmentInfo,
     MatcherOptions,
     options,
     WorkflowDefinition,
@@ -44,7 +45,7 @@ import type {
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
-export type { RedisClientType, User, Assignment, Stats, MatcherOptions, options } from './types/matcher';
+export type { RedisClientType, User, Assignment, Stats, PendingAssignmentInfo, MatcherOptions, options } from './types/matcher';
 // Export workflow types
 export type {
     WorkflowDefinition,
@@ -103,6 +104,7 @@ export default class AssignmentMatcher implements WorkflowHost {
     maxUserBacklogSize: number;
     enableDefaultMatching: boolean;
     matchExpirationMs: number;
+    idleUserTimeoutMs: number | null;
     pendingAssignmentsKey: string;
     pendingAssignmentsExpiryKey: string;
     assignmentOwnerKey: string;
@@ -145,6 +147,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         this.assignmentsRefKey = this.keys.assignmentsRef();
         this.maxUserBacklogSize = options?.maxUserBacklogSize ?? 9;
         this.matchExpirationMs = options?.matchExpirationMs ?? 60000;
+        this.idleUserTimeoutMs = options?.idleUserTimeoutMs ?? null;
         this.pendingAssignmentsKey = this.keys.pendingAssignmentsData();
         this.pendingAssignmentsExpiryKey = this.keys.pendingAssignmentsExpiry();
         this.assignmentOwnerKey = this.keys.assignmentOwner();
@@ -429,6 +432,8 @@ export default class AssignmentMatcher implements WorkflowHost {
             }),
         );
 
+        await this.touchUser(user.id);
+
         return user;
     }
 
@@ -529,6 +534,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             .multi()
             .del(this.keys.userAssignments(userId))
             .del(this.keys.userRejected(userId))
+            .zRem(this.keys.userActivity(), userId)
             .hDel(this.usersKey, userId);
         await multi.exec();
 
@@ -581,6 +587,56 @@ export default class AssignmentMatcher implements WorkflowHost {
     async getAssignmentsByIds(ids: string[]): Promise<Assignment[]> {
         await this.readyPromise;
         return getAssignmentsByIdsBatch(this.redisClient, this.assignmentStoreKeys, ids);
+    }
+
+    /**
+     * Get all pending assignments with owner and pending duration metadata.
+     */
+    async getPendingAssignmentsWithAge(): Promise<PendingAssignmentInfo[]> {
+        await this.readyPromise;
+
+        const now = Date.now();
+        const pendingEntries = await this.redisClient.hGetAll(this.pendingAssignmentsKey);
+        const assignmentIds = Object.keys(pendingEntries);
+
+        if (assignmentIds.length === 0) {
+            return [];
+        }
+
+        const [owners, expiryScores] = await Promise.all([
+            this.redisClient.hmGet(this.assignmentOwnerKey, assignmentIds),
+            Promise.all(assignmentIds.map((id) => this.redisClient.zScore(this.pendingAssignmentsExpiryKey, id))),
+        ]);
+
+        const results: PendingAssignmentInfo[] = [];
+        for (let i = 0; i < assignmentIds.length; i++) {
+            const id = assignmentIds[i];
+            const json = pendingEntries[id];
+            if (!json) continue;
+
+            let assignment: Assignment;
+            try {
+                assignment = JSON.parse(json);
+            } catch {
+                continue;
+            }
+
+            const score = expiryScores[i];
+            const expiresAt = score === null ? null : Number(score);
+            const pendingSince = expiresAt === null ? null : expiresAt - this.matchExpirationMs;
+            const pendingForMs = pendingSince === null ? null : Math.max(0, now - pendingSince);
+
+            results.push({
+                assignment,
+                ownerId: owners[i] ?? null,
+                pendingForMs,
+                pendingSince,
+                expiresAt,
+            });
+        }
+
+        results.sort((a, b) => (b.pendingForMs ?? -1) - (a.pendingForMs ?? -1));
+        return results;
     }
 
     /** Default match score implementation using extracted scoring module */
@@ -1009,6 +1065,8 @@ export default class AssignmentMatcher implements WorkflowHost {
             await this.learning.applyOutcome(assignmentId, 'accept');
         }
 
+        await this.touchUser(userId);
+
         return true;
     }
 
@@ -1037,6 +1095,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         if (this.enableLearning) {
             await this.learning.applyOutcome(assignmentId, 'reject');
         }
+
+        await this.touchUser(userId);
 
         if (json) {
             await this.addAssignment(JSON.parse(json));
@@ -1350,6 +1410,113 @@ export default class AssignmentMatcher implements WorkflowHost {
         if (this.autoReleaseInterval) {
             clearInterval(this.autoReleaseInterval);
             this.autoReleaseInterval = null;
+        }
+    }
+
+    // ============================================================================
+    // Idle User Auto-Rejection (opt-in via idleUserTimeoutMs)
+    // ============================================================================
+
+    /**
+     * Record activity for a user (heartbeat). Resets the idle clock used by
+     * processIdleUsers(). Called automatically on addUser, acceptAssignment,
+     * and rejectAssignment; consumers can also call it directly as a heartbeat.
+     */
+    async touchUser(userId: string): Promise<void> {
+        await this.readyPromise;
+        await this.redisClient.zAdd(this.keys.userActivity(), { score: Date.now(), value: userId });
+    }
+
+    /**
+     * Detect users that have been idle longer than idleUserTimeoutMs while
+     * holding pending (unactioned) assignments. Idle users are removed from
+     * the matching pool and their pending assignments are requeued for
+     * distribution to other users.
+     *
+     * No-op (returns []) when idleUserTimeoutMs is not configured.
+     *
+     * @returns IDs of users that were removed
+     */
+    async processIdleUsers(): Promise<string[]> {
+        await this.readyPromise;
+
+        if (this.idleUserTimeoutMs === null) return [];
+
+        const cutoff = Date.now() - this.idleUserTimeoutMs;
+        const idleCandidates = await this.redisClient.zRangeByScore(this.keys.userActivity(), '-inf', cutoff);
+
+        const removed: string[] = [];
+        for (const userId of idleCandidates) {
+            // Skip users no longer in the pool (clean up stale activity entry)
+            const exists = await this.redisClient.hExists(this.usersKey, userId);
+            if (!exists) {
+                await this.redisClient.zRem(this.keys.userActivity(), userId);
+                continue;
+            }
+
+            // Only consider a user idle if they are sitting on unactioned assignments
+            const pendingCount = await this.redisClient.sCard(this.keys.userAssignments(userId));
+            if (pendingCount === 0) continue;
+
+            await this.releaseUserPendingAssignments(userId);
+            await this.removeUser(userId);
+            removed.push(userId);
+        }
+
+        return removed;
+    }
+
+    /**
+     * Requeue all pending assignments currently held by a user.
+     */
+    private async releaseUserPendingAssignments(userId: string): Promise<void> {
+        const members = await this.redisClient.sMembers(this.keys.userAssignments(userId));
+        const now = Date.now();
+
+        for (const member of members) {
+            const id = member.split(':')[1];
+            const json = await this.redisClient.hGet(this.pendingAssignmentsKey, id);
+
+            const multi = this.redisClient.multi();
+            multi.sRem(this.keys.userAssignments(userId), member);
+            multi.hDel(this.pendingAssignmentsKey, id);
+            multi.zRem(this.pendingAssignmentsExpiryKey, id);
+            multi.hDel(this.assignmentOwnerKey, id);
+            await multi.exec();
+
+            if (this.enableLearning) {
+                await this.learning.applyOutcome(id, 'expire');
+            }
+
+            if (this.enableWorkflows) {
+                await this.workflow.publishWorkflowEvent({
+                    eventId: randomUUID(),
+                    type: 'EXPIRED',
+                    userId,
+                    assignmentId: id,
+                    timestamp: now,
+                });
+            }
+
+            if (json) {
+                await this.addAssignment(JSON.parse(json));
+            }
+        }
+    }
+
+    private idleUserInterval: NodeJS.Timeout | null = null;
+
+    startIdleUserInterval(intervalMs: number = 10000) {
+        if (this.idleUserInterval) return;
+        this.idleUserInterval = setInterval(() => {
+            this.processIdleUsers().catch(console.error);
+        }, intervalMs);
+    }
+
+    stopIdleUserInterval() {
+        if (this.idleUserInterval) {
+            clearInterval(this.idleUserInterval);
+            this.idleUserInterval = null;
         }
     }
 

@@ -5,6 +5,14 @@ import { extractMatchFeatures, cosineSimilarity } from '../src/learning/features
 import { createKeyBuilders } from '../src/utils/keys';
 import type { User } from '../src/types/matcher';
 
+function createRng(seed: number) {
+    let state = seed >>> 0;
+    return () => {
+        state = (1664525 * state + 1013904223) >>> 0;
+        return state / 0xffffffff;
+    };
+}
+
 describe('Learning Features - Unit Tests', function () {
     it('should always include a bias feature', function () {
         const user: User = { id: 'u1', tags: [] };
@@ -216,5 +224,66 @@ describe('LearningManager - Integration Tests', function () {
 
         const weights = await manager.getModel();
         expect(manager.predict(goodFeatures, weights)).to.be.greaterThan(manager.predict(badFeatures, weights));
+    });
+
+    it('should learn stable weight directions from a larger synthetic dataset', async function () {
+        const largeManager = new LearningManager(redisClient, keys, {
+            learningRate: 0.08,
+            explorationRate: 0,
+        });
+        const rng = createRng(42);
+        const samples: Array<{ features: Record<string, number>; reward: number }> = [];
+
+        // Ground-truth reward function: y = 0.25 + 2*x1 - 1.5*x2
+        for (let i = 0; i < 1500; i++) {
+            const x1 = rng();
+            const x2 = rng();
+            samples.push({
+                features: { bias: 1, x1, x2 },
+                reward: 0.25 + 2 * x1 - 1.5 * x2,
+            });
+        }
+
+        await largeManager.trainSamples(samples);
+
+        const model = await largeManager.getModel();
+        expect(Number(model.x1)).to.be.greaterThan(0);
+        expect(Number(model.x2)).to.be.lessThan(0);
+
+        // Evaluate on a holdout set and assert low MAE.
+        let mae = 0;
+        for (let i = 0; i < 200; i++) {
+            const x1 = rng();
+            const x2 = rng();
+            const features = { bias: 1, x1, x2 };
+            const target = 0.25 + 2 * x1 - 1.5 * x2;
+            const pred = largeManager.predict(features, model);
+            mae += Math.abs(target - pred);
+        }
+        mae /= 200;
+        expect(mae).to.be.lessThan(0.25);
+    });
+
+    it('should handle high-volume episode feedback imports', async function () {
+        const feedbackManager = new LearningManager(redisClient, keys, {
+            learningRate: 0.2,
+            explorationRate: 0,
+            signalWeights: { accuracy: 2, errorRate: -1.5 },
+        });
+
+        for (let i = 0; i < 120; i++) {
+            const assignmentId = `bulk-${i}`;
+            const features = { bias: 1, 'tag:english': 1, 'bucket:bulk': 1 };
+            await feedbackManager.recordDecision('user1', assignmentId, features, 0);
+            await feedbackManager.applyOutcome(assignmentId, 'complete');
+            await feedbackManager.recordFeedback(assignmentId, {
+                accuracy: 0.9,
+                errorRate: 0.1,
+            });
+        }
+
+        const model = await feedbackManager.getModel();
+        const score = feedbackManager.predict({ bias: 1, 'tag:english': 1, 'bucket:bulk': 1 }, model);
+        expect(score).to.be.greaterThan(0.5);
     });
 });

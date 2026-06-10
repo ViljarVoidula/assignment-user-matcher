@@ -35,12 +35,28 @@ export type Stats = {
     remainingAssignments?: number;
 };
 
+export type PendingAssignmentInfo = {
+    assignment: Assignment;
+    ownerId: string | null;
+    pendingForMs: number | null;
+    pendingSince: number | null;
+    expiresAt: number | null;
+};
+
 export type MatcherOptions = {
     relevantBatchSize?: number;
     redisPrefix?: string;
     maxUserBacklogSize?: number;
     enableDefaultMatching?: boolean;
     matchExpirationMs?: number;
+    /**
+     * Opt-in idle user auto-rejection. When set, users that have pending
+     * (not yet accepted/rejected) assignments and show no activity for this
+     * many milliseconds are removed from the matching pool by
+     * processIdleUsers(), and their pending assignments are requeued.
+     * Disabled when undefined (default), preserving existing behavior.
+     */
+    idleUserTimeoutMs?: number;
     prioritizationFunction?: (...args: (Assignment | undefined)[]) => Promise<number>;
     matchingFunction?: (
         user: User,

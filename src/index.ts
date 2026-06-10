@@ -30,6 +30,7 @@ export type {
     LearningSignals,
     LearningSample,
     LearningStats,
+    PendingAssignmentInfo,
 } from './matcher.class';
 
 // Learning feature helpers (for custom feature extractors)

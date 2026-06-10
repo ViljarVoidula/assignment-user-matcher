@@ -18,6 +18,7 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         users: () => `${prefix}users`,
         userAssignments: (userId: string) => `${prefix}user:${userId}:assignments`,
         userRejected: (userId: string) => `${prefix}user:${userId}:rejected`,
+        userActivity: () => `${prefix}users:activity`,
 
         // Assignment keys
         assignments: () => `${prefix}assignments`,

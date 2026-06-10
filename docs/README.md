@@ -253,6 +253,16 @@ Retrieves the current list of assignments that a user is tentatively matched wit
 
 - `userId: string`: The ID of the user.
 
+### `getPendingAssignmentsWithAge(): Promise<PendingAssignmentInfo[]>`
+
+Retrieves current pending assignments, including who owns each assignment and how long it has been pending.
+
+- `assignment`: The assignment payload.
+- `ownerId`: The current owner user ID, or `null` if missing.
+- `pendingForMs`: Elapsed pending time in milliseconds.
+- `pendingSince`: Unix timestamp (ms) when the assignment entered pending state.
+- `expiresAt`: Unix timestamp (ms) when pending expiration is scheduled.
+
 ### `removeUser(userId: string): Promise<void>`
 
 Removes a user from the system and clears their assignment backlog.
@@ -302,6 +312,16 @@ type Options = {
     // - if no positive weights exist, no assignment is pulled from queue
     // If set to false, you should provide a custom `matchingFunction`.
     enableDefaultMatching?: boolean; // Default: true
+
+    // Opt-in idle user auto-rejection. When set, users holding pending
+    // (not yet accepted/rejected) assignments with no activity for this many
+    // milliseconds are removed from the matching pool by `processIdleUsers()`,
+    // and their pending assignments are requeued for other users.
+    // Activity is recorded automatically on addUser/acceptAssignment/rejectAssignment,
+    // or explicitly via `touchUser(userId)` as a heartbeat.
+    // Use `startIdleUserInterval(intervalMs)` / `stopIdleUserInterval()` to run
+    // the check periodically. Disabled when undefined (default).
+    idleUserTimeoutMs?: number; // Default: undefined (disabled)
 
     // A custom function to determine the priority of an assignment.
     // The function receives assignment objects (or undefined if fewer than 3 are available for comparison)

@@ -230,4 +230,44 @@ describe('Matcher Learning Layer - Integration Tests', function () {
         expect(Number(model['tag:premium'])).to.be.greaterThan(0);
         expect(Number(model['tag:spam'])).to.be.lessThan(0);
     });
+
+    it('should prioritize learned-positive tags in a larger candidate pool', async function () {
+        const matcher = createMatcher({
+            enableLearning: true,
+            learningExplorationRate: 0,
+            learningBoostFactor: 600,
+            relevantBatchSize: 200,
+            maxUserBacklogSize: 20,
+            enableDefaultMatching: false,
+        });
+
+        await matcher.trainLearningSamples([
+            ...Array.from({ length: 300 }, () => ({
+                features: { bias: 1, 'tag:good': 1 },
+                reward: 1,
+            })),
+            ...Array.from({ length: 300 }, () => ({
+                features: { bias: 1, 'tag:bad': 1 },
+                reward: -1,
+            })),
+        ]);
+
+        await matcher.addUser({ id: 'user1', tags: ['good', 'bad'] });
+
+        for (let i = 0; i < 50; i++) {
+            await matcher.addAssignment({ id: `good-${i}`, tags: ['good'], priority: 1 });
+            await matcher.addAssignment({ id: `bad-${i}`, tags: ['bad'], priority: 1 });
+        }
+
+        await matcher.matchUsersAssignments('user1');
+        const assignments = await matcher.getCurrentAssignmentsForUser('user1');
+
+        expect(assignments).to.have.length(20);
+        const goodCount = assignments.filter((id) => id.startsWith('good-')).length;
+        const badCount = assignments.filter((id) => id.startsWith('bad-')).length;
+
+        // Learned model should dominate tie-breaking in this larger pool.
+        expect(goodCount).to.be.greaterThan(17);
+        expect(badCount).to.be.lessThan(3);
+    });
 });
