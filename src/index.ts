@@ -20,7 +20,20 @@ export type {
     AuditEntry,
     CircuitBreakerState,
     WorkflowInstanceWithSnapshot,
+    LearningOutcome,
+    LearningRewards,
+    LearningFeatures,
+    LearningAssignmentContext,
+    LearningFeatureExtractor,
+    LearningDecisionRecord,
+    LearningEpisodeRecord,
+    LearningSignals,
+    LearningSample,
+    LearningStats,
 } from './matcher.class';
+
+// Learning feature helpers (for custom feature extractors)
+export { extractMatchFeatures, cosineSimilarity } from './learning/features';
 
 // Workflow builder DSL
 export {

@@ -325,8 +325,148 @@ type Options = {
         assignmentPriority: number | string, // This is the score from prioritizationFunction or createdAt
         assignmentId?: string,
     ) => Promise<[number, number]>;
+
+    // ========== Reinforcement Learning Options ==========
+
+    // Enable the adaptive learning layer (contextual bandit re-ranking).
+    enableLearning?: boolean; // Default: false
+
+    // SGD learning rate for online model updates.
+    learningRate?: number; // Default: 0.1
+
+    // Epsilon-greedy exploration rate in [0, 1]. With this probability, a random
+    // jitter is added to candidate scores so the model keeps gathering data on
+    // under-served candidates.
+    learningExplorationRate?: number; // Default: 0.05
+
+    // Shadow mode: record decisions and learn from outcomes, but never alter
+    // ranking. Useful for safely evaluating the model before going live.
+    learningShadowMode?: boolean; // Default: false
+
+    // Multiplier applied to the predicted reward when re-ranking candidates.
+    // Higher values let the learned model dominate over base priority.
+    learningBoostFactor?: number; // Default: 1
+
+    // Override rewards per lifecycle outcome (merged with defaults):
+    // { accept: 0.3, complete: 1, reject: -0.6, expire: -0.3, fail: -0.8 }
+    learningRewards?: Partial<Record<'accept' | 'complete' | 'reject' | 'expire' | 'fail', number>>;
+
+    // Custom feature extractor. Defaults to tag-match, normalized skill-weight,
+    // tag-overlap-ratio and embedding-similarity features.
+    learningFeatureExtractor?: (user: User, assignment: { id: string; tags: string[] }) => Record<string, number>;
+
+    // TTL for stored decision contexts in ms.
+    learningDecisionTtlMs?: number; // Default: 604800000 (7 days)
+
+    // Weights applied to named external feedback signals when computing rewards.
+    // Signals not listed here default to weight 1. Negative weights turn a
+    // signal into a penalty (e.g. { errorRate: -2 }).
+    learningSignalWeights?: Record<string, number>;
+
+    // TTL for archived episodes awaiting late external feedback in ms.
+    learningFeedbackTtlMs?: number; // Default: 604800000 (7 days)
 };
 ```
+
+## Adaptive Matching with Reinforcement Learning
+
+The matcher includes an opt-in, Redis-backed contextual bandit that learns from
+assignment outcomes and re-ranks candidates automatically. Hard matching rules
+(tags, `routingWeights`, vetoes, CIDR, `skillThresholds`) always apply first —
+the learned model only reorders assignments that are already eligible.
+
+How it works:
+
+1. When a user is matched, a sparse feature vector is extracted for each
+   eligible candidate (tag matches, normalized skill weights, tag overlap, and
+   optional `embedding` cosine similarity if both user and assignment carry an
+   `embedding: number[]` field).
+2. Candidates are ranked by `combinedPriority + boostFactor * predictedReward`.
+3. The decision context is stored, and lifecycle outcomes (`accept`,
+   `complete`, `reject`, `expire`, `fail`) feed rewards back into the model via
+   online SGD updates — fully automatic, no training pipeline needed.
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+    enableLearning: true,
+    // Start safe: observe without affecting ranking
+    learningShadowMode: true,
+    // Optional reward shaping
+    learningRewards: { complete: 2, reject: -1 },
+});
+
+// ... normal addUser / addAssignment / matchUsersAssignments usage ...
+
+// Inspect what the model has learned
+const model = await matcher.getLearningModel(); // { 'tag:english': '0.42', ... }
+const stats = await matcher.getLearningStats(); // { decisions, rewards, totalReward, averageReward }
+
+// Manual reward shaping for a matched assignment (e.g. CSAT score arrived later)
+await matcher.recordLearningReward('assignment-123', 1.5);
+
+// Start over
+await matcher.resetLearningModel();
+```
+
+### Feeding External Data into the Model
+
+Matchmaking quality signals often arrive after an assignment is closed — QA
+audits, accuracy reviews, customer satisfaction scores, handle-time analysis.
+The learning layer supports three external feed paths:
+
+**1. Named feedback signals (post-processing per assignment).** When an
+assignment reaches a terminal state, its feature context is archived as an
+*episode* (kept for `learningFeedbackTtlMs`). External pipelines can attribute
+late signals to it at any point within that window:
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+    enableLearning: true,
+    // Reward = sum(signalValue * signalWeight); unlisted signals default to 1
+    learningSignalWeights: {
+        accuracy: 2,         // accuracy audits matter most
+        csat: 1,             // customer satisfaction
+        handleTimePenalty: -0.5, // longer handling reduces reward
+    },
+});
+
+// ...assignment is matched, accepted, completed...
+
+// Hours/days later, the QA pipeline reports back:
+await matcher.recordLearningFeedback('assignment-123', {
+    accuracy: 0.95,
+    csat: 0.8,
+    handleTimePenalty: 0.3,
+});
+// reward = 0.95*2 + 0.8*1 + 0.3*-0.5 = 2.55, applied to the episode's features
+```
+
+**2. Raw reward shaping.** `recordLearningReward(assignmentId, reward)` applies
+an explicit numeric reward against an assignment's decision context when you
+want full control over the value.
+
+**3. Offline batch training.** `trainLearningSamples(samples)` updates the
+model directly from raw `(features, reward)` pairs — no live decision context
+needed. Use it to bootstrap the model from historical data or to run scheduled
+imports from a data warehouse:
+
+```typescript
+await matcher.trainLearningSamples([
+    { features: { bias: 1, 'tag:english': 1, 'skill:english': 0.8 }, reward: 1.2 },
+    { features: { bias: 1, 'tag:billing': 1 }, reward: -0.4 },
+]);
+```
+
+Feature names are arbitrary strings — as long as your
+`learningFeatureExtractor` produces the same names at match time, externally
+trained weights apply immediately to live ranking.
+
+Rollout recommendation: enable with `learningShadowMode: true` first, watch
+`getLearningStats()` and `getLearningModel()`, then flip shadow mode off and
+tune `learningBoostFactor` / `learningExplorationRate` for your workload. For
+domain-specific setups (custom embeddings, business features), supply a
+`learningFeatureExtractor`.
+
 
 ## Detailed Example & Performance Insights
 

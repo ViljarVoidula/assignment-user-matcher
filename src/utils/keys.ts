@@ -56,6 +56,12 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         eventStream: () => `${prefix}events:stream`,
         eventStreamDeadLetter: () => `${prefix}events:deadletter`,
 
+        // Learning (contextual bandit) keys
+        learningModel: () => `${prefix}learning:model`,
+        learningDecision: (assignmentId: string) => `${prefix}learning:decision:${assignmentId}`,
+        learningEpisode: (assignmentId: string) => `${prefix}learning:episode:${assignmentId}`,
+        learningStats: () => `${prefix}learning:stats`,
+
         // Workflow reliability keys
         // Reliability and audit keys
         deadLetterQueue: () => `${prefix}workflow:dlq`,

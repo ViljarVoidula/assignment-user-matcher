@@ -14,6 +14,8 @@ import {
     type AssignmentCounts,
 } from './queries/pagination';
 import { calculateMatchScore, calculateDefaultPriority } from './scoring/match-score';
+import { extractMatchFeatures } from './learning/features';
+import { LearningManager } from './managers/LearningManager';
 import { ReliabilityManager } from './managers/ReliabilityManager';
 import { TelemetryManager } from './managers/TelemetryManager';
 import { WorkflowManager, type WorkflowHost } from './managers/WorkflowManager';
@@ -33,6 +35,12 @@ import type {
     DeadLetterEntry,
     AuditEntry,
     WorkflowInstanceWithSnapshot,
+    LearningFeatureExtractor,
+    LearningFeatures,
+    LearningAssignmentContext,
+    LearningSignals,
+    LearningSample,
+    LearningStats,
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
@@ -55,6 +63,16 @@ export type {
     AuditEntry,
     CircuitBreakerState,
     WorkflowInstanceWithSnapshot,
+    LearningOutcome,
+    LearningRewards,
+    LearningFeatures,
+    LearningAssignmentContext,
+    LearningFeatureExtractor,
+    LearningDecisionRecord,
+    LearningEpisodeRecord,
+    LearningSignals,
+    LearningSample,
+    LearningStats,
 } from './types/matcher';
 
 // Load Lua scripts from files
@@ -106,6 +124,11 @@ export default class AssignmentMatcher implements WorkflowHost {
     private usingDefaultMatchScore: boolean;
     private readonly readyPromise: Promise<this>;
 
+    // Learning (contextual bandit) properties
+    private enableLearning: boolean;
+    private learning: LearningManager;
+    private learningFeatureExtractor: LearningFeatureExtractor;
+
     constructor(
         public redisClient: RedisClientType,
         options?: MatcherOptions,
@@ -148,6 +171,20 @@ export default class AssignmentMatcher implements WorkflowHost {
             streamConsumerName: this.streamConsumerName,
         });
         this.telemetry = new TelemetryManager(options?.enableOpenTelemetry ?? false);
+
+        // Learning layer (opt-in contextual bandit re-ranking)
+        this.enableLearning = options?.enableLearning ?? false;
+        this.learningFeatureExtractor = options?.learningFeatureExtractor ?? extractMatchFeatures;
+        this.learning = new LearningManager(this.redisClient, this.keys, {
+            learningRate: options?.learningRate,
+            explorationRate: options?.learningExplorationRate,
+            shadowMode: options?.learningShadowMode,
+            boostFactor: options?.learningBoostFactor,
+            rewards: options?.learningRewards,
+            decisionTtlMs: options?.learningDecisionTtlMs,
+            signalWeights: options?.learningSignalWeights,
+            feedbackTtlMs: options?.learningFeedbackTtlMs,
+        });
         
         this.workflow = new WorkflowManager(
             this.redisClient,
@@ -288,6 +325,66 @@ export default class AssignmentMatcher implements WorkflowHost {
     async getAuditEvents(count: number = 100): Promise<AuditEntry[]> {
         await this.readyPromise;
         return this.reliability.getAuditEvents(count);
+    }
+
+    // ============================================================================
+    // Learning (Contextual Bandit) Methods
+    // ============================================================================
+
+    /**
+     * Get the learned model weights (feature -> weight).
+     */
+    async getLearningModel(): Promise<Record<string, string>> {
+        await this.readyPromise;
+        return this.learning.getModel();
+    }
+
+    /**
+     * Get aggregate learning statistics (decisions, rewards, average reward).
+     */
+    async getLearningStats(): Promise<LearningStats> {
+        await this.readyPromise;
+        return this.learning.getStats();
+    }
+
+    /**
+     * Apply a manual reward to a matched assignment's decision context.
+     * Enables custom reward shaping beyond the built-in lifecycle outcomes.
+     * Returns false when no decision context exists for the assignment.
+     */
+    async recordLearningReward(assignmentId: string, reward: number): Promise<boolean> {
+        await this.readyPromise;
+        return this.learning.recordReward(assignmentId, reward);
+    }
+
+    /**
+     * Feed external post-processing signals into the model for an assignment
+     * (e.g. { accuracy: 0.95, csat: 0.8 }). Works for live decisions and for
+     * archived episodes of already-completed assignments (within the feedback TTL).
+     * Signal values are weighted via the `learningSignalWeights` option (default 1).
+     * Returns false when no learning context exists for the assignment.
+     */
+    async recordLearningFeedback(assignmentId: string, signals: LearningSignals): Promise<boolean> {
+        await this.readyPromise;
+        return this.learning.recordFeedback(assignmentId, signals);
+    }
+
+    /**
+     * Train the model directly with raw (features, reward) samples from an
+     * external pipeline (offline evaluation jobs, historical data imports).
+     * Returns the number of samples applied.
+     */
+    async trainLearningSamples(samples: LearningSample[]): Promise<number> {
+        await this.readyPromise;
+        return this.learning.trainSamples(samples);
+    }
+
+    /**
+     * Reset the learned model weights and statistics.
+     */
+    async resetLearningModel(): Promise<void> {
+        await this.readyPromise;
+        return this.learning.resetModel();
     }
 
     // ============================================================================
@@ -701,7 +798,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             batched.hGet(this.assignmentsRefKey, assignmentId);
         }
         const flat = await batched.exec() as unknown as (string | null)[];
-        const details = [] as Array<{ id: string; basePriority: number; tags: string; allowedCidrs?: string[]; skillThresholds?: Record<string, number> }>;
+        const details = [] as Array<{ id: string; basePriority: number; tags: string; allowedCidrs?: string[]; skillThresholds?: Record<string, number>; raw?: Record<string, any> }>;
         for (let i = 0; i < top.length; i++) {
             const assignmentId = (top[i] as any).value;
             const priority = Number(flat[i * 3]) || 0;
@@ -709,34 +806,81 @@ export default class AssignmentMatcher implements WorkflowHost {
             const assignmentJson = flat[i * 3 + 2];
             let allowedCidrs: string[] | undefined;
             let skillThresholds: Record<string, number> | undefined;
+            let raw: Record<string, any> | undefined;
             if (assignmentJson) {
                 try {
                     const parsed = JSON.parse(assignmentJson);
                     allowedCidrs = parsed.allowedCidrs;
                     skillThresholds = parsed.skillThresholds;
+                    raw = parsed;
                 } catch {
                     // Ignore JSON parse errors
                 }
             }
-            details.push({ id: assignmentId, basePriority: priority, tags, allowedCidrs, skillThresholds });
+            details.push({ id: assignmentId, basePriority: priority, tags, allowedCidrs, skillThresholds, raw });
         }
         // Prefer higher base priority first to satisfy tests and practical expectations
         details.sort((a, b) => b.basePriority - a.basePriority);
 
         const selected: Array<{ id: string; tags: string }> = [];
-        for (const d of details) {
-            if (userAssignments.length >= this.maxUserBacklogSize) break;
-            
-            // Check CIDR restrictions: if assignment has allowedCidrs, user must have matching IP
-            if (!checkCidrMatch(user.ip, d.allowedCidrs)) {
-                continue; // Skip this assignment - user IP doesn't match allowed CIDRs
+        if (this.enableLearning) {
+            // Learning path: evaluate all eligible candidates, then re-rank by
+            // base priority + predicted reward (hard filters still apply first).
+            const modelWeights = await this.learning.getModel();
+            const eligible: Array<{
+                detail: (typeof details)[0];
+                combinedPriority: number;
+                features: LearningFeatures;
+                predicted: number;
+                effectivePriority: number;
+            }> = [];
+
+            for (const d of details) {
+                if (!checkCidrMatch(user.ip, d.allowedCidrs)) continue;
+                const [score, combinedPriority] = await this.matchScore(user, d.tags, d.basePriority, d.id, d.skillThresholds);
+                if (!score || !combinedPriority) continue;
+
+                const context: LearningAssignmentContext = {
+                    ...(d.raw ?? {}),
+                    id: d.id,
+                    tags: d.tags ? d.tags.split(',').filter(Boolean) : [],
+                };
+                const features = this.learningFeatureExtractor(user, context);
+                const predicted = this.learning.predict(features, modelWeights);
+                // Shadow mode observes without influencing ranking.
+                // Epsilon-greedy exploration adds random jitter to gather data on under-served candidates.
+                const exploration = !this.learning.shadowMode && this.learning.shouldExplore()
+                    ? Math.random() * this.learning.boostFactor
+                    : 0;
+                const effectivePriority = this.learning.shadowMode
+                    ? combinedPriority
+                    : combinedPriority + this.learning.boostFactor * predicted + exploration;
+                eligible.push({ detail: d, combinedPriority, features, predicted, effectivePriority });
             }
-            
-            // Use custom matchScore (supports weights and thresholds) for a final check and tie-break
-            const [score, combinedPriority] = await this.matchScore(user, d.tags, d.basePriority, d.id, d.skillThresholds);
-            if (score && combinedPriority) {
-                userAssignments.push({ id: d.id, priority: combinedPriority });
-                selected.push({ id: d.id, tags: d.tags });
+
+            eligible.sort((a, b) => b.effectivePriority - a.effectivePriority);
+
+            for (const c of eligible) {
+                if (userAssignments.length >= this.maxUserBacklogSize) break;
+                userAssignments.push({ id: c.detail.id, priority: c.effectivePriority });
+                selected.push({ id: c.detail.id, tags: c.detail.tags });
+                await this.learning.recordDecision(user.id, c.detail.id, c.features, c.predicted);
+            }
+        } else {
+            for (const d of details) {
+                if (userAssignments.length >= this.maxUserBacklogSize) break;
+
+                // Check CIDR restrictions: if assignment has allowedCidrs, user must have matching IP
+                if (!checkCidrMatch(user.ip, d.allowedCidrs)) {
+                    continue; // Skip this assignment - user IP doesn't match allowed CIDRs
+                }
+
+                // Use custom matchScore (supports weights and thresholds) for a final check and tie-break
+                const [score, combinedPriority] = await this.matchScore(user, d.tags, d.basePriority, d.id, d.skillThresholds);
+                if (score && combinedPriority) {
+                    userAssignments.push({ id: d.id, priority: combinedPriority });
+                    selected.push({ id: d.id, tags: d.tags });
+                }
             }
         }
 
@@ -861,6 +1005,10 @@ export default class AssignmentMatcher implements WorkflowHost {
         }
         await multi.exec();
 
+        if (this.enableLearning) {
+            await this.learning.applyOutcome(assignmentId, 'accept');
+        }
+
         return true;
     }
 
@@ -885,6 +1033,10 @@ export default class AssignmentMatcher implements WorkflowHost {
         multi.sAdd(this.keys.userRejected(userId), assignmentId);
         
         await multi.exec();
+
+        if (this.enableLearning) {
+            await this.learning.applyOutcome(assignmentId, 'reject');
+        }
 
         if (json) {
             await this.addAssignment(JSON.parse(json));
@@ -932,6 +1084,10 @@ export default class AssignmentMatcher implements WorkflowHost {
         multi.hSet(this.completedAssignmentsKey, assignmentId, JSON.stringify(completedData));
 
         await multi.exec();
+
+        if (this.enableLearning) {
+            await this.learning.applyOutcome(assignmentId, 'complete');
+        }
 
         // Publish workflow event if workflows are enabled
         if (this.enableWorkflows) {
@@ -983,6 +1139,10 @@ export default class AssignmentMatcher implements WorkflowHost {
         multi.hSet(this.completedAssignmentsKey, assignmentId, JSON.stringify(failedData));
 
         await multi.exec();
+
+        if (this.enableLearning) {
+            await this.learning.applyOutcome(assignmentId, 'fail');
+        }
 
         // Publish workflow event if workflows are enabled
         if (this.enableWorkflows) {
@@ -1154,6 +1314,10 @@ export default class AssignmentMatcher implements WorkflowHost {
             multi.zRem(this.pendingAssignmentsExpiryKey, id);
             multi.hDel(this.assignmentOwnerKey, id);
             await multi.exec();
+
+            if (this.enableLearning) {
+                await this.learning.applyOutcome(id, 'expire');
+            }
 
             // Publish workflow expired event if workflows are enabled
             if (this.enableWorkflows && owner) {

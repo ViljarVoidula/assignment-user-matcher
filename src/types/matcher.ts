@@ -75,6 +75,28 @@ export type MatcherOptions = {
     workflowSnapshotDefinitions?: boolean;
     /** Enable OpenTelemetry tracing (default: false) */
     enableOpenTelemetry?: boolean;
+
+    // ========== Reinforcement Learning Options ==========
+    /** Enable the contextual-bandit learning layer (default: false) */
+    enableLearning?: boolean;
+    /** SGD learning rate for online model updates (default: 0.1) */
+    learningRate?: number;
+    /** Epsilon-greedy exploration rate in [0, 1] (default: 0.05) */
+    learningExplorationRate?: number;
+    /** Shadow mode: record decisions and learn, but never alter ranking (default: false) */
+    learningShadowMode?: boolean;
+    /** Multiplier applied to predicted reward when re-ranking candidates (default: 1) */
+    learningBoostFactor?: number;
+    /** Override rewards per lifecycle outcome (merged with defaults) */
+    learningRewards?: Partial<LearningRewards>;
+    /** Custom feature extractor; defaults to tag/skill/overlap/embedding features */
+    learningFeatureExtractor?: LearningFeatureExtractor;
+    /** TTL for stored decision contexts in ms (default: 604800000 = 7 days) */
+    learningDecisionTtlMs?: number;
+    /** Weights applied to named external feedback signals when computing rewards (default weight: 1) */
+    learningSignalWeights?: Record<string, number>;
+    /** TTL for archived episodes awaiting external feedback in ms (default: 604800000 = 7 days) */
+    learningFeedbackTtlMs?: number;
 };
 
 /** @deprecated Use MatcherOptions instead */
@@ -301,6 +323,69 @@ export interface CircuitBreakerState {
 export interface WorkflowInstanceWithSnapshot extends WorkflowInstance {
     /** Resolved definition (from snapshot or registry) */
     resolvedDefinition?: WorkflowDefinition;
+}
+
+// ============================================================================
+// Reinforcement Learning Types
+// ============================================================================
+
+/** Assignment lifecycle outcomes that generate learning rewards */
+export type LearningOutcome = 'accept' | 'complete' | 'reject' | 'expire' | 'fail';
+
+/** Reward values per lifecycle outcome */
+export type LearningRewards = Record<LearningOutcome, number>;
+
+/** Sparse feature vector describing a user/assignment match context */
+export type LearningFeatures = Record<string, number>;
+
+/** Minimal assignment context passed to feature extractors */
+export interface LearningAssignmentContext {
+    id: string;
+    tags: string[];
+    [key: string]: any;
+}
+
+/** Pluggable feature extractor for the learning layer */
+export type LearningFeatureExtractor = (user: User, assignment: LearningAssignmentContext) => LearningFeatures;
+
+/** Stored decision context awaiting an outcome */
+export interface LearningDecisionRecord {
+    userId: string;
+    assignmentId: string;
+    features: LearningFeatures;
+    predictedReward: number;
+    timestamp: number;
+}
+
+/** Archived episode retained after a terminal outcome for late external feedback */
+export interface LearningEpisodeRecord {
+    userId: string;
+    assignmentId: string;
+    features: LearningFeatures;
+    /** Terminal outcome that archived this episode */
+    outcome?: LearningOutcome;
+    timestamp: number;
+}
+
+/** Named external signal values (e.g. { accuracy: 0.95, csat: 0.8 }) */
+export type LearningSignals = Record<string, number>;
+
+/** Raw training sample for offline/batch model updates */
+export interface LearningSample {
+    features: LearningFeatures;
+    reward: number;
+}
+
+/** Aggregate learning statistics */
+export interface LearningStats {
+    /** Number of recorded match decisions */
+    decisions: number;
+    /** Number of reward updates applied */
+    rewards: number;
+    /** Sum of all applied rewards */
+    totalReward: number;
+    /** totalReward / rewards (0 when no rewards) */
+    averageReward: number;
 }
 
 // ============================================================================
