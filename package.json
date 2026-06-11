@@ -27,6 +27,7 @@
     },
     "scripts": {
         "test": "nyc mocha tests/ --recursive --extension .ts --exit",
+        "benchmark:learning": "ts-node benchmark-learning.ts",
         "build:docs": "npx typedoc --plugin typedoc-plugin-markdown",
         "prettier": "prettier --write .",
         "build": "rimraf dist && tsc",

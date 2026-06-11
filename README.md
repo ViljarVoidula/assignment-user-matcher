@@ -487,6 +487,276 @@ tune `learningBoostFactor` / `learningExplorationRate` for your workload. For
 domain-specific setups (custom embeddings, business features), supply a
 `learningFeatureExtractor`.
 
+### RL Scalability & Redis Constraints
+
+The RL layer adds controlled overhead: decision recording, outcome archival,
+and weight updates. Because these operations are write-heavy and per-assignment,
+scalability depends primarily on Redis memory, write throughput, and feature
+cardinality — not on learning math itself.
+
+#### Redis Workload Breakdown
+
+Each matched assignment now costs:
+1. **Decision record** (live): ~300 bytes for features + metadata; expires in 7 days (configurable).
+2. **Episode archive** (terminal): ~400 bytes; kept until feedback arrives, expires in 7 days.
+3. **Model updates**: One hash increment per feature per outcome (typically 5–15 features).
+4. **Stats tracking**: Shared atomic increments.
+
+Matching a single assignment typically involves:
+- 1–2 Redis reads (model + candidate details).
+- 3–5 Redis writes per matched assignment (decision, model updates, stats).
+- Pipelined to reduce round trips.
+
+#### Memory Estimation
+
+Assume:
+- **Small deployment**: 10 users, 1,000 live assignments, ~8 features per assignment.
+  - Model: ~8 KB (8 features × 1 KB per weight + overhead).
+  - Decisions: ~300 KB (1,000 × 300 bytes).
+  - Overhead: ~500 KB for indices and stats.
+  - **Total: ~1 MB**. No scaling issues with standard Redis (safe at anything).
+
+- **Medium deployment**: 100 users, 100,000 live assignments, ~15 features.
+  - Model: ~15 KB.
+  - Decisions: ~30 MB (100,000 × 300 bytes).
+  - Episodes archived: ~10 MB (depends on feedback delay; typically 10% of live at any moment).
+  - Overhead: ~5 MB.
+  - **Total: ~50 MB**. Easily within Redis limits; watch growth over weeks.
+
+- **High-throughput deployment**: 1,000 users, 1,000,000 live assignments, ~20 features, exploration enabled.
+  - Model: ~20 KB.
+  - Decisions: ~300 MB (1,000,000 × 300 bytes).
+  - Episodes: ~100 MB.
+  - Overhead: ~50 MB.
+  - **Total: ~450 MB**. Manageable with a 2–4 GB Redis instance; requires TTL discipline.
+
+#### Configuration Guidelines
+
+**Small (10–50 users, <10K assignments/day):**
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+    enableLearning: true,
+    learningShadowMode: true,  // Observe first; no ranking impact
+    learningRate: 0.1,
+    learningExplorationRate: 0,  // No exploration overhead
+    learningDecisionTtlMs: 604800000,  // 7 days
+    learningFeedbackTtlMs: 604800000,  // 7 days
+});
+// Safe: no performance issues. Monitor model size weekly.
+```
+
+**Medium (50–500 users, 10K–100K assignments/day):**
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+    enableLearning: true,
+    learningShadowMode: false,
+    learningRate: 0.05,  // Slower learning for stability
+    learningExplorationRate: 0.02,  // 2% of matches explore randomly
+    learningBoostFactor: 50,  // Moderate impact on ranking
+    learningDecisionTtlMs: 259200000,  // 3 days (balance TTL vs memory)
+    learningFeedbackTtlMs: 259200000,
+    learningSignalWeights: { accuracy: 1, csat: 0.5, errorRate: -1 },
+});
+// Recommended: batch external feedback imports off-peak.
+// Monitor: Redis memory growth, write latency, decision key count.
+```
+
+**High-throughput (500+ users, 100K+ assignments/day):**
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+    enableLearning: true,
+    learningShadowMode: false,
+    learningRate: 0.02,  // Conservative learning rate
+    learningExplorationRate: 0.01,  // Minimal exploration (1%)
+    learningBoostFactor: 30,  // Restrained boost to avoid instability
+    learningDecisionTtlMs: 86400000,  // 1 day (shorter TTL for faster cleanup)
+    learningFeedbackTtlMs: 172800000,  // 2 days (stagger feedback arrival)
+    learningSignalWeights: { accuracy: 1, csat: 0.3 },  // Fewer signals = less noise
+    // Consider sampling outcomes if traffic is extreme:
+    // Only learn from 10% of low-priority assignments.
+});
+// Monitoring critical: set up Redis memory alerts, track write amplification.
+// Consider a separate Redis instance for RL state if main matcher instance is saturated.
+```
+
+#### Safety Guardrails
+
+1. **Keep hard rules outside RL.** Eligibility, vetoes, backlog limits, and lifecycle state remain deterministic. RL only adjusts ranking of already-eligible candidates.
+2. **Start shadow mode.** Always enable `learningShadowMode: true` for the first week, then migrate to live mode with guardrails in place.
+3. **Cap exploration.** Set `learningExplorationRate ≤ 0.05` (5%). Exploration is important for learning but creates churn and can impact user experience.
+4. **Aggressive TTL.** Never leave decision records for more than 7 days. Episodes (feedback-waiting) should expire in 3–7 days depending on your feedback SLA.
+5. **Batch feedback imports.** Run external QA/accuracy signal imports as background jobs during low-traffic windows, not inline with matching.
+6. **Monitor key counts.** Use `redis-cli info keyspace` or equivalent to watch key cardinality. If decision keys grow unbounded, TTL is broken or Redis is out of memory.
+7. **Separate concerns.** If your matcher handles 1M+ assignments/day, use a dedicated Redis instance for RL state, separate from the main queue data.
+
+#### Monitoring & Diagnostics
+
+Key metrics to track:
+
+- **Model size**: `(await matcher.getLearningModel()).length` — should be stable (5–50 features). If growing > 100, your feature extractor is leaking.
+- **Decision cardinality**: `DBSIZE` and filter for `learning:decision:*` — should stay < 2× your `maxUserBacklogSize × numUsers`.
+- **Learning stats**: `getLearningStats()` — watch `averageReward` drift and `decisions` growth rate. If `averageReward` is always zero or NaN, your reward signals are malformed.
+- **Redis memory**: Keep below 70% of instance limit. Set memory alerts.
+- **Write latency**: Track Redis command latencies (`latency latest`). Spikes indicate contention; consider sharding or a larger instance.
+- **Model convergence**: Periodically log `getLearningModel()` weights and compare week-over-week. Sharp weight changes suggest concept drift or noisy rewards.
+
+#### Recommended Production Workflow
+
+1. Deploy with `learningShadowMode: true` and `learningExplorationRate: 0` for 1–2 weeks.
+2. Validate that `getLearningStats()` shows growing reward without ranking instability.
+3. Switch to live mode with low `learningExplorationRate` (0.01–0.02).
+4. Set up external feedback pipeline (QA, CSAT, etc.) and test with a small sample.
+5. Gradually increase `boostFactor` and `explorationRate` based on business metrics (completion rate, SLA, re-open rate).
+6. Monitor weekly; roll back or reduce `boostFactor` if metrics degrade.
+
+### Learning Benchmark Simulation
+
+Use the built-in simulation benchmark to compare baseline routing vs learning shadow mode vs live learning mode on the same deterministic workload.
+
+Run with defaults:
+
+```bash
+pnpm benchmark:learning
+```
+
+Run with custom scale:
+
+```bash
+pnpm benchmark:learning -- 300 8000 10 20260611
+# arguments: <users> <assignmentsPerRound> <rounds> <seed>
+```
+
+Output includes:
+
+1. Per-mode throughput and latency (`baseline`, `learning-shadow`, `learning-live`)
+2. Acceptance/completion/rejection/failure rates
+3. A normalized quality score for quick comparisons
+4. Top learned model weights
+5. Delta summary vs baseline (throughput, completion rate, quality)
+
+### Configuration Playbook (How To Choose)
+
+Use this quick guide based on your primary goal.
+
+#### Throughput-first (minimal latency impact)
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+  enableLearning: true,
+  learningShadowMode: false,
+  learningExplorationRate: 0.005,
+  learningBoostFactor: 20,
+  learningRate: 0.02,
+  learningDecisionTtlMs: 86400000,
+  learningFeedbackTtlMs: 86400000,
+  relevantBatchSize: 50,
+  maxUserBacklogSize: 1,
+});
+```
+
+When to use:
+1. You have tight p95/p99 latency SLOs.
+2. Even a 2-5% throughput drop is expensive.
+
+#### Balanced (recommended starting point)
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+  enableLearning: true,
+  learningShadowMode: false,
+  learningExplorationRate: 0.01,
+  learningBoostFactor: 35,
+  learningRate: 0.05,
+  learningDecisionTtlMs: 259200000,
+  learningFeedbackTtlMs: 259200000,
+  relevantBatchSize: 100,
+  maxUserBacklogSize: 1,
+});
+```
+
+When to use:
+1. You want measurable quality lift with moderate performance cost.
+2. You can tolerate small throughput swings while tuning.
+
+#### Quality-first (maximize learning impact)
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+  enableLearning: true,
+  learningShadowMode: false,
+  learningExplorationRate: 0.02,
+  learningBoostFactor: 60,
+  learningRate: 0.08,
+  learningDecisionTtlMs: 604800000,
+  learningFeedbackTtlMs: 604800000,
+  relevantBatchSize: 200,
+  maxUserBacklogSize: 1,
+});
+```
+
+When to use:
+1. Completion/quality metrics matter more than raw throughput.
+2. You have enough headroom in Redis and CPU.
+
+### How To Tune It (Step by Step)
+
+1. Start with **shadow mode** and exploration off:
+
+```typescript
+learningShadowMode: true,
+learningExplorationRate: 0,
+```
+
+2. Run baseline benchmark and record metrics:
+
+```bash
+pnpm benchmark:learning -- 100 1000 10 42
+```
+
+3. Move to live mode with conservative values:
+
+```typescript
+learningShadowMode: false,
+learningBoostFactor: 20,
+learningExplorationRate: 0.005,
+```
+
+4. Compare deltas:
+   - `Throughput delta` should stay above your SLO floor (e.g. not below `-2%`).
+   - `Completion rate delta` should be positive.
+   - `Quality score delta` should be positive.
+
+5. If throughput regresses too much:
+   - Reduce `learningBoostFactor`.
+   - Reduce `learningExplorationRate`.
+   - Reduce `relevantBatchSize`.
+   - Shorten `learningDecisionTtlMs` / `learningFeedbackTtlMs`.
+
+6. If quality lift is too small:
+   - Increase `learningBoostFactor` gradually (`+10` per step).
+   - Increase `learningExplorationRate` slightly (`+0.005`), capped at `0.05`.
+   - Improve signal quality in `learningSignalWeights`.
+
+### Reading Benchmark Deltas Quickly
+
+Example:
+
+```text
+Throughput delta: -5.11%
+Completion rate delta: +4.80pp
+Quality score delta: +0.0274
+```
+
+Interpretation:
+1. You traded some speed (`-5.11%`) for better outcomes.
+2. Completion improved by **4.80 percentage points** (`pp`, not percent).
+3. Quality improved overall (`+0.0274`).
+
+Choose the config where business utility is highest for your constraints.
+If throughput is the hard constraint, keep throughput delta near zero and accept smaller quality gains.
 
 ## Detailed Example & Performance Insights
 
