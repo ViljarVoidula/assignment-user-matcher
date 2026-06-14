@@ -188,6 +188,26 @@ describe('LearningManager - Integration Tests', function () {
         expect(manager.predict(features, weights)).to.be.greaterThan(0);
     });
 
+    it('should toggle shadow mode at runtime without losing learned state', async function () {
+        const features = { bias: 1, 'tag:english': 1 };
+        await manager.recordDecision('user1', 'assignment1', features, 0);
+        await manager.applyOutcome('assignment1', 'complete');
+
+        const before = await manager.getModel();
+        expect(Number(before['tag:english']) || 0).to.be.greaterThan(0);
+
+        expect(manager.shadowMode).to.equal(false);
+        manager.setShadowMode(true);
+        expect(manager.shadowMode).to.equal(true);
+
+        // Continue learning in shadow mode and ensure model still updates.
+        await manager.recordDecision('user1', 'assignment2', features, 0);
+        await manager.applyOutcome('assignment2', 'complete');
+        const after = await manager.getModel();
+
+        expect(Number(after['tag:english']) || 0).to.be.at.least(Number(before['tag:english']) || 0);
+    });
+
     it('should track learning stats', async function () {
         await manager.recordDecision('user1', 'assignment1', { bias: 1 }, 0);
         await manager.applyOutcome('assignment1', 'complete');

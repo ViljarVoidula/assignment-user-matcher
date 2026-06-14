@@ -10,8 +10,9 @@
  * rules (tags/weights, CIDR, skill thresholds) - it never makes an ineligible
  * assignment eligible.
  */
-import type { RedisClientType, LearningFeatures, LearningOutcome, LearningRewards, LearningDecisionRecord, LearningEpisodeRecord, LearningSignals, LearningSample, LearningStats } from '../types/matcher';
+import type { RedisClientType, LearningFeatures, LearningOutcome, LearningRewards, LearningDecisionRecord, LearningEpisodeRecord, LearningSignals, LearningSample, LearningStats, LearningTagStat, AutoRoutingWeightsOptions } from '../types/matcher';
 import type { KeyBuilders } from '../utils/keys';
+import { synthesizeRoutingWeights } from '../learning/auto-weights';
 
 export const DEFAULT_LEARNING_REWARDS: LearningRewards = {
     accept: 0.3,
@@ -41,17 +42,23 @@ export interface LearningManagerOptions {
     signalWeights?: Record<string, number>;
     /** TTL for archived episodes awaiting external feedback in ms (default: 7 days) */
     feedbackTtlMs?: number;
+    /** Track per-user, per-tag reward stats for automatic routing weights (default: false) */
+    trackTagStats?: boolean;
+    /** Tuning for automatic routing-weight synthesis */
+    autoWeights?: AutoRoutingWeightsOptions;
 }
 
 export class LearningManager {
     readonly learningRate: number;
     readonly explorationRate: number;
-    readonly shadowMode: boolean;
+    private _shadowMode: boolean;
     readonly boostFactor: number;
     readonly rewards: LearningRewards;
     readonly decisionTtlMs: number;
     readonly signalWeights: Record<string, number>;
     readonly feedbackTtlMs: number;
+    readonly trackTagStats: boolean;
+    readonly autoWeights: AutoRoutingWeightsOptions;
 
     constructor(
         private redisClient: RedisClientType,
@@ -60,12 +67,14 @@ export class LearningManager {
     ) {
         this.learningRate = options?.learningRate ?? 0.1;
         this.explorationRate = options?.explorationRate ?? 0.05;
-        this.shadowMode = options?.shadowMode ?? false;
+        this._shadowMode = options?.shadowMode ?? false;
         this.boostFactor = options?.boostFactor ?? 1;
         this.rewards = { ...DEFAULT_LEARNING_REWARDS, ...options?.rewards };
         this.decisionTtlMs = options?.decisionTtlMs ?? 604800000;
         this.signalWeights = options?.signalWeights ?? {};
         this.feedbackTtlMs = options?.feedbackTtlMs ?? 604800000;
+        this.trackTagStats = options?.trackTagStats ?? false;
+        this.autoWeights = options?.autoWeights ?? {};
     }
 
     /** Load the full model weights hash from Redis */
@@ -88,6 +97,21 @@ export class LearningManager {
         return this.explorationRate > 0 && Math.random() < this.explorationRate;
     }
 
+    /** Current shadow mode state (true: learn-only, false: affects ranking) */
+    get shadowMode(): boolean {
+        return this._shadowMode;
+    }
+
+    /**
+     * Toggle shadow mode at runtime without resetting model/state.
+     *
+     * When enabled, the matcher still records decisions and learns rewards,
+     * but predicted rewards do not influence ranking.
+     */
+    setShadowMode(enabled: boolean): void {
+        this._shadowMode = enabled;
+    }
+
     /**
      * Persist the decision context for an assignment so the eventual outcome
      * can be attributed back to the features that drove the match.
@@ -97,12 +121,14 @@ export class LearningManager {
         assignmentId: string,
         features: LearningFeatures,
         predictedReward: number,
+        tags?: string[],
     ): Promise<void> {
         const record: LearningDecisionRecord = {
             userId,
             assignmentId,
             features,
             predictedReward,
+            tags,
             timestamp: Date.now(),
         };
         const multi = this.redisClient.multi();
@@ -147,6 +173,7 @@ export class LearningManager {
         if (!decision) return false;
 
         await this.updateModel(decision.features, reward);
+        await this.updateTagStats(decision.userId, decision.tags, reward);
 
         if (terminal) {
             // Archive as episode so external post-processing feedback can
@@ -156,6 +183,7 @@ export class LearningManager {
                 assignmentId,
                 features: decision.features,
                 outcome,
+                tags: decision.tags,
                 timestamp: Date.now(),
             };
             const multi = this.redisClient.multi();
@@ -212,6 +240,7 @@ export class LearningManager {
         }
 
         await this.updateModel(context.features, reward);
+        await this.updateTagStats(context.userId, context.tags, reward);
         return true;
     }
 
@@ -229,6 +258,60 @@ export class LearningManager {
         return applied;
     }
 
+    /**
+     * Update per-user, per-tag reward aggregates (count + reward sum).
+     * Uses atomic hash increments only - O(tags) with no read-modify-write -
+     * so high-throughput outcome streams scale without contention.
+     */
+    private async updateTagStats(userId: string, tags: string[] | undefined, reward: number): Promise<void> {
+        if (!this.trackTagStats || !tags || tags.length === 0) return;
+        const multi = this.redisClient.multi();
+        for (const tag of tags) {
+            if (!tag) continue;
+            multi.hIncrBy(this.keys.learningUserTagCounts(userId), tag, 1);
+            multi.hIncrByFloat(this.keys.learningUserTagRewards(userId), tag, reward);
+        }
+        multi.sAdd(this.keys.learningUsers(), userId);
+        await multi.exec();
+    }
+
+    /** Per-user, per-tag reward statistics aggregated from observed outcomes */
+    async getUserTagStats(userId: string): Promise<LearningTagStat[]> {
+        const [counts, rewards] = await Promise.all([
+            this.redisClient.hGetAll(this.keys.learningUserTagCounts(userId)),
+            this.redisClient.hGetAll(this.keys.learningUserTagRewards(userId)),
+        ]);
+        return Object.entries(counts).map(([tag, rawCount]) => {
+            const count = Number(rawCount) || 0;
+            const rewardSum = Number(rewards[tag]) || 0;
+            return { tag, count, rewardSum, meanReward: count > 0 ? rewardSum / count : 0 };
+        });
+    }
+
+    /** Users that have accumulated tag reward statistics */
+    async listTrackedUsers(): Promise<string[]> {
+        return this.redisClient.sMembers(this.keys.learningUsers());
+    }
+
+    /**
+     * Synthesize a routingWeights map for a user from learned tag statistics
+     * (UCB1 policy: mean reward + exploration bonus, hard veto for bad tags).
+     * Pure read + O(tags) computation; does not persist anything.
+     *
+     * @param existingWeights current routingWeights of the user; values are
+     *   used as warm per-tag priors for under-sampled or unobserved tags
+     *   instead of the flat `priorWeight`.
+     */
+    async getLearnedRoutingWeights(
+        userId: string,
+        knownTags?: string[],
+        existingWeights?: Record<string, number>,
+    ): Promise<Record<string, number>> {
+        const stats = await this.getUserTagStats(userId);
+        if (stats.length === 0 && (!knownTags || knownTags.length === 0)) return {};
+        return synthesizeRoutingWeights(stats, this.autoWeights, knownTags, existingWeights);
+    }
+
     /** Aggregate learning statistics */
     async getStats(): Promise<LearningStats> {
         const raw = await this.redisClient.hGetAll(this.keys.learningStats());
@@ -243,11 +326,17 @@ export class LearningManager {
         };
     }
 
-    /** Reset model weights and statistics */
+    /** Reset model weights, statistics, and per-user tag statistics */
     async resetModel(): Promise<void> {
+        const trackedUsers = await this.listTrackedUsers();
         const multi = this.redisClient.multi();
         multi.del(this.keys.learningModel());
         multi.del(this.keys.learningStats());
+        for (const userId of trackedUsers) {
+            multi.del(this.keys.learningUserTagCounts(userId));
+            multi.del(this.keys.learningUserTagRewards(userId));
+        }
+        multi.del(this.keys.learningUsers());
         await multi.exec();
     }
 }

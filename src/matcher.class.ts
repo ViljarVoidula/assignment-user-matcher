@@ -42,6 +42,7 @@ import type {
     LearningSignals,
     LearningSample,
     LearningStats,
+    LearningTagStat,
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
@@ -74,6 +75,8 @@ export type {
     LearningSignals,
     LearningSample,
     LearningStats,
+    LearningTagStat,
+    AutoRoutingWeightsOptions,
 } from './types/matcher';
 
 // Load Lua scripts from files
@@ -128,6 +131,7 @@ export default class AssignmentMatcher implements WorkflowHost {
 
     // Learning (contextual bandit) properties
     private enableLearning: boolean;
+    private enableAutoRoutingWeights: boolean;
     private learning: LearningManager;
     private learningFeatureExtractor: LearningFeatureExtractor;
 
@@ -177,6 +181,7 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         // Learning layer (opt-in contextual bandit re-ranking)
         this.enableLearning = options?.enableLearning ?? false;
+        this.enableAutoRoutingWeights = options?.enableAutoRoutingWeights ?? false;
         this.learningFeatureExtractor = options?.learningFeatureExtractor ?? extractMatchFeatures;
         this.learning = new LearningManager(this.redisClient, this.keys, {
             learningRate: options?.learningRate,
@@ -187,6 +192,8 @@ export default class AssignmentMatcher implements WorkflowHost {
             decisionTtlMs: options?.learningDecisionTtlMs,
             signalWeights: options?.learningSignalWeights,
             feedbackTtlMs: options?.learningFeedbackTtlMs,
+            trackTagStats: this.enableAutoRoutingWeights,
+            autoWeights: options?.autoRoutingWeights,
         });
         
         this.workflow = new WorkflowManager(
@@ -389,6 +396,125 @@ export default class AssignmentMatcher implements WorkflowHost {
         await this.readyPromise;
         return this.learning.resetModel();
     }
+
+    /**
+     * Toggle learning shadow mode at runtime without losing model/state.
+     *
+     * `true`: learn-only, ranking unaffected.
+     * `false`: learning predictions can influence ranking.
+     */
+    async setLearningShadowMode(enabled: boolean): Promise<void> {
+        await this.readyPromise;
+        this.learning.setShadowMode(enabled);
+    }
+
+    /** Current runtime shadow mode state. */
+    async getLearningShadowMode(): Promise<boolean> {
+        await this.readyPromise;
+        return this.learning.shadowMode;
+    }
+
+    // ============================================================================
+    // Auto Routing Weights (RL-generated tags/weights)
+    // ============================================================================
+
+    /**
+     * Per-user, per-tag reward statistics aggregated from learned outcomes.
+     * Requires `enableLearning` and `enableAutoRoutingWeights`.
+     */
+    async getLearnedTagStats(userId: string): Promise<LearningTagStat[]> {
+        await this.readyPromise;
+        return this.learning.getUserTagStats(userId);
+    }
+
+    /**
+     * Synthesize a routingWeights map for a user from learned tag statistics
+     * using a UCB1 bandit policy: high weights for rewarding tags, weight 0
+     * (hard veto) for consistently bad tags, and optimistic priors for
+     * under-explored tags. Does not persist anything.
+     *
+     * @param opts.includeUnexploredTags also assign the exploration prior to
+     *        every known tag in the system the user has no data for yet
+     */
+    async getLearnedRoutingWeights(
+        userId: string,
+        opts?: { includeUnexploredTags?: boolean },
+    ): Promise<Record<string, number>> {
+        await this.readyPromise;
+        const knownTags = opts?.includeUnexploredTags ? await this.getKnownTagsForAutoWeights() : undefined;
+        const userJson = await this.redisClient.hGet(this.usersKey, userId);
+        const existingWeights = userJson ? (JSON.parse(userJson) as User).routingWeights : undefined;
+        return this.learning.getLearnedRoutingWeights(userId, knownTags, existingWeights);
+    }
+
+    /**
+     * Apply learned routing weights to one user (or every tracked user when
+     * no id is given), automating tags/weights generation from RL outcomes.
+     *
+     * Merge semantics: learned tags always take their learned value; manual
+     * routingWeights entries for tags the learner has no data on are
+     * preserved (set `opts.overrideManual` to replace the map entirely).
+     * The applied learned map is stored on the user as `learnedRoutingWeights`
+     * for observability.
+     *
+     * Returns the applied weights per user id.
+     */
+    async syncLearnedRoutingWeights(
+        userId?: string,
+        opts?: { overrideManual?: boolean; includeUnexploredTags?: boolean },
+    ): Promise<Record<string, Record<string, number>>> {
+        await this.readyPromise;
+
+        const targets = userId ? [userId] : await this.learning.listTrackedUsers();
+        const knownTags = opts?.includeUnexploredTags ? await this.getKnownTagsForAutoWeights() : undefined;
+        const applied: Record<string, Record<string, number>> = {};
+
+        for (const id of targets) {
+            const userJson = await this.redisClient.hGet(this.usersKey, id);
+            if (!userJson) continue;
+            const user = JSON.parse(userJson) as User;
+
+            // Pass the user's current routingWeights as warm per-tag priors
+            // so under-sampled tags start from the existing value rather than
+            // the flat priorWeight.
+            const previousLearned: Record<string, number> = user.learnedRoutingWeights ?? {};
+            const existingForSynthesis = user.routingWeights
+                ? Object.fromEntries(
+                      Object.entries(user.routingWeights).filter(([tag]) => !(tag in previousLearned)),
+                  )
+                : undefined;
+
+            const learned = await this.learning.getLearnedRoutingWeights(id, knownTags, existingForSynthesis);
+            if (Object.keys(learned).length === 0) continue;
+
+            let routingWeights: Record<string, number>;
+            if (opts?.overrideManual) {
+                routingWeights = learned;
+            } else {
+                const manualEntries: Record<string, number> = {};
+                for (const [tag, weight] of Object.entries(user.routingWeights ?? {})) {
+                    if (!(tag in previousLearned) && !(tag in learned)) manualEntries[tag] = weight;
+                }
+                routingWeights = { ...manualEntries, ...learned };
+            }
+
+            await this.redisClient.hSet(
+                this.usersKey,
+                id,
+                JSON.stringify({ ...user, routingWeights, learnedRoutingWeights: learned }),
+            );
+            applied[id] = routingWeights;
+        }
+
+        return applied;
+    }
+
+    /** All known tags except the internal 'default' tag (for exploration priors) */
+    private async getKnownTagsForAutoWeights(): Promise<string[]> {
+        const tags: string[] = await this.redisClient.sMembers(this.allTagsKey);
+        return tags.filter((t) => t !== 'default');
+    }
+
 
     // ============================================================================
     // OpenTelemetry Tracing Hooks
@@ -920,7 +1046,13 @@ export default class AssignmentMatcher implements WorkflowHost {
                 if (userAssignments.length >= this.maxUserBacklogSize) break;
                 userAssignments.push({ id: c.detail.id, priority: c.effectivePriority });
                 selected.push({ id: c.detail.id, tags: c.detail.tags });
-                await this.learning.recordDecision(user.id, c.detail.id, c.features, c.predicted);
+                await this.learning.recordDecision(
+                    user.id,
+                    c.detail.id,
+                    c.features,
+                    c.predicted,
+                    c.detail.tags ? c.detail.tags.split(',').filter(Boolean) : undefined,
+                );
             }
         } else {
             for (const d of details) {

@@ -159,6 +159,52 @@ describe('Matcher Learning Layer - Integration Tests', function () {
         expect(stats.totalReward).to.be.greaterThan(9);
     });
 
+    it('should allow toggling learningShadowMode at runtime without losing data', async function () {
+        const matcher = createMatcher({
+            enableLearning: true,
+            learningShadowMode: true,
+            learningExplorationRate: 0,
+            learningBoostFactor: 1000,
+            maxUserBacklogSize: 1,
+            enableDefaultMatching: false,
+        });
+
+        // Train the model while shadow mode is on (learning only).
+        await matcher.addUser({ id: 'trainer', tags: ['good', 'bad'] });
+        for (let i = 0; i < 6; i++) {
+            await matcher.addAssignment({ id: `good-${i}`, tags: ['good'], priority: 1 });
+            await matcher.matchUsersAssignments('trainer');
+            await matcher.acceptAssignment('trainer', `good-${i}`);
+            await matcher.completeAssignment('trainer', `good-${i}`);
+
+            await matcher.addAssignment({ id: `bad-${i}`, tags: ['bad'], priority: 1 });
+            await matcher.matchUsersAssignments('trainer');
+            await matcher.rejectAssignment('trainer', `bad-${i}`);
+        }
+
+        const modelBeforeToggle = await matcher.getLearningModel();
+        expect(Number(modelBeforeToggle['tag:good'])).to.be.greaterThan(0);
+        expect(Number(modelBeforeToggle['tag:bad'])).to.be.lessThan(0);
+
+        // Runtime toggle should not clear model/state.
+        expect(await matcher.getLearningShadowMode()).to.equal(true);
+        await matcher.setLearningShadowMode(false);
+        expect(await matcher.getLearningShadowMode()).to.equal(false);
+
+        const modelAfterToggle = await matcher.getLearningModel();
+        expect(Number(modelAfterToggle['tag:good'])).to.equal(Number(modelBeforeToggle['tag:good']));
+        expect(Number(modelAfterToggle['tag:bad'])).to.equal(Number(modelBeforeToggle['tag:bad']));
+
+        // With shadow mode off, ranking should now be influenced by learned weights.
+        await matcher.addUser({ id: 'user1', tags: ['good', 'bad'] });
+        await matcher.addAssignment({ id: 'bad-final', tags: ['bad'], priority: 1 });
+        await matcher.addAssignment({ id: 'good-final', tags: ['good'], priority: 1 });
+
+        await matcher.matchUsersAssignments('user1');
+        const assignments = await matcher.getCurrentAssignmentsForUser('user1');
+        expect(assignments).to.deep.equal(['good-final']);
+    });
+
     it('should support a custom feature extractor', async function () {
         const matcher = createMatcher({
             enableLearning: true,

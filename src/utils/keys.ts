@@ -62,6 +62,10 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         learningDecision: (assignmentId: string) => `${prefix}learning:decision:${assignmentId}`,
         learningEpisode: (assignmentId: string) => `${prefix}learning:episode:${assignmentId}`,
         learningStats: () => `${prefix}learning:stats`,
+        // Auto routing weights (per-user tag bandit) keys
+        learningUsers: () => `${prefix}learning:users`,
+        learningUserTagCounts: (userId: string) => `${prefix}learning:user:${userId}:tag:counts`,
+        learningUserTagRewards: (userId: string) => `${prefix}learning:user:${userId}:tag:rewards`,
 
         // Workflow reliability keys
         // Reliability and audit keys

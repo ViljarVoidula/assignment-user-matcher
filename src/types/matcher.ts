@@ -113,6 +113,14 @@ export type MatcherOptions = {
     learningSignalWeights?: Record<string, number>;
     /** TTL for archived episodes awaiting external feedback in ms (default: 604800000 = 7 days) */
     learningFeedbackTtlMs?: number;
+    /**
+     * Track per-user, per-tag reward statistics and enable automatic
+     * routingWeights generation from RL outcomes (requires enableLearning).
+     * Default: false.
+     */
+    enableAutoRoutingWeights?: boolean;
+    /** Tuning for automatic routing-weight synthesis (UCB1 policy) */
+    autoRoutingWeights?: AutoRoutingWeightsOptions;
 };
 
 /** @deprecated Use MatcherOptions instead */
@@ -370,6 +378,8 @@ export interface LearningDecisionRecord {
     assignmentId: string;
     features: LearningFeatures;
     predictedReward: number;
+    /** Assignment tags captured at decision time (used for auto routing weights) */
+    tags?: string[];
     timestamp: number;
 }
 
@@ -380,6 +390,8 @@ export interface LearningEpisodeRecord {
     features: LearningFeatures;
     /** Terminal outcome that archived this episode */
     outcome?: LearningOutcome;
+    /** Assignment tags captured at decision time (used for auto routing weights) */
+    tags?: string[];
     timestamp: number;
 }
 
@@ -390,6 +402,31 @@ export type LearningSignals = Record<string, number>;
 export interface LearningSample {
     features: LearningFeatures;
     reward: number;
+}
+
+/** Per-user, per-tag reward statistics aggregated from lifecycle outcomes */
+export interface LearningTagStat {
+    tag: string;
+    /** Number of reward observations for this tag */
+    count: number;
+    /** Sum of observed rewards for this tag */
+    rewardSum: number;
+    /** rewardSum / count (0 when no observations) */
+    meanReward: number;
+}
+
+/** Options controlling automatic routing-weight synthesis (UCB1 policy) */
+export interface AutoRoutingWeightsOptions {
+    /** Minimum observations before a tag's stats are trusted (default: 5) */
+    minSamples?: number;
+    /** Mean-reward UCB score at or below which a tag is hard-vetoed with weight 0 (default: -0.5) */
+    vetoThreshold?: number;
+    /** Maximum synthesized weight on the conventional 0-100 scale (default: 100) */
+    maxWeight?: number;
+    /** UCB exploration coefficient; higher favors less-sampled tags (default: 0.5) */
+    explorationBonus?: number;
+    /** Optimistic weight assigned to under-sampled or unobserved known tags (default: maxWeight / 2) */
+    priorWeight?: number;
 }
 
 /** Aggregate learning statistics */

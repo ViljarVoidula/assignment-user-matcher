@@ -487,6 +487,56 @@ tune `learningBoostFactor` / `learningExplorationRate` for your workload. For
 domain-specific setups (custom embeddings, business features), supply a
 `learningFeatureExtractor`.
 
+### Automatic Routing Weights (RL-Generated Tags/Weights)
+
+Beyond re-ranking, the learning layer can fully automate `routingWeights`
+authoring. With `enableAutoRoutingWeights: true` (requires `enableLearning`),
+every reward observation also updates per-user, per-tag statistics in Redis
+(atomic `HINCRBY`/`HINCRBYFLOAT` — O(tags) per outcome, no scans, no
+read-modify-write), and weights are synthesized on demand with a UCB1 bandit
+policy:
+
+- tags with a high mean reward get proportionally high weights (UCB
+  exploration bonus favors less-sampled tags),
+- tags with a mean reward at/below `vetoThreshold` (after `minSamples`
+  observations) get weight `0` — the matcher's hard-veto semantics,
+- under-sampled or unobserved known tags get an optimistic `priorWeight` so
+  the system keeps exploring them.
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+    enableLearning: true,
+    enableAutoRoutingWeights: true,
+    autoRoutingWeights: {
+        minSamples: 5,        // observations before a tag's stats are trusted
+        vetoThreshold: -0.5,  // mean reward at/below this → weight 0 (hard veto)
+        maxWeight: 100,       // top of the synthesized weight scale
+        explorationBonus: 0.5, // UCB coefficient; higher → more exploration
+        priorWeight: 50,      // optimistic weight for unexplored tags
+    },
+});
+
+// Inspect what the system has learned for a user
+const stats = await matcher.getLearnedTagStats('user-1');
+const preview = await matcher.getLearnedRoutingWeights('user-1');
+
+// Apply learned weights to one user, or to all tracked users (e.g. on a
+// periodic job). Manual routingWeights entries for tags the learner has no
+// data on are preserved; pass { overrideManual: true } to replace them.
+await matcher.syncLearnedRoutingWeights('user-1');
+await matcher.syncLearnedRoutingWeights(); // all tracked users
+
+// Include exploration priors for known tags the user has never seen:
+await matcher.syncLearnedRoutingWeights('user-1', { includeUnexploredTags: true });
+```
+
+Synthesis happens outside the matching hot path — matching itself reads the
+user's stored `routingWeights` exactly as before, so the per-match cost is
+unchanged. The last-applied learned map is stored on the user as
+`learnedRoutingWeights` for observability, and `resetLearningModel()` clears
+all per-user tag statistics. The pure synthesis function is exported as
+`synthesizeRoutingWeights` for offline pipelines.
+
 ### RL Scalability & Redis Constraints
 
 The RL layer adds controlled overhead: decision recording, outcome archival,

@@ -30,11 +30,15 @@ export type {
     LearningSignals,
     LearningSample,
     LearningStats,
+    LearningTagStat,
+    AutoRoutingWeightsOptions,
     PendingAssignmentInfo,
 } from './matcher.class';
 
 // Learning feature helpers (for custom feature extractors)
 export { extractMatchFeatures, cosineSimilarity } from './learning/features';
+// Automatic routing-weight synthesis (UCB1 policy over learned tag stats)
+export { synthesizeRoutingWeights, DEFAULT_AUTO_WEIGHTS_OPTIONS } from './learning/auto-weights';
 
 // Workflow builder DSL
 export {
