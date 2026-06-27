@@ -74,6 +74,8 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         eventRetryCount: (eventId: string) => `${prefix}events:retries:${eventId}`,
         workflowStepExpiry: (instanceId: string, stepId: string) => `${prefix}workflow:${instanceId}:step:${stepId}:expiry`,
         workflowAuditStream: () => `${prefix}workflow:audit:stream`,
+        circuitBreakerState: () => `${prefix}reliability:circuit-breaker:state`,
+        reliabilityMetrics: () => `${prefix}reliability:metrics`,
     };
 }
 

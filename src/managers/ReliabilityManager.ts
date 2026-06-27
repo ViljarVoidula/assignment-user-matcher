@@ -1,14 +1,37 @@
 import { RedisClientType } from '../types/matcher';
 import { KeyBuilders } from '../utils/keys';
-import { 
-    WorkflowEvent, 
-    DeadLetterEntry, 
-    AuditEntry, 
-    CircuitBreakerState
+import {
+    WorkflowEvent,
+    DeadLetterEntry,
+    AuditEntry,
+    CircuitBreakerState,
+    ReliabilityMetrics
 } from '../types/matcher';
+
+/**
+ * Calculate delay with exponential backoff and jitter
+ * to avoid thundering herd problem during retries
+ */
+function calculateRetryDelay(
+    attempt: number,
+    initialDelay: number,
+    maxDelay: number
+): number {
+    const exponentialDelay = Math.min(initialDelay * Math.pow(2, attempt), maxDelay);
+    // Add jitter: ±25% of calculated delay
+    const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1);
+    return Math.max(0, exponentialDelay + jitter);
+}
 
 export class ReliabilityManager {
     private circuitBreaker: CircuitBreakerState;
+    private metrics: ReliabilityMetrics;
+    private persistState: boolean;
+    private reconnectCount: number = 0;
+    private lastError?: string;
+    private redisHealthy: boolean = true;
+    private lastConnectedAt: number = Date.now();
+    private lastHealthCheckAt?: number;
 
     constructor(
         private redisClient: RedisClientType,
@@ -21,6 +44,9 @@ export class ReliabilityManager {
             workflowAuditEnabled: boolean;
             workflowSnapshotDefinitions?: boolean;
             streamConsumerName: string;
+            circuitBreakerPersistState?: boolean;
+            enableReliabilityMetrics?: boolean;
+            deadLetterQueueAlertThreshold?: number;
         }
     ) {
         this.circuitBreaker = {
@@ -28,6 +54,132 @@ export class ReliabilityManager {
             failureCount: 0,
             lastFailureTime: 0,
         };
+        this.persistState = options.circuitBreakerPersistState ?? false;
+        this.metrics = {
+            circuitBreakerState: { ...this.circuitBreaker },
+            deadLetterQueueSize: 0,
+            redisHealthy: true,
+            reconnectCount: 0,
+            lastConnectedAt: Date.now(),
+            circuitBreakerAllowingRequests: true,
+        };
+    }
+
+    /**
+     * Initialize the reliability manager by loading persisted state if enabled
+     */
+    async init(): Promise<void> {
+        if (this.persistState) {
+            await this.loadCircuitBreakerState();
+        }
+        this.updateMetrics();
+    }
+
+    /**
+     * Load circuit breaker state from Redis for distributed awareness
+     */
+    private async loadCircuitBreakerState(): Promise<void> {
+        try {
+            const stateKey = this.keys.circuitBreakerState();
+            const stateData = await this.redisClient.hGetAll(stateKey);
+
+            if (stateData.state) {
+                this.circuitBreaker = {
+                    state: stateData.state as CircuitBreakerState['state'],
+                    failureCount: Number(stateData.failureCount) || 0,
+                    lastFailureTime: Number(stateData.lastFailureTime) || 0,
+                };
+                console.log('Loaded circuit breaker state from Redis:', this.circuitBreaker);
+            }
+        } catch (err) {
+            console.error('Failed to load circuit breaker state from Redis:', err);
+            // Continue with default state
+        }
+    }
+
+    /**
+     * Save circuit breaker state to Redis for distributed awareness
+     */
+    private async saveCircuitBreakerState(): Promise<void> {
+        if (!this.persistState) return;
+
+        try {
+            const stateKey = this.keys.circuitBreakerState();
+            await this.redisClient.hSet(stateKey, {
+                state: this.circuitBreaker.state,
+                failureCount: String(this.circuitBreaker.failureCount),
+                lastFailureTime: String(this.circuitBreaker.lastFailureTime),
+            });
+            // Set TTL to clean up state if circuit breaker stays closed for a long time
+            await this.redisClient.expire(stateKey, 86400); // 24 hours
+        } catch (err) {
+            console.error('Failed to save circuit breaker state to Redis:', err);
+        }
+    }
+
+    /**
+     * Update reliability metrics
+     */
+    private updateMetrics(): void {
+        const now = Date.now();
+        const circuitBreakerAllowingRequests =
+            this.circuitBreaker.state !== 'open' ||
+            now - this.circuitBreaker.lastFailureTime > this.options.workflowCircuitBreakerResetMs;
+
+        this.metrics = {
+            circuitBreakerState: { ...this.circuitBreaker },
+            deadLetterQueueSize: 0, // Will be updated when needed
+            redisHealthy: this.redisHealthy,
+            reconnectCount: this.reconnectCount,
+            lastError: this.lastError,
+            lastConnectedAt: this.lastConnectedAt,
+            lastHealthCheckAt: this.lastHealthCheckAt,
+            circuitBreakerAllowingRequests,
+        };
+    }
+
+    /**
+     * Get current reliability metrics
+     */
+    async getMetrics(): Promise<ReliabilityMetrics> {
+        // Update DLQ size
+        try {
+            this.metrics.deadLetterQueueSize = await this.getDeadLetterQueueSize();
+        } catch {
+            // Keep previous value if fetch fails
+        }
+        this.updateMetrics();
+        return { ...this.metrics };
+    }
+
+    /**
+     * Update Redis health status (called by health check mechanism)
+     */
+    updateRedisHealth(isHealthy: boolean, error?: string): void {
+        this.redisHealthy = isHealthy;
+        if (!isHealthy && error) {
+            this.lastError = error;
+        } else if (isHealthy) {
+            this.lastConnectedAt = Date.now();
+            this.lastError = undefined;
+        }
+        this.updateMetrics();
+    }
+
+    /**
+     * Update reconnection count (called by connection handler)
+     */
+    updateReconnectCount(count: number): void {
+        this.reconnectCount = count;
+        this.updateMetrics();
+    }
+
+    /**
+     * Update last health check timestamp
+     */
+    updateHealthCheckTimestamp(): void {
+        this.lastHealthCheckAt = Date.now();
+        this.updateMetrics();
     }
 
     /**
@@ -93,15 +245,20 @@ export class ReliabilityManager {
     shouldProcessCircuitBreaker(): boolean {
         const now = Date.now();
         switch (this.circuitBreaker.state) {
-            case 'closed': return true;
+            case 'closed':
+                return true;
             case 'open':
                 if (now - this.circuitBreaker.lastFailureTime > this.options.workflowCircuitBreakerResetMs) {
                     this.circuitBreaker.state = 'half-open';
+                    this.saveCircuitBreakerState();
+                    this.updateMetrics();
                     return true;
                 }
                 return false;
-            case 'half-open': return true;
-            default: return true;
+            case 'half-open':
+                return true;
+            default:
+                return true;
         }
     }
 
@@ -109,16 +266,21 @@ export class ReliabilityManager {
         if (this.circuitBreaker.state === 'half-open') {
             this.circuitBreaker.state = 'closed';
             this.circuitBreaker.failureCount = 0;
+            this.saveCircuitBreakerState(); // Persist state change
         }
+        this.updateMetrics();
     }
 
     recordCircuitBreakerFailure(): void {
         this.circuitBreaker.failureCount++;
         this.circuitBreaker.lastFailureTime = Date.now();
-        if (this.circuitBreaker.state === 'half-open' || 
+        if (this.circuitBreaker.state === 'half-open' ||
             this.circuitBreaker.failureCount >= this.options.workflowCircuitBreakerThreshold) {
             this.circuitBreaker.state = 'open';
+            this.saveCircuitBreakerState(); // Persist state change
+            console.warn(`Circuit breaker opened after ${this.circuitBreaker.failureCount} failures`);
         }
+        this.updateMetrics();
     }
 
     async emitAuditEvent(
@@ -148,6 +310,31 @@ export class ReliabilityManager {
     }
 
     getCircuitBreakerState(): CircuitBreakerState {
+        this.updateMetrics();
         return { ...this.circuitBreaker };
+    }
+
+    /**
+     * Check if Dead Letter Queue size exceeds alert threshold
+     */
+    async checkDeadLetterQueueAlert(): Promise<boolean> {
+        const threshold = this.options.deadLetterQueueAlertThreshold ?? 100;
+        const size = await this.getDeadLetterQueueSize();
+        return size > threshold;
+    }
+
+    /**
+     * Perform exponential backoff delay
+     * @param attempt Current retry attempt
+     * @param initialDelay Initial delay in ms (default: 100)
+     * @param maxDelay Maximum delay in ms (default: 5000)
+     */
+    static async backoff(
+        attempt: number,
+        initialDelay: number = 100,
+        maxDelay: number = 5000
+    ): Promise<void> {
+        const delay = calculateRetryDelay(attempt, initialDelay, maxDelay);
+        await new Promise(resolve => setTimeout(resolve, delay));
     }
 }

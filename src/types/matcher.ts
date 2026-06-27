@@ -72,6 +72,24 @@ export type MatcherOptions = {
     /** Consumer name within the group (defaults to random UUID) */
     streamConsumerName?: string;
 
+    // ========== Redis Connection Reliability Options ==========
+    /** Maximum number of reconnection attempts (default: 10) */
+    redisMaxRetries?: number;
+    /** Initial delay between retries in ms (default: 50) */
+    redisInitialRetryDelay?: number;
+    /** Maximum delay between retries in ms (default: 2000) */
+    redisMaxRetryDelay?: number;
+    /** Connection timeout in ms (default: 10000) */
+    redisConnectTimeout?: number;
+    /** Command timeout in ms (default: 3000) */
+    redisCommandTimeout?: number;
+    /** Enable offline queue for commands during disconnect (default: true) */
+    redisEnableOfflineQueue?: boolean;
+    /** Enable ready check before considering connection successful (default: true) */
+    redisEnableReadyCheck?: boolean;
+    /** Health check interval in ms (default: 30000) */
+    redisHealthCheckInterval?: number;
+
     // ========== Workflow Reliability Options ==========
     /** Maximum retries for failed workflow events before moving to DLQ (default: 3) */
     workflowMaxRetries?: number;
@@ -91,6 +109,14 @@ export type MatcherOptions = {
     workflowSnapshotDefinitions?: boolean;
     /** Enable OpenTelemetry tracing (default: false) */
     enableOpenTelemetry?: boolean;
+    /** Persist circuit breaker state to Redis for distributed awareness (default: false) */
+    circuitBreakerPersistState?: boolean;
+    /** Enable circuit breaker and reliability metrics (default: true when telemetry enabled) */
+    enableReliabilityMetrics?: boolean;
+    /** Enable graceful degradation mode when Redis is unavailable (default: false) */
+    enableGracefulDegradation?: boolean;
+    /** Alert threshold for Dead Letter Queue size (default: 100) */
+    deadLetterQueueAlertThreshold?: number;
 
     // ========== Reinforcement Learning Options ==========
     /** Enable the contextual-bandit learning layer (default: false) */
@@ -341,6 +367,26 @@ export interface CircuitBreakerState {
     failureCount: number;
     /** Timestamp of last failure */
     lastFailureTime: number;
+}
+
+/** Reliability metrics for monitoring */
+export interface ReliabilityMetrics {
+    /** Current circuit breaker state */
+    circuitBreakerState: CircuitBreakerState;
+    /** Current Dead Letter Queue size */
+    deadLetterQueueSize: number;
+    /** Whether Redis is considered healthy */
+    redisHealthy: boolean;
+    /** Number of reconnection attempts since start */
+    reconnectCount: number;
+    /** Last error message if any */
+    lastError?: string;
+    /** Timestamp of last successful connection */
+    lastConnectedAt: number;
+    /** Timestamp of last health check */
+    lastHealthCheckAt?: number;
+    /** Whether circuit breaker is currently allowing requests */
+    circuitBreakerAllowingRequests: boolean;
 }
 
 /** Workflow instance with resolved definition for versioning */

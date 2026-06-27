@@ -43,10 +43,12 @@ import type {
     LearningSample,
     LearningStats,
     LearningTagStat,
+    ReliabilityMetrics,
+    CircuitBreakerState,
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
-export type { RedisClientType, User, Assignment, Stats, PendingAssignmentInfo, MatcherOptions, options } from './types/matcher';
+export type { RedisClientType, User, Assignment, Stats, PendingAssignmentInfo, MatcherOptions, options, ReliabilityMetrics } from './types/matcher';
 // Export workflow types
 export type {
     WorkflowDefinition,
@@ -176,6 +178,9 @@ export default class AssignmentMatcher implements WorkflowHost {
             workflowAuditEnabled: options?.workflowAuditEnabled ?? false,
             workflowSnapshotDefinitions: options?.workflowSnapshotDefinitions ?? true,
             streamConsumerName: this.streamConsumerName,
+            circuitBreakerPersistState: options?.circuitBreakerPersistState ?? false,
+            enableReliabilityMetrics: options?.enableReliabilityMetrics ?? true,
+            deadLetterQueueAlertThreshold: options?.deadLetterQueueAlertThreshold ?? 100,
         });
         this.telemetry = new TelemetryManager(options?.enableOpenTelemetry ?? false);
 
@@ -229,6 +234,9 @@ export default class AssignmentMatcher implements WorkflowHost {
         if (!this.redisClient.isOpen) {
             await this.redisClient.connect();
         }
+
+        // Initialize reliability manager (load persisted circuit breaker state if enabled)
+        await this.reliability.init();
 
         // Initialize workflow stream consumer group if workflows are enabled
         if (this.enableWorkflows) {
@@ -335,6 +343,76 @@ export default class AssignmentMatcher implements WorkflowHost {
     async getAuditEvents(count: number = 100): Promise<AuditEntry[]> {
         await this.readyPromise;
         return this.reliability.getAuditEvents(count);
+    }
+
+    // ============================================================================
+    // Reliability & Health Check Methods
+    // ============================================================================
+
+    /**
+     * Get comprehensive reliability metrics including circuit breaker state,
+     * Dead Letter Queue size, and Redis health status.
+     */
+    async getReliabilityMetrics(): Promise<ReliabilityMetrics> {
+        await this.readyPromise;
+        return this.reliability.getMetrics();
+    }
+
+    /**
+     * Get current circuit breaker state
+     */
+    async getCircuitBreakerState(): Promise<CircuitBreakerState> {
+        await this.readyPromise;
+        return this.reliability.getCircuitBreakerState();
+    }
+
+    /**
+     * Check if Dead Letter Queue size exceeds alert threshold
+     */
+    async checkDeadLetterQueueAlert(): Promise<boolean> {
+        await this.readyPromise;
+        return this.reliability.checkDeadLetterQueueAlert();
+    }
+
+    /**
+     * Perform a health check on Redis connection
+     * Returns true if Redis is healthy, false otherwise
+     */
+    async healthCheck(): Promise<{ healthy: boolean; details: Record<string, any> }> {
+        await this.readyPromise;
+
+        const details: Record<string, any> = {
+            timestamp: Date.now(),
+        };
+
+        try {
+            // Check if Redis client is connected
+            details.redisConnected = this.redisClient.isOpen;
+
+            // Try to ping Redis
+            const pingResult = await this.redisClient.ping();
+            details.redisPing = pingResult;
+
+            // Get reliability metrics
+            const metrics = await this.getReliabilityMetrics();
+            details.circuitBreakerState = metrics.circuitBreakerState;
+            details.deadLetterQueueSize = metrics.deadLetterQueueSize;
+            details.circuitBreakerAllowingRequests = metrics.circuitBreakerAllowingRequests;
+
+            // Check if circuit breaker is allowing requests
+            const healthy = details.redisConnected && pingResult === 'PONG' && details.circuitBreakerAllowingRequests;
+
+            return {
+                healthy,
+                details,
+            };
+        } catch (err) {
+            details.error = err instanceof Error ? err.message : String(err);
+            return {
+                healthy: false,
+                details,
+            };
+        }
     }
 
     // ============================================================================

@@ -17,6 +17,9 @@ import { ReliabilityManager } from './ReliabilityManager';
 import { TelemetryManager } from './TelemetryManager';
 import { normalizeWorkflowDefinition } from '../workflow-validation';
 
+// Re-export the static backoff method for convenience
+export const { backoff } = ReliabilityManager;
+
 export interface WorkflowHost {
     addAssignment(assignment: Assignment): Promise<Assignment>;
     matchUsersAssignments(userId: string): Promise<any>;
@@ -31,6 +34,7 @@ export class WorkflowManager {
     private orchestratorRunning: boolean = false;
     private orchestratorAbortController: AbortController | null = null;
     private subscriberClient: RedisClientType | null = null;
+    private subscriberReconnectAttempts: number = 0;
     private luaScriptSha: string | null = null;
 
     constructor(
@@ -45,6 +49,7 @@ export class WorkflowManager {
             streamConsumerName: string;
             reclaimIntervalMs: number;
             reclaimMinIdleMs?: number;
+            commandTimeout?: number;
         }
     ) {}
 
@@ -492,8 +497,9 @@ export class WorkflowManager {
 
         this.orchestratorRunning = true;
         this.orchestratorAbortController = new AbortController();
-        this.subscriberClient = this.redisClient.duplicate() as RedisClientType;
-        await this.subscriberClient.connect();
+
+        // Setup subscriber client with reconnection handling
+        await this.setupSubscriberClient();
 
         this.orchestratorLoop().catch((err) => {
             if (!this.orchestratorAbortController?.signal.aborted) {
@@ -502,11 +508,83 @@ export class WorkflowManager {
         });
     }
 
+    /**
+     * Setup subscriber client with comprehensive reconnection handling
+     */
+    private async setupSubscriberClient(): Promise<void> {
+        this.subscriberClient = this.redisClient.duplicate() as RedisClientType;
+
+        // Setup reconnection handling
+        this.subscriberClient.on('error', (err) => {
+            console.error('Subscriber client error:', err);
+            this.subscriberReconnectAttempts++;
+            this.reliability.updateReconnectCount(this.subscriberReconnectAttempts);
+        });
+
+        this.subscriberClient.on('connect', () => {
+            console.log('Subscriber client connected');
+            this.subscriberReconnectAttempts = 0;
+            this.reliability.updateReconnectCount(0);
+        });
+
+        this.subscriberClient.on('disconnect', () => {
+            console.warn('Subscriber client disconnected');
+            this.reliability.updateRedisHealth(false, 'Subscriber client disconnected');
+        });
+
+        this.subscriberClient.on('ready', () => {
+            console.log('Subscriber client ready');
+            this.reliability.updateRedisHealth(true);
+        });
+
+        await this.subscriberClient.connect();
+    }
+
+    /**
+     * Reconnect subscriber client with exponential backoff
+     */
+    private async reconnectSubscriberClient(): Promise<void> {
+        if (this.subscriberClient?.isOpen) {
+            await this.subscriberClient.quit();
+        }
+
+        const maxAttempts = 5;
+        let attempt = 0;
+
+        while (attempt < maxAttempts && this.orchestratorRunning) {
+            try {
+                await this.setupSubscriberClient();
+                console.log('Subscriber client reconnected successfully');
+                return;
+            } catch (err) {
+                attempt++;
+                this.subscriberReconnectAttempts = attempt;
+
+                if (attempt >= maxAttempts) {
+                    console.error(`Failed to reconnect subscriber client after ${maxAttempts} attempts`);
+                    throw err;
+                }
+
+                // Exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms
+                const delay = Math.min(100 * Math.pow(2, attempt - 1), 2000);
+                console.warn(`Subscriber client reconnection attempt ${attempt}/${maxAttempts}, retrying in ${delay}ms`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+
+        throw new Error(`Failed to reconnect subscriber client after ${maxAttempts} attempts`);
+    }
+
     async stopOrchestrator(): Promise<void> {
         this.orchestratorRunning = false;
         this.orchestratorAbortController?.abort();
+
         if (this.subscriberClient?.isOpen) {
-            await this.subscriberClient.quit();
+            try {
+                await this.subscriberClient.quit();
+            } catch (err) {
+                console.error('Error closing subscriber client:', err);
+            }
             this.subscriberClient = null;
         }
     }
@@ -581,9 +659,23 @@ export class WorkflowManager {
                     }
                 } catch (err: any) {
                     if (this.orchestratorAbortController?.signal.aborted) break;
+
                     console.error('Orchestrator read error:', err);
                     this.reliability.recordCircuitBreakerFailure();
-                    await new Promise((r) => setTimeout(r, 1000));
+
+                    // Check if it's a connection error and try to reconnect
+                    const errorMessage = err?.message || String(err);
+                    if (errorMessage.includes('connection') || errorMessage.includes('Socket') || errorMessage.includes('ECONN')) {
+                        console.warn('Detected connection error, attempting to reconnect subscriber client...');
+                        try {
+                            await this.reconnectSubscriberClient();
+                        } catch (reconnectErr) {
+                            console.error('Failed to reconnect subscriber client:', reconnectErr);
+                        }
+                    }
+
+                    // Exponential backoff before retry
+                    await ReliabilityManager.backoff(this.subscriberReconnectAttempts);
                 }
             }
         } finally {

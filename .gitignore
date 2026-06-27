@@ -33,3 +33,4 @@ assignment-user-matcher-*.tgz
 docs/prds/deterministic-workflows.md
 scripts/release-patch-local.sh
 benchmark-*
+assignment-engine.code-workspace
