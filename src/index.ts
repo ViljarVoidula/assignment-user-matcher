@@ -1,6 +1,14 @@
 import AssignmentMatcher from './matcher.class';
 
-export type { Assignment, options, Stats, User } from './matcher.class';
+export type {
+    Assignment,
+    MatcherOptions,
+    options,
+    Stats,
+    User,
+    ReliabilityMetrics,
+    AssignmentStatus,
+} from './matcher.class';
 
 // Workflow type exports
 export type {
@@ -8,7 +16,9 @@ export type {
     WorkflowDefinitionInput,
     WorkflowDefinitionSummary,
     WorkflowInstance,
+    WorkflowInstanceStatus,
     WorkflowStep,
+    WorkflowRouting,
     WorkflowTargetUser,
     WorkflowMachineTask,
     WorkflowTaskType,
@@ -35,6 +45,10 @@ export type {
     PendingAssignmentInfo,
     WorkflowEngineMetrics,
     MachineTaskHandler,
+    WorkflowHost,
+    PaginationOptions,
+    PaginationResult,
+    AssignmentCounts,
 } from './matcher.class';
 
 // Learning feature helpers (for custom feature extractors)

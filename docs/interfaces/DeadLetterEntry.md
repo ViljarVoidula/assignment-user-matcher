@@ -25,9 +25,9 @@ Error message if available
 
 #### Defined in
 
-[src/types/matcher.ts:374](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a2b968d8469e70a64512419c49eaf6a09004fda6/src/types/matcher.ts#L374)
+[src/types/matcher.ts:374](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L374)
 
-___
+---
 
 ### errorStack
 
@@ -37,9 +37,9 @@ Error stack trace if available
 
 #### Defined in
 
-[src/types/matcher.ts:376](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a2b968d8469e70a64512419c49eaf6a09004fda6/src/types/matcher.ts#L376)
+[src/types/matcher.ts:376](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L376)
 
-___
+---
 
 ### event
 
@@ -49,9 +49,9 @@ Original event that failed
 
 #### Defined in
 
-[src/types/matcher.ts:370](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a2b968d8469e70a64512419c49eaf6a09004fda6/src/types/matcher.ts#L370)
+[src/types/matcher.ts:370](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L370)
 
-___
+---
 
 ### movedAt
 
@@ -61,9 +61,9 @@ Timestamp when moved to DLQ
 
 #### Defined in
 
-[src/types/matcher.ts:378](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a2b968d8469e70a64512419c49eaf6a09004fda6/src/types/matcher.ts#L378)
+[src/types/matcher.ts:378](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L378)
 
-___
+---
 
 ### reason
 
@@ -73,9 +73,9 @@ Reason the event failed
 
 #### Defined in
 
-[src/types/matcher.ts:372](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a2b968d8469e70a64512419c49eaf6a09004fda6/src/types/matcher.ts#L372)
+[src/types/matcher.ts:372](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L372)
 
-___
+---
 
 ### retryCount
 
@@ -85,4 +85,4 @@ Number of processing attempts before moving to DLQ
 
 #### Defined in
 
-[src/types/matcher.ts:380](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a2b968d8469e70a64512419c49eaf6a09004fda6/src/types/matcher.ts#L380)
+[src/types/matcher.ts:380](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L380)

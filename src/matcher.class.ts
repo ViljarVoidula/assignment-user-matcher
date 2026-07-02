@@ -9,6 +9,7 @@ import {
     getAssignmentById,
     getAssignmentsByIdsBatch,
     getAssignmentsPaginatedFromStores,
+    type AssignmentStatus,
     type PaginationOptions,
     type PaginationResult,
     type AssignmentCounts,
@@ -58,6 +59,8 @@ export type {
     MatcherOptions,
     options,
     ReliabilityMetrics,
+    WorkflowInstanceStatus,
+    WorkflowRouting,
 } from './types/matcher';
 // Export workflow types
 export type {
@@ -91,7 +94,8 @@ export type {
     AutoRoutingWeightsOptions,
     WorkflowEngineMetrics,
 } from './types/matcher';
-export type { MachineTaskHandler } from './managers/WorkflowManager';
+export type { MachineTaskHandler, WorkflowHost } from './managers/WorkflowManager';
+export type { AssignmentStatus, PaginationOptions, PaginationResult, AssignmentCounts } from './queries/pagination';
 
 // Load Lua scripts from files
 const LUA_SCRIPTS_DIR = join(__dirname, 'lua');
@@ -763,10 +767,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Get assignments with pagination support for efficient querying of large datasets.
      * Uses cursor-based pagination across statuses.
      *
-     * @param options.cursor - Cursor for pagination (null/undefined for first page)
-     * @param options.limit - Maximum number of assignments to return per page (default: 100)
-     * @param options.status - Filter by status: 'queued' | 'pending' | 'accepted' | 'all' (default: 'all')
-     * @param options.includeTotal - Whether to include total count (slower for large datasets)
+     * @param options - Pagination options.
      */
     async getAssignmentsPaginated(options?: PaginationOptions): Promise<PaginationResult> {
         await this.readyPromise;

@@ -18,8 +18,9 @@
         "esModuleInterop": true
     },
     "typedocOptions": {
-        "entryPoints": ["src/matcher.class.ts"],
-        "out": "docs"
+        "entryPoints": ["src/index.ts"],
+        "out": "docs",
+        "excludePrivate": true
     },
     "include": ["src"]
 }
