@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import {
     RedisClientType,
     WorkflowDefinition,
@@ -11,6 +11,7 @@ import {
     Assignment,
     WorkflowInstanceWithSnapshot,
     ParallelBranchState,
+    WorkflowEngineMetrics,
 } from '../types/matcher';
 import { KeyBuilders } from '../utils/keys';
 import { ReliabilityManager } from './ReliabilityManager';
@@ -30,12 +31,22 @@ export interface WorkflowHost {
     }): Promise<Record<string, any> | void>;
 }
 
+/** Signature for machine task handlers registered via registerMachineHandler(). */
+export type MachineTaskHandler = (args: {
+    instance: WorkflowInstance;
+    step: WorkflowStep;
+    definition: WorkflowDefinition;
+}) => Promise<Record<string, any> | void>;
+
 export class WorkflowManager {
     private orchestratorRunning: boolean = false;
     private orchestratorAbortController: AbortController | null = null;
     private subscriberClient: RedisClientType | null = null;
     private subscriberReconnectAttempts: number = 0;
     private luaScriptSha: string | null = null;
+    private machineHandlers: Map<string, MachineTaskHandler> = new Map();
+    private throttleWindowStart: number = 0;
+    private throttleTokensUsed: number = 0;
 
     constructor(
         private redisClient: RedisClientType,
@@ -50,7 +61,17 @@ export class WorkflowManager {
             reclaimIntervalMs: number;
             reclaimMinIdleMs?: number;
             commandTimeout?: number;
-        }
+            /** TTL applied to terminal workflow instances; keeps them forever when unset */
+            retentionMs?: number;
+            /** Initial backoff delay for scheduled event retries (default: 1000ms) */
+            retryBackoffMs?: number;
+            /** Max stream entries read per orchestrator poll (default: 10) */
+            eventBatchSize?: number;
+            /** Blocking wait per orchestrator poll in ms (default: 5000) */
+            pollBlockMs?: number;
+            /** Per-replica cap on processed events per second; unlimited when unset */
+            maxEventsPerSecond?: number;
+        },
     ) {}
 
     async init(): Promise<void> {
@@ -76,17 +97,20 @@ export class WorkflowManager {
         this.luaScriptSha = sha;
     }
 
-    async registerWorkflow(
-        definition: WorkflowDefinitionInput | WorkflowDefinition,
-    ): Promise<WorkflowDefinition> {
+    /**
+     * Register a machine task handler by name. Machine steps whose
+     * machineTask.handler matches the name run through this handler.
+     * Falls back to the host's executeMachineTask when no handler matches.
+     */
+    registerMachineHandler(name: string, handler: MachineTaskHandler): void {
+        this.machineHandlers.set(name, handler);
+    }
+
+    async registerWorkflow(definition: WorkflowDefinitionInput | WorkflowDefinition): Promise<WorkflowDefinition> {
         const normalizedDefinition = normalizeWorkflowDefinition(definition);
         const key = this.keys.workflowDefinition(normalizedDefinition.id);
         await this.redisClient.set(key, JSON.stringify(normalizedDefinition));
-        await this.redisClient.hSet(
-            this.keys.workflowDefinitions(),
-            normalizedDefinition.id,
-            normalizedDefinition.name,
-        );
+        await this.redisClient.hSet(this.keys.workflowDefinitions(), normalizedDefinition.id, normalizedDefinition.name);
         return normalizedDefinition;
     }
 
@@ -144,20 +168,29 @@ export class WorkflowManager {
                 version: 1,
                 createdAt: now,
                 updatedAt: now,
-                definitionSnapshot: this.reliability.options.workflowSnapshotDefinitions !== false
-                    ? JSON.parse(JSON.stringify(definition)) 
-                    : undefined,
+                definitionSnapshot:
+                    this.reliability.options.workflowSnapshotDefinitions !== false
+                        ? JSON.parse(JSON.stringify(definition))
+                        : undefined,
             };
 
-            await this.redisClient.hSet(this.keys.workflowInstance(instanceId), 'data', JSON.stringify(instance));
-            await this.redisClient.sAdd(this.keys.workflowInstancesByUser(userId), instanceId);
-            await this.redisClient.hSet(this.keys.workflowInstances(), instanceId, workflowDefinitionId);
+            const multi = this.redisClient.multi();
+            multi.hSet(this.keys.workflowInstance(instanceId), 'data', JSON.stringify(instance));
+            multi.sAdd(this.keys.workflowInstancesByUser(userId), instanceId);
+            multi.hSet(this.keys.workflowInstances(), instanceId, workflowDefinitionId);
+            multi.zAdd(this.keys.workflowInstancesActive(), { score: now, value: instanceId });
+            await multi.exec();
 
-            await this.reliability.emitAuditEvent('WORKFLOW_STARTED', instanceId, {
-                definitionId: workflowDefinitionId,
-                definitionVersion: definition.version,
-                userId,
-            }, 'workflow_instance');
+            await this.reliability.emitAuditEvent(
+                'WORKFLOW_STARTED',
+                instanceId,
+                {
+                    definitionId: workflowDefinitionId,
+                    definitionVersion: definition.version,
+                    userId,
+                },
+                'workflow_instance',
+            );
 
             if (this.options.enableWorkflows) {
                 await this.publishWorkflowEvent({
@@ -191,7 +224,7 @@ export class WorkflowManager {
         const instance = await this.getWorkflowInstance(instanceId);
         if (!instance) return null;
 
-        const definition = instance.definitionSnapshot ?? await this.getWorkflowDefinition(instance.workflowDefinitionId);
+        const definition = instance.definitionSnapshot ?? (await this.getWorkflowDefinition(instance.workflowDefinitionId));
 
         return {
             ...instance,
@@ -201,11 +234,19 @@ export class WorkflowManager {
 
     async getActiveWorkflowsForUser(userId: string): Promise<WorkflowInstance[]> {
         const instanceIds = await this.redisClient.sMembers(this.keys.workflowInstancesByUser(userId));
-        const instances: WorkflowInstance[] = [];
+        if (instanceIds.length === 0) return [];
 
+        const multi = this.redisClient.multi();
         for (const id of instanceIds) {
-            const instance = await this.getWorkflowInstance(id);
-            if (instance && instance.status === 'active') {
+            multi.hGet(this.keys.workflowInstance(id), 'data');
+        }
+        const results = (await multi.exec()) as unknown as (string | null)[];
+
+        const instances: WorkflowInstance[] = [];
+        for (const json of results) {
+            if (!json) continue;
+            const instance: WorkflowInstance = JSON.parse(String(json));
+            if (instance.status === 'active') {
                 instances.push(instance);
             }
         }
@@ -251,7 +292,7 @@ export class WorkflowManager {
                         throw new Error(`Machine step "${parallelStep.id}" is missing machineTask.handler`);
                     }
 
-                    const syntheticAssignmentId = randomUUID();
+                    const syntheticAssignmentId = this.deterministicAssignmentId(instance, parallelStepId);
                     machineParallelSteps.push({ stepId: parallelStepId, assignmentId: syntheticAssignmentId });
                     branches.push({
                         stepId: parallelStepId,
@@ -324,7 +365,7 @@ export class WorkflowManager {
         definition: WorkflowDefinition,
         assignmentId?: string,
     ): Promise<void> {
-        const syntheticAssignmentId = assignmentId ?? randomUUID();
+        const syntheticAssignmentId = assignmentId ?? this.deterministicAssignmentId(instance, step.id);
         const eventBase: WorkflowEvent = {
             eventId: randomUUID(),
             type: 'COMPLETED',
@@ -336,17 +377,39 @@ export class WorkflowManager {
         };
 
         try {
-            if (!this.host.executeMachineTask) {
+            const handlerName = step.machineTask?.handler;
+            const registered = handlerName ? this.machineHandlers.get(handlerName) : undefined;
+            const executor: MachineTaskHandler | undefined =
+                registered ?? (this.host.executeMachineTask ? (args) => this.host.executeMachineTask!(args) : undefined);
+
+            if (!executor) {
                 throw new Error(
                     `Machine task executor not configured for step "${step.id}" (handler: ${step.machineTask?.handler ?? 'unknown'})`,
                 );
             }
 
-            const result = await this.host.executeMachineTask({
-                instance,
-                step,
-                definition,
-            });
+            const run = Promise.resolve(executor({ instance, step, definition }));
+            // Prevent unhandled rejections when the handler loses the timeout race
+            run.catch(() => {});
+
+            const timeoutMs = step.timeoutMs ?? definition.defaultTimeoutMs;
+            let result: Record<string, any> | void;
+            if (timeoutMs) {
+                let timer: NodeJS.Timeout | undefined;
+                const timeout = new Promise<never>((_, reject) => {
+                    timer = setTimeout(
+                        () => reject(new Error(`Machine step "${step.id}" timed out after ${timeoutMs}ms`)),
+                        timeoutMs,
+                    );
+                });
+                try {
+                    result = await Promise.race([run, timeout]);
+                } finally {
+                    clearTimeout(timer);
+                }
+            } else {
+                result = await run;
+            }
 
             await this.processWorkflowEvent({
                 ...eventBase,
@@ -367,45 +430,51 @@ export class WorkflowManager {
     private async setStepTimeout(instanceId: string, stepId: string, timeoutMs: number): Promise<void> {
         const expiryKey = this.keys.workflowStepExpiry(instanceId, stepId);
         const expiryTime = Date.now() + timeoutMs;
-        await this.redisClient.set(expiryKey, String(expiryTime), { PX: timeoutMs });
+        const multi = this.redisClient.multi();
+        multi.set(expiryKey, String(expiryTime), { PX: timeoutMs });
+        multi.zAdd(this.keys.workflowStepExpiryIndex(), {
+            score: expiryTime,
+            value: `${instanceId}|${stepId}`,
+        });
+        await multi.exec();
     }
 
     async processExpiredWorkflowSteps(): Promise<number> {
         if (!this.options.enableWorkflows) return 0;
 
-        const instances = await this.redisClient.hGetAll(this.keys.workflowInstances());
+        const indexKey = this.keys.workflowStepExpiryIndex();
+        const due = await this.redisClient.zRangeByScore(indexKey, '-inf', Date.now());
         let expiredCount = 0;
 
-        for (const [instanceId] of Object.entries(instances)) {
+        for (const member of due) {
+            // Atomic claim: only the replica that removes the member fires the expiry
+            const removed = await this.redisClient.zRem(indexKey, member);
+            if (!removed) continue;
+
+            const separatorIndex = member.indexOf('|');
+            if (separatorIndex === -1) continue;
+            const instanceId = member.slice(0, separatorIndex);
+            const stepId = member.slice(separatorIndex + 1);
+
             const instance = await this.getWorkflowInstance(instanceId);
             if (!instance || instance.status !== 'active') continue;
 
-            const currentStepId = instance.currentStepId;
-            if (!currentStepId) continue;
+            const branch = instance.parallelBranches?.find((b) => b.stepId === stepId);
+            const isCurrentStep = instance.currentStepId === stepId;
+            const isPendingBranch = branch?.status === 'pending';
+            if (!isCurrentStep && !isPendingBranch) continue;
 
-            const expiryKey = this.keys.workflowStepExpiry(instanceId, currentStepId);
-            const expiryTimeStr = await this.redisClient.get(expiryKey);
+            await this.publishWorkflowEvent({
+                eventId: randomUUID(),
+                type: 'EXPIRED',
+                userId: instance.initiatorUserId,
+                assignmentId: branch?.assignmentId ?? instance.currentAssignmentId ?? '',
+                workflowInstanceId: instanceId,
+                stepId,
+                timestamp: Date.now(),
+            });
 
-            if (expiryTimeStr === null) {
-                const definition = await this.getWorkflowDefinition(instance.workflowDefinitionId);
-                if (!definition) continue;
-
-                const step = definition.steps.find((s) => s.id === currentStepId);
-                const timeoutMs = step?.timeoutMs ?? definition.defaultTimeoutMs;
-                if (!timeoutMs) continue;
-
-                await this.publishWorkflowEvent({
-                    eventId: randomUUID(),
-                    type: 'EXPIRED',
-                    userId: instance.initiatorUserId,
-                    assignmentId: instance.currentAssignmentId ?? '',
-                    workflowInstanceId: instanceId,
-                    stepId: currentStepId,
-                    timestamp: Date.now(),
-                });
-
-                expiredCount++;
-            }
+            expiredCount++;
         }
 
         return expiredCount;
@@ -433,7 +502,7 @@ export class WorkflowManager {
             targetUserId = targetUserSelector as string;
         }
 
-        const assignmentId = randomUUID();
+        const assignmentId = this.deterministicAssignmentId(instance, step.id);
         const assignment: Assignment = {
             id: assignmentId,
             tags: step.assignmentTemplate.tags ?? ['workflow'],
@@ -568,7 +637,7 @@ export class WorkflowManager {
                 // Exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms
                 const delay = Math.min(100 * Math.pow(2, attempt - 1), 2000);
                 console.warn(`Subscriber client reconnection attempt ${attempt}/${maxAttempts}, retrying in ${delay}ms`);
-                await new Promise(resolve => setTimeout(resolve, delay));
+                await new Promise((resolve) => setTimeout(resolve, delay));
             }
         }
 
@@ -599,6 +668,11 @@ export class WorkflowManager {
             } catch (err) {
                 console.error('Error reclaiming orphaned messages:', err);
             }
+            try {
+                await this.drainScheduledRetries();
+            } catch (err) {
+                console.error('Error draining scheduled retries:', err);
+            }
         }, this.options.reclaimIntervalMs);
 
         try {
@@ -609,12 +683,15 @@ export class WorkflowManager {
                         continue;
                     }
 
-                    const response = await client.xReadGroup(
+                    const response = (await client.xReadGroup(
                         this.options.streamConsumerGroup,
                         this.options.streamConsumerName,
                         [{ key: streamKey, id: '>' }],
-                        { COUNT: 10, BLOCK: 5000 },
-                    ) as any;
+                        {
+                            COUNT: this.options.eventBatchSize ?? 10,
+                            BLOCK: this.options.pollBlockMs ?? 5000,
+                        },
+                    )) as any;
 
                     if (!response) continue;
 
@@ -627,18 +704,25 @@ export class WorkflowManager {
                                 continue;
                             }
 
+                            await this.applyEventThrottle();
+
                             try {
                                 await this.processWorkflowEvent(event);
                                 await this.reliability.markEventProcessed(event.eventId);
                                 await client.xAck(streamKey, this.options.streamConsumerGroup, message.id);
                                 this.reliability.recordCircuitBreakerSuccess();
-                                await this.reliability.emitAuditEvent('EVENT_PROCESSED', event.eventId, {
-                                    type: event.type,
-                                    workflowInstanceId: event.workflowInstanceId,
-                                }, 'event');
+                                await this.reliability.emitAuditEvent(
+                                    'EVENT_PROCESSED',
+                                    event.eventId,
+                                    {
+                                        type: event.type,
+                                        workflowInstanceId: event.workflowInstanceId,
+                                    },
+                                    'event',
+                                );
                             } catch (err) {
                                 console.error(`Error processing event ${event.eventId}:`, err);
-                                this.reliability.recordCircuitBreakerFailure();
+                                await this.reliability.recordCircuitBreakerFailure();
 
                                 const retryKey = this.keys.eventRetryCount(event.eventId);
                                 const retryCount = Number(await this.redisClient.get(retryKey)) || 0;
@@ -651,8 +735,12 @@ export class WorkflowManager {
                                     );
                                     await client.xAck(streamKey, this.options.streamConsumerGroup, message.id);
                                 } else {
-                                    await this.redisClient.incr(retryKey);
+                                    const nextRetryCount = Number(await this.redisClient.incr(retryKey));
                                     await this.redisClient.expire(retryKey, 86400);
+                                    // Schedule a delayed retry with backoff and release the
+                                    // stream entry instead of waiting for the reclaim idle window.
+                                    await this.scheduleEventRetry(event, nextRetryCount);
+                                    await client.xAck(streamKey, this.options.streamConsumerGroup, message.id);
                                 }
                             }
                         }
@@ -661,11 +749,15 @@ export class WorkflowManager {
                     if (this.orchestratorAbortController?.signal.aborted) break;
 
                     console.error('Orchestrator read error:', err);
-                    this.reliability.recordCircuitBreakerFailure();
+                    await this.reliability.recordCircuitBreakerFailure();
 
                     // Check if it's a connection error and try to reconnect
                     const errorMessage = err?.message || String(err);
-                    if (errorMessage.includes('connection') || errorMessage.includes('Socket') || errorMessage.includes('ECONN')) {
+                    if (
+                        errorMessage.includes('connection') ||
+                        errorMessage.includes('Socket') ||
+                        errorMessage.includes('ECONN')
+                    ) {
                         console.warn('Detected connection error, attempting to reconnect subscriber client...');
                         try {
                             await this.reconnectSubscriberClient();
@@ -708,28 +800,41 @@ export class WorkflowManager {
         });
 
         try {
-            const instance = await this.getWorkflowInstance(event.workflowInstanceId);
-            if (!instance || instance.status !== 'active') {
-                endSpan();
-                return;
-            }
+            const maxAttempts = 3;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                const instance = await this.getWorkflowInstance(event.workflowInstanceId);
+                if (!instance || instance.status !== 'active') {
+                    break;
+                }
 
-            const definition = instance.definitionSnapshot ?? await this.getWorkflowDefinition(instance.workflowDefinitionId);
-            if (!definition) {
-                endSpan();
-                return;
-            }
+                const definition =
+                    instance.definitionSnapshot ?? (await this.getWorkflowDefinition(instance.workflowDefinitionId));
+                if (!definition) {
+                    break;
+                }
 
-            switch (event.type) {
-                case 'COMPLETED':
-                    await this.handleStepCompletion(instance, definition, event);
+                try {
+                    switch (event.type) {
+                        case 'COMPLETED':
+                            await this.handleStepCompletion(instance, definition, event);
+                            break;
+                        case 'FAILED':
+                            await this.handleStepFailure(instance, definition, event);
+                            break;
+                        case 'EXPIRED':
+                            await this.handleStepExpiry(instance, definition, event);
+                            break;
+                    }
                     break;
-                case 'FAILED':
-                    await this.handleStepFailure(instance, definition, event);
-                    break;
-                case 'EXPIRED':
-                    await this.handleStepExpiry(instance, definition, event);
-                    break;
+                } catch (err: any) {
+                    // Optimistic-lock conflicts are retried in place with a fresh
+                    // read instead of waiting for the reclaim loop.
+                    if (attempt < maxAttempts - 1 && String(err?.message ?? err).includes('VERSION_MISMATCH')) {
+                        await ReliabilityManager.backoff(attempt, 25, 250);
+                        continue;
+                    }
+                    throw err;
+                }
             }
 
             endSpan();
@@ -891,14 +996,21 @@ export class WorkflowManager {
 
             switch (operator) {
                 case '==':
-                case '===': return actualValue === expectedValue;
+                case '===':
+                    return actualValue === expectedValue;
                 case '!=':
-                case '!==': return actualValue !== expectedValue;
-                case '>': return actualValue > expectedValue;
-                case '<': return actualValue < expectedValue;
-                case '>=': return actualValue >= expectedValue;
-                case '<=': return actualValue <= expectedValue;
-                default: return false;
+                case '!==':
+                    return actualValue !== expectedValue;
+                case '>':
+                    return actualValue > expectedValue;
+                case '<':
+                    return actualValue < expectedValue;
+                case '>=':
+                    return actualValue >= expectedValue;
+                case '<=':
+                    return actualValue <= expectedValue;
+                default:
+                    return false;
             }
         } catch {
             return false;
@@ -966,10 +1078,10 @@ export class WorkflowManager {
         const newData = JSON.stringify(instance);
 
         if (this.luaScriptSha) {
-            const result = await this.redisClient.evalSha(this.luaScriptSha, {
+            const result = (await this.redisClient.evalSha(this.luaScriptSha, {
                 keys: [instanceKey],
                 arguments: [String(expectedVersion), newData],
-            }) as string;
+            })) as string;
             const parsed = JSON.parse(result);
             if (parsed.err) {
                 throw new Error(`Workflow transition failed: ${parsed.err}`);
@@ -977,6 +1089,227 @@ export class WorkflowManager {
         } else {
             await this.redisClient.hSet(instanceKey, 'data', newData);
         }
+
+        await this.syncInstanceIndexes(instance);
+    }
+
+    /**
+     * Keep the active-instance index in sync with instance status and apply
+     * the retention policy to terminal instances.
+     */
+    private async syncInstanceIndexes(instance: WorkflowInstance): Promise<void> {
+        const activeKey = this.keys.workflowInstancesActive();
+
+        if (instance.status === 'active') {
+            await this.redisClient.zAdd(activeKey, { score: instance.updatedAt, value: instance.id });
+            return;
+        }
+
+        const multi = this.redisClient.multi();
+        multi.zRem(activeKey, instance.id);
+        if (this.options.retentionMs) {
+            multi.pExpire(this.keys.workflowInstance(instance.id), this.options.retentionMs);
+            multi.hDel(this.keys.workflowInstances(), instance.id);
+            multi.sRem(this.keys.workflowInstancesByUser(instance.initiatorUserId), instance.id);
+        }
+        await multi.exec();
+    }
+
+    /**
+     * Deterministic assignment id for a step execution, so replays of the same
+     * event after a crash produce the same assignment instead of duplicates.
+     */
+    private deterministicAssignmentId(instance: WorkflowInstance, stepId: string): string {
+        return createHash('sha256')
+            .update(`wfa:${instance.id}:${stepId}:${instance.retryCount}:${instance.history.length}`)
+            .digest('hex')
+            .slice(0, 32);
+    }
+
+    /**
+     * Per-replica flow-rate limiter: allows a burst of up to maxEventsPerSecond
+     * events per one-second window, then waits for the window to roll over.
+     * No-op when maxEventsPerSecond is unset.
+     */
+    private async applyEventThrottle(): Promise<void> {
+        const limit = this.options.maxEventsPerSecond;
+        if (!limit || limit <= 0) return;
+
+        const now = Date.now();
+        if (now - this.throttleWindowStart >= 1000) {
+            this.throttleWindowStart = now;
+            this.throttleTokensUsed = 0;
+        }
+
+        if (this.throttleTokensUsed >= limit) {
+            const waitMs = Math.max(this.throttleWindowStart + 1000 - now, 1);
+            await new Promise((r) => setTimeout(r, waitMs));
+            this.throttleWindowStart = Date.now();
+            this.throttleTokensUsed = 0;
+        }
+
+        this.throttleTokensUsed++;
+    }
+
+    /**
+     * Schedule a failed event for a delayed retry with exponential backoff.
+     */
+    async scheduleEventRetry(event: WorkflowEvent, attempt: number): Promise<void> {
+        const base = this.options.retryBackoffMs ?? 1000;
+        const delay = Math.min(base * Math.pow(2, Math.max(attempt - 1, 0)), 60000);
+        await this.redisClient.zAdd(this.keys.eventsRetryScheduled(), {
+            score: Date.now() + delay,
+            value: JSON.stringify(event),
+        });
+    }
+
+    /**
+     * Process due scheduled retries. Entries are claimed atomically (ZREM) so
+     * concurrent replicas never process the same retry twice.
+     */
+    async drainScheduledRetries(): Promise<number> {
+        const key = this.keys.eventsRetryScheduled();
+        const due = await this.redisClient.zRangeByScore(key, '-inf', Date.now());
+        let processed = 0;
+
+        for (const raw of due) {
+            const removed = await this.redisClient.zRem(key, raw);
+            if (!removed) continue;
+
+            let event: WorkflowEvent;
+            try {
+                event = JSON.parse(raw);
+            } catch {
+                continue;
+            }
+
+            if (await this.reliability.isEventProcessed(event.eventId)) continue;
+
+            await this.applyEventThrottle();
+
+            try {
+                await this.processWorkflowEvent(event);
+                await this.reliability.markEventProcessed(event.eventId);
+                processed++;
+            } catch (err) {
+                const retryKey = this.keys.eventRetryCount(event.eventId);
+                const retryCount = Number(await this.redisClient.incr(retryKey));
+                await this.redisClient.expire(retryKey, 86400);
+
+                if (retryCount >= this.reliability.options.workflowMaxRetries!) {
+                    await this.reliability.moveToDeadLetter(
+                        event,
+                        'Max retries exceeded',
+                        err instanceof Error ? err : new Error(String(err)),
+                    );
+                } else {
+                    await this.scheduleEventRetry(event, retryCount);
+                }
+            }
+        }
+
+        return processed;
+    }
+
+    /**
+     * Backfill the active-instance index from legacy instance records that
+     * were created before the index existed. Safe to run multiple times.
+     */
+    async backfillWorkflowIndexes(): Promise<number> {
+        let cursor = '0';
+        let indexed = 0;
+
+        do {
+            const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.keys.workflowInstances(), cursor, {
+                COUNT: 100,
+            });
+            cursor = nextCursor;
+
+            for (const entry of entries) {
+                const instance = await this.getWorkflowInstance(entry.field);
+                if (instance && instance.status === 'active') {
+                    await this.redisClient.zAdd(this.keys.workflowInstancesActive(), {
+                        score: instance.updatedAt,
+                        value: instance.id,
+                    });
+                    indexed++;
+                }
+            }
+        } while (cursor !== '0');
+
+        return indexed;
+    }
+
+    /**
+     * Remove terminal (completed/failed/cancelled) workflow instances that
+     * were last updated more than olderThanMs ago, including their registry,
+     * per-user, and active-index entries.
+     */
+    async pruneWorkflowInstances(olderThanMs: number): Promise<number> {
+        const cutoff = Date.now() - olderThanMs;
+        let cursor = '0';
+        let pruned = 0;
+
+        do {
+            const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.keys.workflowInstances(), cursor, {
+                COUNT: 100,
+            });
+            cursor = nextCursor;
+
+            for (const entry of entries) {
+                const instanceId = entry.field;
+                const instance = await this.getWorkflowInstance(instanceId);
+                if (!instance) {
+                    await this.redisClient.hDel(this.keys.workflowInstances(), instanceId);
+                    continue;
+                }
+                if (instance.status === 'active') continue;
+                if (instance.updatedAt > cutoff) continue;
+
+                const multi = this.redisClient.multi();
+                multi.del(this.keys.workflowInstance(instanceId));
+                multi.hDel(this.keys.workflowInstances(), instanceId);
+                multi.sRem(this.keys.workflowInstancesByUser(instance.initiatorUserId), instanceId);
+                multi.zRem(this.keys.workflowInstancesActive(), instanceId);
+                await multi.exec();
+                pruned++;
+            }
+        } while (cursor !== '0');
+
+        return pruned;
+    }
+
+    /**
+     * Operational metrics for the workflow engine.
+     */
+    async getWorkflowMetrics(): Promise<WorkflowEngineMetrics> {
+        const [activeInstances, scheduledRetries, deadLetterQueueSize] = await Promise.all([
+            this.redisClient.zCard(this.keys.workflowInstancesActive()),
+            this.redisClient.zCard(this.keys.eventsRetryScheduled()),
+            this.reliability.getDeadLetterQueueSize(),
+        ]);
+
+        let streamLength = 0;
+        let streamPending = 0;
+        try {
+            streamLength = Number(await this.redisClient.xLen(this.keys.eventStream()));
+        } catch {
+            // Stream may not exist yet
+        }
+        try {
+            const pendingInfo = await this.redisClient.xPending(this.keys.eventStream(), this.options.streamConsumerGroup);
+            streamPending = Number((pendingInfo as any)?.pending ?? 0);
+        } catch {
+            // Consumer group may not exist yet
+        }
+
+        return {
+            activeInstances: Number(activeInstances),
+            scheduledRetries: Number(scheduledRetries),
+            deadLetterQueueSize,
+            streamLength,
+            streamPending,
+        };
     }
 
     async atomicWorkflowTransition(

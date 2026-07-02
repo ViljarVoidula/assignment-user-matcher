@@ -50,14 +50,14 @@ describe('Assignment Rejection Tests', async function () {
 
         // Reject
         await matcher.rejectAssignment('user1', 'task1');
-        
+
         // Verify removed
         assignments = await matcher.getCurrentAssignmentsForUser('user1');
         expect(assignments).to.not.include('task1');
 
         // Match again
         await matcher.matchUsersAssignments();
-        
+
         // Verify not re-assigned
         assignments = await matcher.getCurrentAssignmentsForUser('user1');
         expect(assignments).to.not.include('task1');
@@ -102,10 +102,10 @@ describe('Assignment Rejection Tests', async function () {
         const assignments2 = await matcher.getCurrentAssignmentsForUser('user2');
         expect(assignments2).to.include('task1');
     });
-    
+
     it('Should clear rejections when user is removed', async function () {
-         // Add user
-         await matcher.addUser({
+        // Add user
+        await matcher.addUser({
             id: 'user1',
             tags: ['tag1'],
         });
@@ -116,14 +116,14 @@ describe('Assignment Rejection Tests', async function () {
             tags: ['tag1'],
             priority: 100,
         });
-        
+
         // Match and reject
         await matcher.matchUsersAssignments();
         await matcher.rejectAssignment('user1', 'task1');
-        
+
         // Remove user
         await matcher.removeUser('user1');
-        
+
         // Check if rejection key is gone
         const rejectedKey = 'test:rejection:user:user1:rejected';
         const exists = await redisClient.exists(rejectedKey);

@@ -19,10 +19,7 @@ export function matchesPattern(pattern: string, tag: string): boolean {
  * Get the effective weight for a skill tag from user's routingWeights
  * Supports wildcard patterns (e.g., 'eng*' matches 'english')
  */
-export function getEffectiveWeight(
-    routingWeights: Record<string, number>,
-    tag: string
-): number {
+export function getEffectiveWeight(routingWeights: Record<string, number>, tag: string): number {
     // First check for exact match
     if (tag in routingWeights) {
         return routingWeights[tag];
@@ -42,7 +39,7 @@ export function getEffectiveWeight(
  */
 export function meetsSkillThresholds(
     routingWeights: Record<string, number> | undefined,
-    skillThresholds: Record<string, number> | undefined
+    skillThresholds: Record<string, number> | undefined,
 ): boolean {
     if (!skillThresholds || Object.keys(skillThresholds).length === 0) {
         return true; // No thresholds to check
@@ -50,7 +47,7 @@ export function meetsSkillThresholds(
     if (!routingWeights || Object.keys(routingWeights).length === 0) {
         return false; // User has no weights but thresholds exist
     }
-    
+
     for (const [skill, minWeight] of Object.entries(skillThresholds)) {
         const userWeight = getEffectiveWeight(routingWeights, skill);
         if (userWeight < minWeight) {
@@ -69,7 +66,7 @@ export function calculateMatchScore(
     assignmentTags: string,
     assignmentPriority: string | number,
     enableDefaultMatching: boolean,
-    skillThresholds?: Record<string, number>
+    skillThresholds?: Record<string, number>,
 ): [number, number] {
     const aTags = assignmentTags ? assignmentTags.split(',') : [];
 
@@ -102,11 +99,11 @@ export function calculateMatchScore(
                     }
                 }
             }
-            
-            // If enableDefaultMatching is true, and the tag is 'default', 
+
+            // If enableDefaultMatching is true, and the tag is 'default',
             // and it wasn't matched by any routing weight, give it default weight 1
             if (enableDefaultMatching && t === 'default' && !matchedByRouting) {
-                 weightSum += 1;
+                weightSum += 1;
             }
         }
         const base = Number(assignmentPriority) || 0;
@@ -122,7 +119,7 @@ export function calculateMatchScore(
     // Fallback to default tag-intersection scoring
     const userTagSet = new Set(user.tags);
     const assignmentTagSet = new Set(aTags);
-    
+
     let intersectionSize = 0;
     for (const userTag of userTagSet) {
         let matched = false;

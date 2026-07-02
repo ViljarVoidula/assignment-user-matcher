@@ -16,7 +16,9 @@ export class TelemetryManager {
             return {
                 span,
                 end: () => {
-                    try { span.end(); } catch {}
+                    try {
+                        span.end();
+                    } catch {}
                 },
             };
         } catch {

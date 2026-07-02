@@ -49,8 +49,8 @@ describe('Matcher Wildcard Tests', async function () {
             tags: [],
             routingWeights: {
                 'region:eu:*': 100,
-                'region:us:*': 50
-            }
+                'region:us:*': 50,
+            },
         };
         await matcher.addUser(user);
 
@@ -80,18 +80,18 @@ describe('Matcher Wildcard Tests', async function () {
             tags: ['type:bug'], // Should match a3
             routingWeights: {
                 'type:bug': 10,
-                'lang:*': 0 // Exclude anything with a lang tag? 
+                'lang:*': 0, // Exclude anything with a lang tag?
                 // Wait, exclusion logic: if user has weight 0 for a tag, and assignment HAS that tag, it is excluded.
                 // But here we are saying: if assignment has ANY tag matching lang:*, exclude it?
                 // The implementation expands 'lang:*' to actual tags present in system.
                 // If 'lang:en' exists in system, it gets weight 0.
                 // If assignment has 'lang:en', it matches a 0-weight tag.
-            }
+            },
         };
         // We need to make sure a1 and a2 have the tags that are being excluded.
         // a1 has lang:en. 'lang:*' expands to 'lang:en', 'lang:fr'.
         // So user effectively has routingWeights: { 'type:bug': 10, 'lang:en': 0, 'lang:fr': 0 }
-        
+
         // However, for a1 to be excluded, it must match the exclusion criteria.
         // In matchScore:
         // if (user.routingWeights[t] === 0) return [0, ...];
@@ -99,17 +99,17 @@ describe('Matcher Wildcard Tests', async function () {
         // The expansion happens in `getUserRelatedAssignments` for candidate selection.
         // BUT `matchScore` is called for final verification.
         // We need to ensure `matchScore` handles wildcards or `getUserRelatedAssignments` filtering is sufficient.
-        
+
         // `getUserRelatedAssignments` does:
         // 1. Expand positive weights.
         // 2. Expand zero weights.
         // 3. zDiffStore (candidates - exclude).
-        
+
         // So a1 (lang:en) will be in `tag:lang:en:assignments`.
         // `lang:*` expands to `lang:en`.
         // `tag:lang:en:assignments` is added to exclude set.
         // So a1 should be excluded from candidates.
-        
+
         await matcher.addUser(user);
 
         await matcher.matchUsersAssignments('u1');
@@ -130,25 +130,25 @@ describe('Matcher Wildcard Tests', async function () {
             tags: [],
             routingWeights: {
                 'skill:js:*': 20, // Matches a1, a2
-                'skill:*:node': 50 // Matches a1 (assuming we support * in middle? No, implementation uses zRangeByLex which is prefix only)
+                'skill:*:node': 50, // Matches a1 (assuming we support * in middle? No, implementation uses zRangeByLex which is prefix only)
                 // The implementation: wildcards = tags.filter((t) => t.tag.endsWith('*'));
                 // So only suffix wildcards are supported.
-            }
+            },
         };
-        
+
         // Let's test prefix matching specifically
         const user2 = {
             id: 'u2',
             tags: [],
             routingWeights: {
-                'skill:*': 10
-            }
+                'skill:*': 10,
+            },
         };
 
         await matcher.addUser(user2);
         await matcher.matchUsersAssignments('u2');
         const assignments = await matcher.getCurrentAssignmentsForUser('u2');
-        
+
         expect(assignments).to.include('a1');
         expect(assignments).to.include('a2');
         expect(assignments).to.include('a3');
@@ -161,14 +161,14 @@ describe('Matcher Wildcard Tests', async function () {
         // In `expandTagWildcards`, we push literals first, then expanded wildcards.
         // `skill:*` expands to `skill:special` (and others).
         // So we might have `skill:special` twice in the list with different weights.
-        // `zUnionStore` with WEIGHTS sums them up if duplicate keys? 
+        // `zUnionStore` with WEIGHTS sums them up if duplicate keys?
         // No, `zUnionStore` takes keys (sets).
         // We map expanded tags to keys: `tag:skill:special:assignments`.
         // If `skill:special` appears twice in `expandedPositive`, we will have the key twice in `unionKeys`.
         // And weights twice in `unionWeights`.
         // Redis `ZUNIONSTORE` sums scores by default (AGGREGATE SUM).
         // So weights should stack! 10 + 100 = 110.
-        
+
         await matcher.addAssignment({ id: 'a1', tags: ['skill:special'], priority: 10 });
         await matcher.addAssignment({ id: 'a2', tags: ['skill:other'], priority: 10 });
 
@@ -177,16 +177,16 @@ describe('Matcher Wildcard Tests', async function () {
             tags: [],
             routingWeights: {
                 'skill:*': 10,
-                'skill:special': 100
-            }
+                'skill:special': 100,
+            },
         };
 
         await matcher.addUser(user);
         await matcher.matchUsersAssignments('u1');
-        
+
         // We can't easily check the internal score, but we can check relative order if we add another one.
         // a1 score ~= 110. a2 score ~= 10.
-        
+
         const assignments = await matcher.getCurrentAssignmentsForUser('u1');
         expect(assignments[0]).to.equal('a1');
         expect(assignments[1]).to.equal('a2');
@@ -202,7 +202,7 @@ describe('Matcher Wildcard Tests', async function () {
             routingWeights: {
                 'skill:*': 10,
                 'skill:special': 0,
-            }
+            },
         };
 
         await matcher.addUser(user);
@@ -222,7 +222,7 @@ describe('Matcher Wildcard Tests', async function () {
             routingWeights: {
                 'skill:special': 100,
                 'skill:*': 0,
-            }
+            },
         };
 
         await matcher.addUser(user);
@@ -240,7 +240,7 @@ describe('Matcher Wildcard Tests', async function () {
             tags: [],
             routingWeights: {
                 'skill:*:node': 100,
-            }
+            },
         };
 
         await matcher.addUser(user);

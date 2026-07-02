@@ -1,8 +1,4 @@
-import type {
-    WorkflowDefinition,
-    WorkflowDefinitionInput,
-    WorkflowStep,
-} from './types/matcher';
+import type { WorkflowDefinition, WorkflowDefinitionInput, WorkflowStep } from './types/matcher';
 
 function ensureNonEmpty(value: string | undefined, message: string): string {
     if (!value?.trim()) {
@@ -22,10 +18,7 @@ function validateStepBasics(step: WorkflowStep): void {
 
     const taskType = step.taskType ?? 'assignment';
     if (taskType === 'machine') {
-        ensureNonEmpty(
-            step.machineTask?.handler,
-            `Step "${step.id}" has taskType "machine" but no machineTask.handler`,
-        );
+        ensureNonEmpty(step.machineTask?.handler, `Step "${step.id}" has taskType "machine" but no machineTask.handler`);
         return;
     }
 
@@ -63,25 +56,19 @@ export function validateWorkflowDefinition(definition: WorkflowDefinition): Work
         if (step.routing) {
             for (const route of step.routing) {
                 if (!stepIds.has(route.targetStepId)) {
-                    throw new Error(
-                        `Step "${step.id}" references non-existent step "${route.targetStepId}" in routing`,
-                    );
+                    throw new Error(`Step "${step.id}" references non-existent step "${route.targetStepId}" in routing`);
                 }
             }
         }
 
         if (step.defaultNextStepId && !stepIds.has(step.defaultNextStepId)) {
-            throw new Error(
-                `Step "${step.id}" references non-existent step "${step.defaultNextStepId}" as default next`,
-            );
+            throw new Error(`Step "${step.id}" references non-existent step "${step.defaultNextStepId}" as default next`);
         }
 
         if (step.parallelStepIds) {
             for (const parallelStepId of step.parallelStepIds) {
                 if (!stepIds.has(parallelStepId)) {
-                    throw new Error(
-                        `Step "${step.id}" references non-existent parallel step "${parallelStepId}"`,
-                    );
+                    throw new Error(`Step "${step.id}" references non-existent parallel step "${parallelStepId}"`);
                 }
             }
         }
@@ -90,9 +77,7 @@ export function validateWorkflowDefinition(definition: WorkflowDefinition): Work
     return definition;
 }
 
-export function normalizeWorkflowDefinition(
-    definition: WorkflowDefinitionInput | WorkflowDefinition,
-): WorkflowDefinition {
+export function normalizeWorkflowDefinition(definition: WorkflowDefinitionInput | WorkflowDefinition): WorkflowDefinition {
     const steps = [...definition.steps];
     if (!steps.length) {
         throw new Error('Workflow must have at least one step');

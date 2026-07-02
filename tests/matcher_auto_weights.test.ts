@@ -38,28 +38,29 @@ describe('Auto Routing Weights - Unit Tests (synthesizeRoutingWeights)', functio
     });
 
     it('should add a UCB exploration bonus favoring less-sampled tags at equal mean reward', function () {
-        const weights = synthesizeRoutingWeights(
-            [stat('common', 1000, 500), stat('rare', 10, 5)],
-            { minSamples: 5, explorationBonus: 0.5 },
-        );
+        const weights = synthesizeRoutingWeights([stat('common', 1000, 500), stat('rare', 10, 5)], {
+            minSamples: 5,
+            explorationBonus: 0.5,
+        });
         expect(weights.rare).to.be.greaterThan(weights.common);
     });
 
     it('should clamp weights into [0, maxWeight] and keep eligible tags at least 1', function () {
-        const weights = synthesizeRoutingWeights(
-            [stat('great', 50, 200), stat('meh', 50, -20)],
-            { minSamples: 5, maxWeight: 100, vetoThreshold: -0.6 },
-        );
+        const weights = synthesizeRoutingWeights([stat('great', 50, 200), stat('meh', 50, -20)], {
+            minSamples: 5,
+            maxWeight: 100,
+            vetoThreshold: -0.6,
+        });
         expect(weights.great).to.equal(100);
         expect(weights.meh).to.be.at.least(1);
     });
 
     it('should use existingWeights values as per-tag prior for under-sampled tags', function () {
         const weights = synthesizeRoutingWeights(
-            [stat('english', 2, 1)],          // under-sampled (< minSamples=5)
+            [stat('english', 2, 1)], // under-sampled (< minSamples=5)
             { minSamples: 5, priorWeight: 30 }, // flat prior is 30
             undefined,
-            { english: 80 },                   // existing weight should win over flat prior
+            { english: 80 }, // existing weight should win over flat prior
         );
         expect(weights.english).to.equal(80);
     });
@@ -68,8 +69,8 @@ describe('Auto Routing Weights - Unit Tests (synthesizeRoutingWeights)', functio
         const weights = synthesizeRoutingWeights(
             [stat('english', 20, 18)],
             { minSamples: 5, priorWeight: 30 },
-            ['dutch'],                          // known but no observations
-            { dutch: 65 },                      // existing weight is the prior
+            ['dutch'], // known but no observations
+            { dutch: 65 }, // existing weight is the prior
         );
         expect(weights.dutch).to.equal(65);
     });

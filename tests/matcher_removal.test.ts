@@ -25,7 +25,7 @@ describe('Assignment removal tests', () => {
 
     it('should remove queued assignment completely', async () => {
         await matcher.addAssignment({ id: 'a1', tags: ['t1'] });
-        
+
         // Verify it exists
         let a = await matcher.getAssignment('a1');
         expect(a).to.not.be.null;
@@ -44,14 +44,14 @@ describe('Assignment removal tests', () => {
     it('should remove pending assignment and from user backlog', async () => {
         await matcher.addAssignment({ id: 'a1', tags: ['t1'] });
         await matcher.addUser({ id: 'u1', tags: ['t1'] });
-        
+
         // Match it to u1
         await matcher.matchUsersAssignments();
-        
+
         // Verify it's pending and in u1's backlog
         let a = await matcher.getAssignment('a1');
         expect((a as any)._status).to.equal('pending');
-        
+
         let userAssignments = await matcher.getCurrentAssignmentsForUser('u1');
         expect(userAssignments).to.have.lengthOf(1);
         expect(userAssignments[0]).to.equal('a1');

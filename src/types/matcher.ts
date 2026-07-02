@@ -111,6 +111,29 @@ export type MatcherOptions = {
     enableOpenTelemetry?: boolean;
     /** Persist circuit breaker state to Redis for distributed awareness (default: false) */
     circuitBreakerPersistState?: boolean;
+    /**
+     * Share circuit breaker failure counts across replicas via Redis so
+     * breakers converge in multi-orchestrator deployments (default: false).
+     */
+    circuitBreakerShared?: boolean;
+    /**
+     * TTL applied to terminal (completed/failed/cancelled) workflow instances,
+     * including cleanup of registry, per-user, and active-index entries.
+     * When unset (default), terminal instances are kept forever.
+     */
+    workflowInstanceRetentionMs?: number;
+    /** Initial backoff delay for scheduled workflow event retries in ms (default: 1000) */
+    workflowRetryBackoffMs?: number;
+    /** Max stream entries read per orchestrator poll (XREADGROUP COUNT, default: 10) */
+    workflowEventBatchSize?: number;
+    /** Blocking wait per orchestrator poll in ms (XREADGROUP BLOCK, default: 5000) */
+    workflowPollBlockMs?: number;
+    /**
+     * Per-replica throttle on workflow event processing (events per second).
+     * Applies to orchestrator stream consumption and scheduled-retry draining.
+     * When unset (default), events are processed as fast as possible.
+     */
+    workflowMaxEventsPerSecond?: number;
     /** Enable circuit breaker and reliability metrics (default: true when telemetry enabled) */
     enableReliabilityMetrics?: boolean;
     /** Enable graceful degradation mode when Redis is unavailable (default: false) */
@@ -151,6 +174,20 @@ export type MatcherOptions = {
 
 /** @deprecated Use MatcherOptions instead */
 export type options = MatcherOptions;
+
+/** Operational metrics for the workflow engine */
+export type WorkflowEngineMetrics = {
+    /** Number of active workflow instances (from the active-instance index) */
+    activeInstances: number;
+    /** Number of events waiting in the delayed-retry queue */
+    scheduledRetries: number;
+    /** Number of events in the Dead Letter Queue */
+    deadLetterQueueSize: number;
+    /** Total length of the workflow event stream */
+    streamLength: number;
+    /** Number of pending (delivered but unacknowledged) stream messages */
+    streamPending: number;
+};
 
 // ============================================================================
 // Workflow Types

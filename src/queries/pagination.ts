@@ -37,14 +37,14 @@ export interface AssignmentKeys {
  */
 export async function getAllAssignmentsFromStores(
     redisClient: RedisClientType,
-    keys: AssignmentKeys
+    keys: AssignmentKeys,
 ): Promise<Assignment[]> {
     const [queuedAssignments, pendingAssignments, acceptedAssignments] = await Promise.all([
         redisClient.hGetAll(keys.queued),
         redisClient.hGetAll(keys.pending),
         redisClient.hGetAll(keys.accepted),
     ]);
-    
+
     const allAssignments = { ...queuedAssignments, ...pendingAssignments, ...acceptedAssignments };
     return Object.values(allAssignments).map((assignment) => JSON.parse(assignment));
 }
@@ -54,7 +54,7 @@ export async function getAllAssignmentsFromStores(
  */
 export async function getAssignmentCountsFromStores(
     redisClient: RedisClientType,
-    keys: AssignmentKeys
+    keys: AssignmentKeys,
 ): Promise<AssignmentCounts> {
     const [queued, pending, accepted] = await Promise.all([
         redisClient.hLen(keys.queued),
@@ -76,7 +76,7 @@ export async function getAssignmentCountsFromStores(
 export async function getAssignmentById(
     redisClient: RedisClientType,
     keys: AssignmentKeys,
-    id: string
+    id: string,
 ): Promise<(Assignment & { _status?: string }) | null> {
     const [queued, pending, accepted] = await Promise.all([
         redisClient.hGet(keys.queued, id),
@@ -109,7 +109,7 @@ export async function getAssignmentById(
 export async function getAssignmentsByIdsBatch(
     redisClient: RedisClientType,
     keys: AssignmentKeys,
-    ids: string[]
+    ids: string[],
 ): Promise<Assignment[]> {
     if (ids.length === 0) return [];
 
@@ -120,7 +120,7 @@ export async function getAssignmentsByIdsBatch(
         multi.hGet(keys.accepted, id);
     }
 
-    const results = await multi.exec() as unknown as (string | null)[];
+    const results = (await multi.exec()) as unknown as (string | null)[];
     const assignments: Assignment[] = [];
 
     for (let i = 0; i < ids.length; i++) {
@@ -149,7 +149,7 @@ export async function getAssignmentsByIdsBatch(
 export async function getAssignmentsPaginatedFromStores(
     redisClient: RedisClientType,
     keys: AssignmentKeys,
-    options?: PaginationOptions
+    options?: PaginationOptions,
 ): Promise<PaginationResult> {
     const limit = options?.limit ?? 100;
     const status = options?.status ?? 'all';
@@ -157,14 +157,16 @@ export async function getAssignmentsPaginatedFromStores(
 
     const getKeyForStatus = (s: AssignmentStatus): string => {
         switch (s) {
-            case 'queued': return keys.queued;
-            case 'pending': return keys.pending;
-            case 'accepted': return keys.accepted;
+            case 'queued':
+                return keys.queued;
+            case 'pending':
+                return keys.pending;
+            case 'accepted':
+                return keys.accepted;
         }
     };
 
-    const statusOrder: AssignmentStatus[] = 
-        status === 'all' ? ['queued', 'pending', 'accepted'] : [status];
+    const statusOrder: AssignmentStatus[] = status === 'all' ? ['queued', 'pending', 'accepted'] : [status];
 
     // Parse cursor: "statusIndex:offset"
     let statusIndex = 0;
@@ -213,7 +215,7 @@ export async function getAssignmentsPaginatedFromStores(
                 }
 
                 if (assignments.length >= limit) {
-                    nextCursor = `${statusIndex}:${offset + (assignments.length - (assignments.filter(a => (a as any)._status === scanStatus).length - 1))}`;
+                    nextCursor = `${statusIndex}:${offset + (assignments.length - (assignments.filter((a) => (a as any)._status === scanStatus).length - 1))}`;
                     hasMore = true;
                     break;
                 }
@@ -232,7 +234,7 @@ export async function getAssignmentsPaginatedFromStores(
         } while (cursor !== '0' && assignments.length < limit);
 
         if (assignments.length >= limit) {
-            const countFromCurrentStatus = assignments.filter(a => (a as any)._status === scanStatus).length;
+            const countFromCurrentStatus = assignments.filter((a) => (a as any)._status === scanStatus).length;
             nextCursor = `${statusIndex}:${offset + countFromCurrentStatus}`;
             hasMore = true;
             break;

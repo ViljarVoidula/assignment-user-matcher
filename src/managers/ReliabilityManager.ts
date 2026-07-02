@@ -1,22 +1,12 @@
 import { RedisClientType } from '../types/matcher';
 import { KeyBuilders } from '../utils/keys';
-import {
-    WorkflowEvent,
-    DeadLetterEntry,
-    AuditEntry,
-    CircuitBreakerState,
-    ReliabilityMetrics
-} from '../types/matcher';
+import { WorkflowEvent, DeadLetterEntry, AuditEntry, CircuitBreakerState, ReliabilityMetrics } from '../types/matcher';
 
 /**
  * Calculate delay with exponential backoff and jitter
  * to avoid thundering herd problem during retries
  */
-function calculateRetryDelay(
-    attempt: number,
-    initialDelay: number,
-    maxDelay: number
-): number {
+function calculateRetryDelay(attempt: number, initialDelay: number, maxDelay: number): number {
     const exponentialDelay = Math.min(initialDelay * Math.pow(2, attempt), maxDelay);
     // Add jitter: ±25% of calculated delay
     const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1);
@@ -45,9 +35,10 @@ export class ReliabilityManager {
             workflowSnapshotDefinitions?: boolean;
             streamConsumerName: string;
             circuitBreakerPersistState?: boolean;
+            circuitBreakerShared?: boolean;
             enableReliabilityMetrics?: boolean;
             deadLetterQueueAlertThreshold?: number;
-        }
+        },
     ) {
         this.circuitBreaker = {
             state: 'closed',
@@ -185,11 +176,7 @@ export class ReliabilityManager {
     /**
      * Move a failed event to the Dead Letter Queue.
      */
-    async moveToDeadLetter(
-        event: WorkflowEvent,
-        reason: string,
-        error?: Error,
-    ): Promise<void> {
+    async moveToDeadLetter(event: WorkflowEvent, reason: string, error?: Error): Promise<void> {
         const dlqKey = this.keys.deadLetterQueue();
         const entry: DeadLetterEntry = {
             event,
@@ -206,10 +193,15 @@ export class ReliabilityManager {
         });
 
         if (this.options.workflowAuditEnabled) {
-            await this.emitAuditEvent('EVENT_DLQ', event.eventId, {
-                reason,
-                workflowInstanceId: event.workflowInstanceId,
-            }, 'event');
+            await this.emitAuditEvent(
+                'EVENT_DLQ',
+                event.eventId,
+                {
+                    reason,
+                    workflowInstanceId: event.workflowInstanceId,
+                },
+                'event',
+            );
         }
     }
 
@@ -231,15 +223,18 @@ export class ReliabilityManager {
     }
 
     async isEventProcessed(eventId: string): Promise<boolean> {
-        const key = this.keys.processedEvents();
-        const result = await this.redisClient.sIsMember(key, eventId);
+        // Per-event marker (has its own TTL)
+        const marker = await this.redisClient.get(this.keys.processedEvent(eventId));
+        if (marker) return true;
+        // Legacy set-based marker (dual-read for backward compatibility)
+        const result = await this.redisClient.sIsMember(this.keys.processedEvents(), eventId);
         return Boolean(result);
     }
 
     async markEventProcessed(eventId: string): Promise<void> {
-        const key = this.keys.processedEvents();
-        await this.redisClient.sAdd(key, eventId);
-        await this.redisClient.expire(key, Math.floor(this.options.workflowIdempotencyTtlMs / 1000));
+        await this.redisClient.set(this.keys.processedEvent(eventId), '1', {
+            PX: this.options.workflowIdempotencyTtlMs,
+        });
     }
 
     shouldProcessCircuitBreaker(): boolean {
@@ -267,15 +262,34 @@ export class ReliabilityManager {
             this.circuitBreaker.state = 'closed';
             this.circuitBreaker.failureCount = 0;
             this.saveCircuitBreakerState(); // Persist state change
+            if (this.options.circuitBreakerShared) {
+                // Reset the shared failure window (fire-and-forget)
+                this.redisClient.del(this.keys.circuitBreakerFailures()).catch(() => {});
+            }
         }
         this.updateMetrics();
     }
 
-    recordCircuitBreakerFailure(): void {
+    async recordCircuitBreakerFailure(): Promise<void> {
         this.circuitBreaker.failureCount++;
         this.circuitBreaker.lastFailureTime = Date.now();
-        if (this.circuitBreaker.state === 'half-open' ||
-            this.circuitBreaker.failureCount >= this.options.workflowCircuitBreakerThreshold) {
+
+        if (this.options.circuitBreakerShared) {
+            try {
+                const key = this.keys.circuitBreakerFailures();
+                const sharedCount = Number(await this.redisClient.incr(key));
+                await this.redisClient.pExpire(key, this.options.workflowCircuitBreakerResetMs);
+                // Converge on the shared failure count across replicas
+                this.circuitBreaker.failureCount = Math.max(this.circuitBreaker.failureCount, sharedCount);
+            } catch {
+                // Redis unavailable: fall back to local counting
+            }
+        }
+
+        if (
+            this.circuitBreaker.state === 'half-open' ||
+            this.circuitBreaker.failureCount >= this.options.workflowCircuitBreakerThreshold
+        ) {
             this.circuitBreaker.state = 'open';
             this.saveCircuitBreakerState(); // Persist state change
             console.warn(`Circuit breaker opened after ${this.circuitBreaker.failureCount} failures`);
@@ -329,12 +343,8 @@ export class ReliabilityManager {
      * @param initialDelay Initial delay in ms (default: 100)
      * @param maxDelay Maximum delay in ms (default: 5000)
      */
-    static async backoff(
-        attempt: number,
-        initialDelay: number = 100,
-        maxDelay: number = 5000
-    ): Promise<void> {
+    static async backoff(attempt: number, initialDelay: number = 100, maxDelay: number = 5000): Promise<void> {
         const delay = calculateRetryDelay(attempt, initialDelay, maxDelay);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
     }
 }

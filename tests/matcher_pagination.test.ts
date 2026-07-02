@@ -40,7 +40,7 @@ describe('Assignment pagination and querying tests', () => {
             await matcher.addAssignment({ id: 'a1', tags: ['t1'] });
             await matcher.addUser({ id: 'u1', tags: ['t1'] });
             await matcher.matchUsersAssignments(); // Moves a1 to pending
-            
+
             const assignments = await matcher.getAllAssignments();
             expect(assignments).to.have.lengthOf(1);
             expect(assignments[0].id).to.equal('a1');
@@ -51,7 +51,7 @@ describe('Assignment pagination and querying tests', () => {
             await matcher.addUser({ id: 'u1', tags: ['t1'] });
             await matcher.matchUsersAssignments();
             await matcher.acceptAssignment('u1', 'a1'); // Moves a1 to accepted
-            
+
             const assignments = await matcher.getAllAssignments();
             expect(assignments).to.have.lengthOf(1);
             expect(assignments[0].id).to.equal('a1');
@@ -59,15 +59,15 @@ describe('Assignment pagination and querying tests', () => {
 
         it('should return assignments from all statuses combined', async () => {
             await matcher.addAssignment({ id: 'queued', tags: ['t1'] });
-            
+
             await matcher.addAssignment({ id: 'pending', tags: ['t1'] });
             await matcher.addUser({ id: 'u1', tags: ['t1'] });
             await matcher.matchUsersAssignments();
-            
+
             await matcher.addAssignment({ id: 'accepted', tags: ['t1'] });
             await matcher.addUser({ id: 'u2', tags: ['t1'] });
             await matcher.matchUsersAssignments();
-            // Note: matchUsersAssignments() might pick up 'accepted' or 'pending' depending on timing, 
+            // Note: matchUsersAssignments() might pick up 'accepted' or 'pending' depending on timing,
             // but we want to ensure one is accepted.
             await matcher.acceptAssignment('u2', 'accepted');
 
@@ -116,10 +116,10 @@ describe('Assignment pagination and querying tests', () => {
             await matcherNoDefault.addAssignment({ id: 'q1', tags: ['queued-tag'] });
             await matcherNoDefault.addAssignment({ id: 'p1', tags: ['pending-tag'] });
             await matcherNoDefault.addAssignment({ id: 'a1', tags: ['accepted-tag'] });
-            
+
             await matcherNoDefault.addUser({ id: 'u1', tags: ['pending-tag', 'accepted-tag'] });
             await matcherNoDefault.matchUsersAssignments('u1');
-            
+
             await matcherNoDefault.acceptAssignment('u1', 'a1');
 
             const counts = await matcherNoDefault.getAssignmentCounts();
@@ -182,7 +182,7 @@ describe('Assignment pagination and querying tests', () => {
             await matcherNoDefault.addAssignment({ id: 'p1', tags: ['p-tag'] });
             await matcherNoDefault.addUser({ id: 'u1', tags: ['p-tag'] });
             await matcherNoDefault.matchUsersAssignments('u1');
-            
+
             const results = await matcherNoDefault.getAssignmentsByIds(['q1', 'p1']);
             expect(results).to.have.lengthOf(2);
             const statuses = results.map((r: any) => (r as any)._status);
@@ -219,12 +219,15 @@ describe('Assignment pagination and querying tests', () => {
             for (let i = 0; i < 10; i++) {
                 await matcher.addAssignment({ id: `a${i}`, tags: ['t1'] });
             }
-            
+
             let allFetched: any[] = [];
             let cursor: string | null = null;
-            
+
             do {
-                const res: { assignments: any[], nextCursor: string | null } = await matcher.getAssignmentsPaginated({ limit: 4, cursor: cursor || undefined });
+                const res: { assignments: any[]; nextCursor: string | null } = await matcher.getAssignmentsPaginated({
+                    limit: 4,
+                    cursor: cursor || undefined,
+                });
                 allFetched = allFetched.concat(res.assignments);
                 cursor = res.nextCursor;
             } while (cursor);

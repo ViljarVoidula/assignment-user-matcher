@@ -74,10 +74,10 @@ describe('ReliabilityManager', function () {
             this.timeout(3000);
             const eventId = 'event-3';
             await reliabilityManager.markEventProcessed(eventId);
-            
+
             // Wait for TTL (1000ms)
-            await new Promise(resolve => setTimeout(resolve, 1100));
-            
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+
             const isProcessed = await reliabilityManager.isEventProcessed(eventId);
             expect(isProcessed).to.be.false;
         });
@@ -100,7 +100,7 @@ describe('ReliabilityManager', function () {
             // Circuit is open from previous test
             expect(reliabilityManager.shouldProcessCircuitBreaker()).to.be.false;
 
-            await new Promise(resolve => setTimeout(resolve, 600));
+            await new Promise((resolve) => setTimeout(resolve, 600));
 
             // Should be half-open/closed now
             expect(reliabilityManager.shouldProcessCircuitBreaker()).to.be.true;
@@ -113,17 +113,17 @@ describe('ReliabilityManager', function () {
             expect(reliabilityManager.shouldProcessCircuitBreaker()).to.be.false;
 
             // Wait for reset
-            await new Promise(resolve => setTimeout(resolve, 600));
-            
+            await new Promise((resolve) => setTimeout(resolve, 600));
+
             // Now in half-open (shouldProcess returns true)
             expect(reliabilityManager.shouldProcessCircuitBreaker()).to.be.true;
-            
+
             // Record success
             reliabilityManager.recordCircuitBreakerSuccess();
-            
+
             // Should be closed now
             expect(reliabilityManager.shouldProcessCircuitBreaker()).to.be.true;
-            
+
             // One failure should not open it (threshold is 2)
             reliabilityManager.recordCircuitBreakerFailure();
             expect(reliabilityManager.shouldProcessCircuitBreaker()).to.be.true;
@@ -169,8 +169,12 @@ describe('ReliabilityManager', function () {
         it('should return full metrics snapshot', async function () {
             const metrics = await reliabilityManager.getMetrics();
             expect(metrics).to.include.all.keys([
-                'circuitBreakerState', 'deadLetterQueueSize', 'redisHealthy',
-                'reconnectCount', 'lastConnectedAt', 'circuitBreakerAllowingRequests',
+                'circuitBreakerState',
+                'deadLetterQueueSize',
+                'redisHealthy',
+                'reconnectCount',
+                'lastConnectedAt',
+                'circuitBreakerAllowingRequests',
             ]);
             expect(metrics.deadLetterQueueSize).to.be.a('number');
             expect(metrics.circuitBreakerAllowingRequests).to.be.a('boolean');
@@ -240,7 +244,7 @@ describe('ReliabilityManager', function () {
             mgr.recordCircuitBreakerFailure();
             expect(mgr.shouldProcessCircuitBreaker()).to.be.false;
 
-            await new Promise(resolve => setTimeout(resolve, 400));
+            await new Promise((resolve) => setTimeout(resolve, 400));
 
             // First call transitions open → half-open
             expect(mgr.shouldProcessCircuitBreaker()).to.be.true;
@@ -262,7 +266,7 @@ describe('ReliabilityManager', function () {
 
             mgr.recordCircuitBreakerFailure();
             mgr.recordCircuitBreakerFailure();
-            await new Promise(resolve => setTimeout(resolve, 400));
+            await new Promise((resolve) => setTimeout(resolve, 400));
             mgr.shouldProcessCircuitBreaker(); // transitions to half-open
             expect(mgr.getCircuitBreakerState().state).to.equal('half-open');
 
@@ -474,7 +478,7 @@ describe('ReliabilityManager', function () {
             });
             await mgr.init();
             mgr.recordCircuitBreakerFailure(); // opens
-            await new Promise(resolve => setTimeout(resolve, 300));
+            await new Promise((resolve) => setTimeout(resolve, 300));
             mgr.shouldProcessCircuitBreaker(); // transitions to half-open, persists
             mgr.recordCircuitBreakerSuccess(); // closes, persists
 

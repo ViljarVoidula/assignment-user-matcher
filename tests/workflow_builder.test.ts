@@ -1,19 +1,14 @@
 import { expect } from 'chai';
-import {
-    WorkflowBuilder,
-    approvalWorkflow,
-    linearWorkflow,
-    workflow,
-} from '../src/workflow-builder';
+import { WorkflowBuilder, approvalWorkflow, linearWorkflow, workflow } from '../src/workflow-builder';
 
 describe('WorkflowBuilder', function () {
     it('should default taskType to assignment', function () {
         const definition = workflow('wf-builder-1', 'Builder 1')
             .step('s1')
-                .name('Step 1')
-                .assignment({ tags: ['a'] })
-                .targetUser('initiator')
-                .done()
+            .name('Step 1')
+            .assignment({ tags: ['a'] })
+            .targetUser('initiator')
+            .done()
             .initialStep('s1')
             .build();
 
@@ -22,7 +17,8 @@ describe('WorkflowBuilder', function () {
 
     it('should configure step builder properties before completing the step', function () {
         const builder = WorkflowBuilder.create('wf-step-config', 'Step Config');
-        const stepBuilder = builder.step('review')
+        const stepBuilder = builder
+            .step('review')
             .taskType('assignment')
             .name('Review Step')
             .assignment({ tags: ['review'], title: 'Review item' })
@@ -58,10 +54,10 @@ describe('WorkflowBuilder', function () {
     it('should build machine task steps', function () {
         const definition = workflow('wf-builder-machine', 'Builder Machine')
             .step('s1')
-                .name('Machine Step')
-                .machineTask('ml.infer', { model: 'v1' })
-                .defaultNext(null)
-                .done()
+            .name('Machine Step')
+            .machineTask('ml.infer', { model: 'v1' })
+            .defaultNext(null)
+            .done()
             .initialStep('s1')
             .build();
 
@@ -72,10 +68,7 @@ describe('WorkflowBuilder', function () {
 
     it('should throw when finishing a machine step without a handler', function () {
         expect(() => {
-            workflow('wf-builder-invalid-machine', 'Invalid Machine')
-                .step('s1')
-                    .taskType('machine')
-                    .done();
+            workflow('wf-builder-invalid-machine', 'Invalid Machine').step('s1').taskType('machine').done();
         }).to.throw('Machine step "s1" requires machineTask(handler)');
     });
 
@@ -93,11 +86,11 @@ describe('WorkflowBuilder', function () {
                 defaultNextStepId: 'finish',
             })
             .step('finish')
-                .name('Finish')
-                .assignment({ tags: ['done'] })
-                .targetUser('previous')
-                .waitForAll(false)
-                .done()
+            .name('Finish')
+            .assignment({ tags: ['done'] })
+            .targetUser('previous')
+            .waitForAll(false)
+            .done()
             .build();
 
         expect(definition.version).to.equal(7);
@@ -110,24 +103,14 @@ describe('WorkflowBuilder', function () {
     });
 
     it('should validate required workflow fields and references during build', function () {
-        expect(() => workflow('', 'Missing ID').step('s1').done().build()).to.throw(
-            'Workflow ID is required'
-        );
+        expect(() => workflow('', 'Missing ID').step('s1').done().build()).to.throw('Workflow ID is required');
 
-        expect(() => workflow('wf-missing-name', '').step('s1').done().build()).to.throw(
-            'Workflow name is required'
-        );
+        expect(() => workflow('wf-missing-name', '').step('s1').done().build()).to.throw('Workflow name is required');
 
-        expect(() => workflow('wf-no-steps', 'No Steps').build()).to.throw(
-            'Workflow must have at least one step'
-        );
+        expect(() => workflow('wf-no-steps', 'No Steps').build()).to.throw('Workflow must have at least one step');
 
         expect(() => {
-            workflow('wf-missing-initial', 'Missing Initial')
-                .step('s1')
-                    .done()
-                .initialStep('missing')
-                .build();
+            workflow('wf-missing-initial', 'Missing Initial').step('s1').done().initialStep('missing').build();
         }).to.throw('Initial step "missing" not found');
 
         expect(() => {
@@ -143,27 +126,15 @@ describe('WorkflowBuilder', function () {
         }).to.throw('Step "machine" has taskType "machine" but no machineTask.handler');
 
         expect(() => {
-            workflow('wf-bad-route', 'Bad Route')
-                .step('start')
-                    .route('true', 'missing')
-                    .done()
-                .build();
+            workflow('wf-bad-route', 'Bad Route').step('start').route('true', 'missing').done().build();
         }).to.throw('Step "start" references non-existent step "missing" in routing');
 
         expect(() => {
-            workflow('wf-bad-default-next', 'Bad Default Next')
-                .step('start')
-                    .defaultNext('missing')
-                    .done()
-                .build();
+            workflow('wf-bad-default-next', 'Bad Default Next').step('start').defaultNext('missing').done().build();
         }).to.throw('Step "start" references non-existent step "missing" as default next');
 
         expect(() => {
-            workflow('wf-bad-parallel', 'Bad Parallel')
-                .step('start')
-                    .parallel(['missing'])
-                    .done()
-                .build();
+            workflow('wf-bad-parallel', 'Bad Parallel').step('start').parallel(['missing']).done().build();
         }).to.throw('Step "start" references non-existent parallel step "missing"');
     });
 
@@ -223,7 +194,7 @@ describe('WorkflowBuilder', function () {
 
     it('should reject empty linear workflows', function () {
         expect(() => linearWorkflow('wf-linear-empty', 'Linear Empty', [])).to.throw(
-            'Linear workflow must have at least one step'
+            'Linear workflow must have at least one step',
         );
     });
 
@@ -234,12 +205,7 @@ describe('WorkflowBuilder', function () {
         });
 
         expect(definition.initialStepId).to.equal('submit');
-        expect(definition.steps.map(step => step.id)).to.deep.equal([
-            'submit',
-            'review',
-            'complete',
-            'rejected',
-        ]);
+        expect(definition.steps.map((step) => step.id)).to.deep.equal(['submit', 'review', 'complete', 'rejected']);
         expect(definition.steps[1].targetUser).to.equal('initiator');
         expect(definition.steps[1].timeoutMs).to.equal(86400000);
         expect(definition.steps[1].routing).to.deep.equal([

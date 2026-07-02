@@ -17,8 +17,12 @@ describe('WorkflowManager', function () {
     const keys = createKeyBuilders({ prefix: 'test-wf:' });
 
     const mockHost: WorkflowHost = {
-        async addAssignment(assignment: Assignment) { return assignment; },
-        async matchUsersAssignments(userId: string) { return []; }
+        async addAssignment(assignment: Assignment) {
+            return assignment;
+        },
+        async matchUsersAssignments(userId: string) {
+            return [];
+        },
     };
 
     before(async function () {
@@ -79,18 +83,18 @@ describe('WorkflowManager', function () {
                     assignmentTemplate: { tags: ['t2'] },
                     targetUser: 'initiator',
                     defaultNextStepId: null,
-                }
-            ]
+                },
+            ],
         };
 
         it('should start a workflow and create first assignment', async function () {
             await workflowManager.registerWorkflow(definition);
             const instance = await workflowManager.startWorkflow(definition.id, 'user-1');
-            
+
             expect(instance.status).to.equal('active');
             expect(instance.currentStepId).to.equal('step-1');
             expect(instance.currentAssignmentId).to.be.a('string');
-            
+
             const link = await redisClient.get(keys.workflowAssignmentLink(instance.currentAssignmentId!));
             expect(link).to.not.be.null;
         });
@@ -100,13 +104,13 @@ describe('WorkflowManager', function () {
             await workflowManager.registerWorkflow(definition);
             const instance = await workflowManager.startWorkflow(definition.id, 'user-2');
             const step1Id = 'step-1';
-            
+
             // Wait for timeout
-            await new Promise(resolve => setTimeout(resolve, 600));
-            
+            await new Promise((resolve) => setTimeout(resolve, 600));
+
             const expiredCount = await workflowManager.processExpiredWorkflowSteps();
             expect(expiredCount).to.equal(1);
-            
+
             // The orchestrator should pick up the EXPIRED event if it was running
             // But here we are testing the manager methods directly
         });
@@ -366,8 +370,12 @@ describe('WorkflowManager', function () {
         it('should skip consumer group init when workflows are disabled', async function () {
             const xGroupCreateSpy = sinon.spy(redisClient, 'xGroupCreate');
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -440,8 +448,12 @@ describe('WorkflowManager', function () {
 
         it('should throw when a parallel machine step is missing a handler', async function () {
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -608,8 +620,12 @@ describe('WorkflowManager', function () {
 
         it('should keep waiting on parallel failure with continue policy until all branches finish', async function () {
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -889,8 +905,12 @@ describe('WorkflowManager', function () {
             });
 
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, localKeys, localReliability, telemetry, host, {
@@ -971,7 +991,9 @@ describe('WorkflowManager', function () {
                     createdAssignments.push(a);
                     return a;
                 },
-                async matchUsersAssignments() { return []; },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1041,7 +1063,9 @@ describe('WorkflowManager', function () {
                     createdAssignments.push(a);
                     return a;
                 },
-                async matchUsersAssignments() { return []; },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1137,7 +1161,9 @@ describe('WorkflowManager', function () {
                     createdAssignments.push(a);
                     return a;
                 },
-                async matchUsersAssignments() { return []; },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1208,8 +1234,12 @@ describe('WorkflowManager', function () {
 
         it('should abort workflow on parallel failure policy abort', async function () {
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1266,8 +1296,12 @@ describe('WorkflowManager', function () {
 
         it('should continue on parallel failure when policy continue and allDone', async function () {
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1353,7 +1387,9 @@ describe('WorkflowManager', function () {
                     createdAssignments.push(assignment);
                     return assignment;
                 },
-                async matchUsersAssignments() { return []; },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1398,12 +1434,10 @@ describe('WorkflowManager', function () {
             const other = redisClient.duplicate();
             await other.connect();
             const streamKey = keys.eventStream();
-            const response = await other.xReadGroup(
-                'reclaim-group',
-                'other-consumer',
-                [{ key: streamKey, id: '>' }],
-                { COUNT: 10, BLOCK: 1000 },
-            ) as any;
+            const response = (await other.xReadGroup('reclaim-group', 'other-consumer', [{ key: streamKey, id: '>' }], {
+                COUNT: 10,
+                BLOCK: 1000,
+            })) as any;
             expect(response).to.not.equal(null);
 
             // Ack any non-COMPLETED messages (e.g. STARTED), leave COMPLETED pending
@@ -1463,8 +1497,12 @@ describe('WorkflowManager', function () {
             this.timeout(10000);
 
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1506,12 +1544,10 @@ describe('WorkflowManager', function () {
             const other = redisClient.duplicate();
             await other.connect();
             const streamKey = keys.eventStream();
-            const resp = await other.xReadGroup(
-                'dedupe-group',
-                'other-consumer',
-                [{ key: streamKey, id: '>' }],
-                { COUNT: 10, BLOCK: 1000 },
-            ) as any;
+            const resp = (await other.xReadGroup('dedupe-group', 'other-consumer', [{ key: streamKey, id: '>' }], {
+                COUNT: 10,
+                BLOCK: 1000,
+            })) as any;
             expect(resp).to.not.equal(null);
 
             // Ack STARTED; keep COMPLETED pending
@@ -1534,7 +1570,7 @@ describe('WorkflowManager', function () {
             const reclaimed = await mgr.reclaimOrphanedMessages();
             expect(reclaimed).to.equal(0);
 
-            const pending = await redisClient.sendCommand(['XPENDING', streamKey, 'dedupe-group']) as any;
+            const pending = (await redisClient.sendCommand(['XPENDING', streamKey, 'dedupe-group'])) as any;
             expect(Number(pending[0])).to.equal(0);
 
             await subscriber.quit();
@@ -1544,8 +1580,12 @@ describe('WorkflowManager', function () {
             this.timeout(10000);
 
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1590,12 +1630,10 @@ describe('WorkflowManager', function () {
             const other = redisClient.duplicate();
             await other.connect();
             const streamKey = keys.eventStream();
-            const resp = await other.xReadGroup(
-                'dlq-group',
-                'other-consumer',
-                [{ key: streamKey, id: '>' }],
-                { COUNT: 10, BLOCK: 1000 },
-            ) as any;
+            const resp = (await other.xReadGroup('dlq-group', 'other-consumer', [{ key: streamKey, id: '>' }], {
+                COUNT: 10,
+                BLOCK: 1000,
+            })) as any;
             expect(resp).to.not.equal(null);
 
             // Ack STARTED; keep COMPLETED pending
@@ -1617,7 +1655,7 @@ describe('WorkflowManager', function () {
             expect(reclaimed).to.equal(0);
             expect(await reliability.getDeadLetterQueueSize()).to.equal(1);
 
-            const pending = await redisClient.sendCommand(['XPENDING', streamKey, 'dlq-group']) as any;
+            const pending = (await redisClient.sendCommand(['XPENDING', streamKey, 'dlq-group'])) as any;
             expect(Number(pending[0])).to.equal(0);
 
             await subscriber.quit();
@@ -1632,7 +1670,9 @@ describe('WorkflowManager', function () {
                 async addAssignment() {
                     throw new Error('downstream failure');
                 },
-                async matchUsersAssignments() { return []; },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1701,12 +1741,10 @@ describe('WorkflowManager', function () {
             const other = redisClient.duplicate();
             await other.connect();
             const streamKey = keys.eventStream();
-            const resp = await other.xReadGroup(
-                'err-group',
-                'other-consumer',
-                [{ key: streamKey, id: '>' }],
-                { COUNT: 10, BLOCK: 1000 },
-            ) as any;
+            const resp = (await other.xReadGroup('err-group', 'other-consumer', [{ key: streamKey, id: '>' }], {
+                COUNT: 10,
+                BLOCK: 1000,
+            })) as any;
             expect(resp).to.not.equal(null);
 
             // Ack STARTED (if any); keep COMPLETED pending
@@ -1733,7 +1771,7 @@ describe('WorkflowManager', function () {
             const after = Number(await redisClient.get(keys.eventRetryCount('evt-err'))) || 0;
             expect(after).to.equal(1);
 
-            const pending = await redisClient.sendCommand(['XPENDING', streamKey, 'err-group']) as any;
+            const pending = (await redisClient.sendCommand(['XPENDING', streamKey, 'err-group'])) as any;
             expect(Number(pending[0])).to.be.greaterThan(0);
 
             await subscriber.quit();
@@ -1744,8 +1782,12 @@ describe('WorkflowManager', function () {
         it('should handle XAUTOCLAIM errors and null reclaimed messages gracefully', async function () {
             const consoleStub = sinon.stub(console, 'error');
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1780,8 +1822,12 @@ describe('WorkflowManager', function () {
     describe('Lua Transitions', function () {
         it('should perform atomic transitions via lua when sha is set', async function () {
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1825,8 +1871,12 @@ describe('WorkflowManager', function () {
 
         it('should return error on version mismatch via lua', async function () {
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1868,8 +1918,12 @@ describe('WorkflowManager', function () {
     describe('Orchestrator Controls', function () {
         it('should throw when starting orchestrator while workflows disabled', async function () {
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1890,8 +1944,12 @@ describe('WorkflowManager', function () {
 
         it('should return early when starting orchestrator twice and stop cleanly without an open subscriber', async function () {
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1919,8 +1977,12 @@ describe('WorkflowManager', function () {
             const consoleStub = sinon.stub(console, 'error');
 
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -1988,7 +2050,9 @@ describe('WorkflowManager', function () {
                     }
                     return a;
                 },
-                async matchUsersAssignments() { return []; },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
@@ -2072,7 +2136,9 @@ describe('WorkflowManager', function () {
                     }
                     return a;
                 },
-                async matchUsersAssignments() { return []; },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, localReliability, telemetry, host, {
@@ -2137,8 +2203,12 @@ describe('WorkflowManager', function () {
     describe('Process Expired Workflow Steps', function () {
         it('should return 0 when workflows disabled', async function () {
             const host: WorkflowHost = {
-                async addAssignment(a: Assignment) { return a; },
-                async matchUsersAssignments() { return []; },
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
             };
 
             const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {

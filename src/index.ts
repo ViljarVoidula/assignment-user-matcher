@@ -33,6 +33,8 @@ export type {
     LearningTagStat,
     AutoRoutingWeightsOptions,
     PendingAssignmentInfo,
+    WorkflowEngineMetrics,
+    MachineTaskHandler,
 } from './matcher.class';
 
 // Learning feature helpers (for custom feature extractors)
@@ -41,13 +43,7 @@ export { extractMatchFeatures, cosineSimilarity } from './learning/features';
 export { synthesizeRoutingWeights, DEFAULT_AUTO_WEIGHTS_OPTIONS } from './learning/auto-weights';
 
 // Workflow builder DSL
-export {
-    WorkflowBuilder,
-    WorkflowStepBuilder,
-    workflow,
-    linearWorkflow,
-    approvalWorkflow,
-} from './workflow-builder';
+export { WorkflowBuilder, WorkflowStepBuilder, workflow, linearWorkflow, approvalWorkflow } from './workflow-builder';
 export { normalizeWorkflowDefinition, validateWorkflowDefinition } from './workflow-validation';
 
 // Utility exports for advanced usage

@@ -163,13 +163,15 @@ describe('Matcher Coverage Improvements', function () {
             await matcher.registerWorkflow({
                 id: 'exec-by-id',
                 name: 'Execute By ID',
-                steps: [{
-                    id: 'step-1',
-                    name: 'Step 1',
-                    assignmentTemplate: { tags: ['test'] },
-                    targetUser: 'initiator',
-                    defaultNextStepId: null,
-                }],
+                steps: [
+                    {
+                        id: 'step-1',
+                        name: 'Step 1',
+                        assignmentTemplate: { tags: ['test'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: null,
+                    },
+                ],
             });
 
             const instance = await matcher.executeWorkflow('exec-by-id', 'user1');
@@ -201,13 +203,17 @@ describe('Matcher Coverage Improvements', function () {
 
             // Inject workflow-targeted assignments directly into the ref store
             for (let i = 0; i < maxSize; i++) {
-                await redisClient.hSet(matcher.assignmentsRefKey, `wf-a${i}`, JSON.stringify({
-                    id: `wf-a${i}`,
-                    tags: ['test'],
-                    priority: 100,
-                    _targetUserId: userId,
-                    _workflowInstanceId: 'wf-instance-1',
-                }));
+                await redisClient.hSet(
+                    matcher.assignmentsRefKey,
+                    `wf-a${i}`,
+                    JSON.stringify({
+                        id: `wf-a${i}`,
+                        tags: ['test'],
+                        priority: 100,
+                        _targetUserId: userId,
+                        _workflowInstanceId: 'wf-instance-1',
+                    }),
+                );
             }
 
             await matcher.matchUsersAssignments(userId);

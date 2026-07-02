@@ -71,10 +71,15 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         // Reliability and audit keys
         deadLetterQueue: () => `${prefix}workflow:dlq`,
         processedEvents: () => `${prefix}events:processed`,
+        processedEvent: (eventId: string) => `${prefix}events:processed:${eventId}`,
         eventRetryCount: (eventId: string) => `${prefix}events:retries:${eventId}`,
+        eventsRetryScheduled: () => `${prefix}events:retries:scheduled`,
         workflowStepExpiry: (instanceId: string, stepId: string) => `${prefix}workflow:${instanceId}:step:${stepId}:expiry`,
+        workflowStepExpiryIndex: () => `${prefix}workflow:steps:expiry`,
+        workflowInstancesActive: () => `${prefix}workflows:instances:active`,
         workflowAuditStream: () => `${prefix}workflow:audit:stream`,
         circuitBreakerState: () => `${prefix}reliability:circuit-breaker:state`,
+        circuitBreakerFailures: () => `${prefix}reliability:circuit-breaker:failures`,
         reliabilityMetrics: () => `${prefix}reliability:metrics`,
     };
 }

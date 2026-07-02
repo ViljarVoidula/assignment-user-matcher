@@ -51,28 +51,29 @@ Traditional matching systems can become bottlenecks, leading to delays, suboptim
 2.  **Matching via Tag Intersection:**
     The core matching logic finds users whose tags have a common intersection with an assignment's tags.
 
-  When using `routingWeights` with the built-in matcher:
-  - Only **positive** weights (`> 0`) make assignments eligible.
-  - Weight `0` is a **hard veto** (exact tag or suffix wildcard like `lang:*`).
-  - Wildcards are **suffix-only** (`prefix*`). Patterns like `skill:*:node` are not treated as wildcards.
-  - If a user has `routingWeights` but no positive entries, assignments stay queued.
+When using `routingWeights` with the built-in matcher:
 
-  Hard veto configuration example:
+- Only **positive** weights (`> 0`) make assignments eligible.
+- Weight `0` is a **hard veto** (exact tag or suffix wildcard like `lang:*`).
+- Wildcards are **suffix-only** (`prefix*`). Patterns like `skill:*:node` are not treated as wildcards.
+- If a user has `routingWeights` but no positive entries, assignments stay queued.
 
-  ```ts
-  await assignmentMatcher.addUser({
+Hard veto configuration example:
+
+```ts
+await assignmentMatcher.addUser({
     id: 'agent_1',
     tags: [],
     routingWeights: {
-      'support:*': 100, // eligible
-      'lang:*': 0,      // hard veto for all language-tagged assignments
-      default: 0,       // hard veto for default matching fallback
+        'support:*': 100, // eligible
+        'lang:*': 0, // hard veto for all language-tagged assignments
+        default: 0, // hard veto for default matching fallback
     },
-  });
-  ```
+});
+```
 
-  Note: `usingDefaultMatchScore` is an internal implementation detail and is **not** a public option.
-  Configure hard veto behavior only through `routingWeights` values.
+Note: `usingDefaultMatchScore` is an internal implementation detail and is **not** a public option.
+Configure hard veto behavior only through `routingWeights` values.
 
 3.  **Prioritization Engine:**
     Assignments are typically processed in the order they are received or by a custom prioritization function you can provide. This ensures that older or more critical assignments get attention first. The library aims to match the highest priority assignments to available, suitable users.
@@ -174,8 +175,8 @@ Workflows are easiest to use with the builder helpers and the `executeWorkflow()
 import AssignmentMatcher, { workflow } from 'assignment-user-matcher';
 
 const matcher = new AssignmentMatcher(redisClient, {
-  enableWorkflows: true,
-  redisPrefix: 'exampleApp:',
+    enableWorkflows: true,
+    redisPrefix: 'exampleApp:',
 });
 
 // Optional if your Redis client is already connected.
@@ -183,23 +184,23 @@ const matcher = new AssignmentMatcher(redisClient, {
 await matcher.waitUntilReady();
 
 const onboardingWorkflow = workflow('onboarding', 'Onboarding')
-  .step('profile')
+    .step('profile')
     .name('Complete profile')
     .assignment({ tags: ['profile'], title: 'Complete your profile' })
     .targetUser('initiator')
     .defaultNext('review')
     .done()
-  .step('review')
+    .step('review')
     .name('Manager review')
     .assignment({ tags: ['review'], title: 'Review onboarding' })
     .targetUser({ tag: 'managers' })
     .defaultNext(null)
     .done()
-  .build();
+    .build();
 
 // Registers the definition if needed, then starts the workflow instance.
 const instance = await matcher.executeWorkflow(onboardingWorkflow, 'agent_007', {
-  source: 'signup',
+    source: 'signup',
 });
 
 console.log(instance.id, instance.currentStepId);
@@ -212,6 +213,43 @@ Plain object workflow definitions are also accepted. The library now fills in se
 - `version` defaults to `1`
 - `initialStepId` defaults to the first step ID
 - invalid definitions fail early during registration with clear validation errors
+
+### 4. Scaling & Reliability for Workflows
+
+The workflow engine is designed to run with many orchestrator replicas over large instance counts. The key building blocks:
+
+- **Indexed step timeouts** — step expirations are tracked in a sorted set and claimed atomically, so `processExpiredWorkflowSteps()` is O(due steps) instead of scanning every instance, and an expiry fires on exactly one replica.
+- **In-place conflict retries** — optimistic-lock (`VERSION_MISMATCH`) conflicts are retried immediately with a fresh read instead of waiting for the orphan-reclaim window.
+- **Delayed retry queue** — failed events are scheduled for retry with exponential backoff (`workflowRetryBackoffMs`, default 1000ms initial delay) and drained automatically by the orchestrator; retries are claimed atomically across replicas.
+- **Flow rate control** — tune orchestrator throughput per replica: `workflowEventBatchSize` (XREADGROUP COUNT, default 10), `workflowPollBlockMs` (blocking poll wait, default 5000ms), and `workflowMaxEventsPerSecond` to cap event processing (applies to both stream consumption and retry draining; unlimited when unset).
+- **Per-event idempotency markers** — processed-event markers carry their own TTL (`workflowIdempotencyTtlMs`), and replayed step executions generate deterministic assignment IDs so crash-replays never create duplicate assignments.
+- **Shared circuit breaker** — set `circuitBreakerShared: true` to converge breaker state across replicas through a shared Redis failure counter (recommended for multi-replica deployments).
+- **Instance retention** — set `workflowInstanceRetentionMs` to expire terminal (completed/failed/cancelled) instances and clean their registry/index entries. Unset (the default) keeps them forever, matching previous behavior; a value in the range of days to weeks is recommended for high-volume deployments.
+
+Operational helpers:
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+    enableWorkflows: true,
+    circuitBreakerShared: true,
+    workflowInstanceRetentionMs: 30 * 24 * 60 * 60 * 1000, // 30 days
+});
+
+// Machine steps can run through named handlers with timeout enforcement
+// (step.timeoutMs / defaultTimeoutMs); falls back to executeMachineTask.
+matcher.registerMachineHandler('score-lead', async ({ instance, step }) => {
+    return { score: 42 };
+});
+
+// One-time migration for deployments created before the indexes existed
+await matcher.backfillWorkflowIndexes();
+
+// Periodic maintenance for deployments without retention configured
+await matcher.pruneWorkflowInstances(30 * 24 * 60 * 60 * 1000);
+
+// Monitoring: active instances, retry queue depth, DLQ size, stream stats
+const metrics = await matcher.getWorkflowMetrics();
+```
 
 ## API Reference
 
@@ -436,7 +474,7 @@ The learning layer supports three external feed paths:
 
 **1. Named feedback signals (post-processing per assignment).** When an
 assignment reaches a terminal state, its feature context is archived as an
-*episode* (kept for `learningFeedbackTtlMs`). External pipelines can attribute
+_episode_ (kept for `learningFeedbackTtlMs`). External pipelines can attribute
 late signals to it at any point within that window:
 
 ```typescript
@@ -444,8 +482,8 @@ const matcher = new AssignmentMatcher(redisClient, {
     enableLearning: true,
     // Reward = sum(signalValue * signalWeight); unlisted signals default to 1
     learningSignalWeights: {
-        accuracy: 2,         // accuracy audits matter most
-        csat: 1,             // customer satisfaction
+        accuracy: 2, // accuracy audits matter most
+        csat: 1, // customer satisfaction
         handleTimePenalty: -0.5, // longer handling reduces reward
     },
 });
@@ -508,11 +546,11 @@ const matcher = new AssignmentMatcher(redisClient, {
     enableLearning: true,
     enableAutoRoutingWeights: true,
     autoRoutingWeights: {
-        minSamples: 5,        // observations before a tag's stats are trusted
-        vetoThreshold: -0.5,  // mean reward at/below this → weight 0 (hard veto)
-        maxWeight: 100,       // top of the synthesized weight scale
+        minSamples: 5, // observations before a tag's stats are trusted
+        vetoThreshold: -0.5, // mean reward at/below this → weight 0 (hard veto)
+        maxWeight: 100, // top of the synthesized weight scale
         explorationBonus: 0.5, // UCB coefficient; higher → more exploration
-        priorWeight: 50,      // optimistic weight for unexplored tags
+        priorWeight: 50, // optimistic weight for unexplored tags
     },
 });
 
@@ -547,12 +585,14 @@ cardinality — not on learning math itself.
 #### Redis Workload Breakdown
 
 Each matched assignment now costs:
+
 1. **Decision record** (live): ~300 bytes for features + metadata; expires in 7 days (configurable).
 2. **Episode archive** (terminal): ~400 bytes; kept until feedback arrives, expires in 7 days.
 3. **Model updates**: One hash increment per feature per outcome (typically 5–15 features).
 4. **Stats tracking**: Shared atomic increments.
 
 Matching a single assignment typically involves:
+
 - 1–2 Redis reads (model + candidate details).
 - 3–5 Redis writes per matched assignment (decision, model updates, stats).
 - Pipelined to reduce round trips.
@@ -560,25 +600,28 @@ Matching a single assignment typically involves:
 #### Memory Estimation
 
 Assume:
+
 - **Small deployment**: 10 users, 1,000 live assignments, ~8 features per assignment.
-  - Model: ~8 KB (8 features × 1 KB per weight + overhead).
-  - Decisions: ~300 KB (1,000 × 300 bytes).
-  - Overhead: ~500 KB for indices and stats.
-  - **Total: ~1 MB**. No scaling issues with standard Redis (safe at anything).
+
+    - Model: ~8 KB (8 features × 1 KB per weight + overhead).
+    - Decisions: ~300 KB (1,000 × 300 bytes).
+    - Overhead: ~500 KB for indices and stats.
+    - **Total: ~1 MB**. No scaling issues with standard Redis (safe at anything).
 
 - **Medium deployment**: 100 users, 100,000 live assignments, ~15 features.
-  - Model: ~15 KB.
-  - Decisions: ~30 MB (100,000 × 300 bytes).
-  - Episodes archived: ~10 MB (depends on feedback delay; typically 10% of live at any moment).
-  - Overhead: ~5 MB.
-  - **Total: ~50 MB**. Easily within Redis limits; watch growth over weeks.
+
+    - Model: ~15 KB.
+    - Decisions: ~30 MB (100,000 × 300 bytes).
+    - Episodes archived: ~10 MB (depends on feedback delay; typically 10% of live at any moment).
+    - Overhead: ~5 MB.
+    - **Total: ~50 MB**. Easily within Redis limits; watch growth over weeks.
 
 - **High-throughput deployment**: 1,000 users, 1,000,000 live assignments, ~20 features, exploration enabled.
-  - Model: ~20 KB.
-  - Decisions: ~300 MB (1,000,000 × 300 bytes).
-  - Episodes: ~100 MB.
-  - Overhead: ~50 MB.
-  - **Total: ~450 MB**. Manageable with a 2–4 GB Redis instance; requires TTL discipline.
+    - Model: ~20 KB.
+    - Decisions: ~300 MB (1,000,000 × 300 bytes).
+    - Episodes: ~100 MB.
+    - Overhead: ~50 MB.
+    - **Total: ~450 MB**. Manageable with a 2–4 GB Redis instance; requires TTL discipline.
 
 #### Configuration Guidelines
 
@@ -587,11 +630,11 @@ Assume:
 ```typescript
 const matcher = new AssignmentMatcher(redisClient, {
     enableLearning: true,
-    learningShadowMode: true,  // Observe first; no ranking impact
+    learningShadowMode: true, // Observe first; no ranking impact
     learningRate: 0.1,
-    learningExplorationRate: 0,  // No exploration overhead
-    learningDecisionTtlMs: 604800000,  // 7 days
-    learningFeedbackTtlMs: 604800000,  // 7 days
+    learningExplorationRate: 0, // No exploration overhead
+    learningDecisionTtlMs: 604800000, // 7 days
+    learningFeedbackTtlMs: 604800000, // 7 days
 });
 // Safe: no performance issues. Monitor model size weekly.
 ```
@@ -602,10 +645,10 @@ const matcher = new AssignmentMatcher(redisClient, {
 const matcher = new AssignmentMatcher(redisClient, {
     enableLearning: true,
     learningShadowMode: false,
-    learningRate: 0.05,  // Slower learning for stability
-    learningExplorationRate: 0.02,  // 2% of matches explore randomly
-    learningBoostFactor: 50,  // Moderate impact on ranking
-    learningDecisionTtlMs: 259200000,  // 3 days (balance TTL vs memory)
+    learningRate: 0.05, // Slower learning for stability
+    learningExplorationRate: 0.02, // 2% of matches explore randomly
+    learningBoostFactor: 50, // Moderate impact on ranking
+    learningDecisionTtlMs: 259200000, // 3 days (balance TTL vs memory)
     learningFeedbackTtlMs: 259200000,
     learningSignalWeights: { accuracy: 1, csat: 0.5, errorRate: -1 },
 });
@@ -619,12 +662,12 @@ const matcher = new AssignmentMatcher(redisClient, {
 const matcher = new AssignmentMatcher(redisClient, {
     enableLearning: true,
     learningShadowMode: false,
-    learningRate: 0.02,  // Conservative learning rate
-    learningExplorationRate: 0.01,  // Minimal exploration (1%)
-    learningBoostFactor: 30,  // Restrained boost to avoid instability
-    learningDecisionTtlMs: 86400000,  // 1 day (shorter TTL for faster cleanup)
-    learningFeedbackTtlMs: 172800000,  // 2 days (stagger feedback arrival)
-    learningSignalWeights: { accuracy: 1, csat: 0.3 },  // Fewer signals = less noise
+    learningRate: 0.02, // Conservative learning rate
+    learningExplorationRate: 0.01, // Minimal exploration (1%)
+    learningBoostFactor: 30, // Restrained boost to avoid instability
+    learningDecisionTtlMs: 86400000, // 1 day (shorter TTL for faster cleanup)
+    learningFeedbackTtlMs: 172800000, // 2 days (stagger feedback arrival)
+    learningSignalWeights: { accuracy: 1, csat: 0.3 }, // Fewer signals = less noise
     // Consider sampling outcomes if traffic is extreme:
     // Only learn from 10% of low-priority assignments.
 });
@@ -695,19 +738,20 @@ Use this quick guide based on your primary goal.
 
 ```typescript
 const matcher = new AssignmentMatcher(redisClient, {
-  enableLearning: true,
-  learningShadowMode: false,
-  learningExplorationRate: 0.005,
-  learningBoostFactor: 20,
-  learningRate: 0.02,
-  learningDecisionTtlMs: 86400000,
-  learningFeedbackTtlMs: 86400000,
-  relevantBatchSize: 50,
-  maxUserBacklogSize: 1,
+    enableLearning: true,
+    learningShadowMode: false,
+    learningExplorationRate: 0.005,
+    learningBoostFactor: 20,
+    learningRate: 0.02,
+    learningDecisionTtlMs: 86400000,
+    learningFeedbackTtlMs: 86400000,
+    relevantBatchSize: 50,
+    maxUserBacklogSize: 1,
 });
 ```
 
 When to use:
+
 1. You have tight p95/p99 latency SLOs.
 2. Even a 2-5% throughput drop is expensive.
 
@@ -715,19 +759,20 @@ When to use:
 
 ```typescript
 const matcher = new AssignmentMatcher(redisClient, {
-  enableLearning: true,
-  learningShadowMode: false,
-  learningExplorationRate: 0.01,
-  learningBoostFactor: 35,
-  learningRate: 0.05,
-  learningDecisionTtlMs: 259200000,
-  learningFeedbackTtlMs: 259200000,
-  relevantBatchSize: 100,
-  maxUserBacklogSize: 1,
+    enableLearning: true,
+    learningShadowMode: false,
+    learningExplorationRate: 0.01,
+    learningBoostFactor: 35,
+    learningRate: 0.05,
+    learningDecisionTtlMs: 259200000,
+    learningFeedbackTtlMs: 259200000,
+    relevantBatchSize: 100,
+    maxUserBacklogSize: 1,
 });
 ```
 
 When to use:
+
 1. You want measurable quality lift with moderate performance cost.
 2. You can tolerate small throughput swings while tuning.
 
@@ -735,19 +780,20 @@ When to use:
 
 ```typescript
 const matcher = new AssignmentMatcher(redisClient, {
-  enableLearning: true,
-  learningShadowMode: false,
-  learningExplorationRate: 0.02,
-  learningBoostFactor: 60,
-  learningRate: 0.08,
-  learningDecisionTtlMs: 604800000,
-  learningFeedbackTtlMs: 604800000,
-  relevantBatchSize: 200,
-  maxUserBacklogSize: 1,
+    enableLearning: true,
+    learningShadowMode: false,
+    learningExplorationRate: 0.02,
+    learningBoostFactor: 60,
+    learningRate: 0.08,
+    learningDecisionTtlMs: 604800000,
+    learningFeedbackTtlMs: 604800000,
+    relevantBatchSize: 200,
+    maxUserBacklogSize: 1,
 });
 ```
 
 When to use:
+
 1. Completion/quality metrics matter more than raw throughput.
 2. You have enough headroom in Redis and CPU.
 
@@ -775,20 +821,22 @@ learningExplorationRate: 0.005,
 ```
 
 4. Compare deltas:
-   - `Throughput delta` should stay above your SLO floor (e.g. not below `-2%`).
-   - `Completion rate delta` should be positive.
-   - `Quality score delta` should be positive.
+
+    - `Throughput delta` should stay above your SLO floor (e.g. not below `-2%`).
+    - `Completion rate delta` should be positive.
+    - `Quality score delta` should be positive.
 
 5. If throughput regresses too much:
-   - Reduce `learningBoostFactor`.
-   - Reduce `learningExplorationRate`.
-   - Reduce `relevantBatchSize`.
-   - Shorten `learningDecisionTtlMs` / `learningFeedbackTtlMs`.
+
+    - Reduce `learningBoostFactor`.
+    - Reduce `learningExplorationRate`.
+    - Reduce `relevantBatchSize`.
+    - Shorten `learningDecisionTtlMs` / `learningFeedbackTtlMs`.
 
 6. If quality lift is too small:
-   - Increase `learningBoostFactor` gradually (`+10` per step).
-   - Increase `learningExplorationRate` slightly (`+0.005`), capped at `0.05`.
-   - Improve signal quality in `learningSignalWeights`.
+    - Increase `learningBoostFactor` gradually (`+10` per step).
+    - Increase `learningExplorationRate` slightly (`+0.005`), capped at `0.05`.
+    - Improve signal quality in `learningSignalWeights`.
 
 ### Reading Benchmark Deltas Quickly
 
@@ -801,6 +849,7 @@ Quality score delta: +0.0274
 ```
 
 Interpretation:
+
 1. You traded some speed (`-5.11%`) for better outcomes.
 2. Completion improved by **4.80 percentage points** (`pp`, not percent).
 3. Quality improved overall (`+0.0274`).

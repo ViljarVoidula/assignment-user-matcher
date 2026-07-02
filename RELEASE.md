@@ -9,21 +9,21 @@ Workflow reference: `.github/workflows/npm-publish.yml`
 1. Ensure branch is up to date and tests pass.
 2. Bump version (creates commit + tag):
 
-   ```bash
-   pnpm version patch
-   ```
+    ```bash
+    pnpm version patch
+    ```
 
 3. Push commit and tag:
 
-   ```bash
-   git push origin main --follow-tags
-   ```
+    ```bash
+    git push origin main --follow-tags
+    ```
 
 4. Verify the tag exists remotely:
 
-   ```bash
-   git ls-remote --tags origin | tail
-   ```
+    ```bash
+    git ls-remote --tags origin | tail
+    ```
 
 5. Watch the workflow run on GitHub and confirm npm publish succeeded.
 
@@ -40,9 +40,9 @@ Use the helper script below. It handles both cases:
 - Copy `scripts/release-patch-local.sh.example` to `scripts/release-patch-local.sh`.
 - Run:
 
-  ```bash
-  ./scripts/release-patch-local.sh
-  ```
+    ```bash
+    ./scripts/release-patch-local.sh
+    ```
 
 The local script is intentionally gitignored.
 

@@ -24,7 +24,7 @@ describe('Matcher Wildcard with Default Matching Tests', async function () {
     it('Should match wildcard tags in user tags with default matching enabled', async function () {
         // Assignments with specific tags
         await matcher.addAssignment({ id: 'a1', tags: ['qa:test:unit'], priority: 10 });
-        
+
         // User with wildcard tag
         const user = { id: 'u1', tags: ['qa:test:*'] };
         await matcher.addUser(user);
@@ -57,7 +57,7 @@ describe('Matcher Wildcard with Default Matching Tests', async function () {
             tags: [],
             routingWeights: {
                 'my:*': 0,
-            }
+            },
         };
         await matcher.addUser(user);
 
@@ -80,7 +80,7 @@ describe('Matcher Wildcard with Default Matching Tests', async function () {
             routingWeights: {
                 'my:tag': 100,
                 default: 0,
-            }
+            },
         };
         await matcher.addUser(user);
 
@@ -98,7 +98,7 @@ describe('Matcher Wildcard with Default Matching Tests', async function () {
             routingWeights: {
                 'my:tag': 100,
                 'def*': 0,
-            }
+            },
         };
         await matcher.addUser(user);
 

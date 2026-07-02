@@ -145,11 +145,7 @@ describe('Workflow Tests', function () {
         });
 
         it('Should start a workflow instance', async function () {
-            const instance = await matcher.startWorkflow(
-                'onboarding-v1',
-                'user-workflow-1',
-                { source: 'test' },
-            );
+            const instance = await matcher.startWorkflow('onboarding-v1', 'user-workflow-1', { source: 'test' });
 
             expect(instance).to.not.be.null;
             expect(instance.id).to.be.a('string');
@@ -213,10 +209,7 @@ describe('Workflow Tests', function () {
 
         it('Should cancel a workflow instance', async function () {
             // Start a new workflow to cancel
-            const instance = await matcher.startWorkflow(
-                'onboarding-v1',
-                'user-workflow-1',
-            );
+            const instance = await matcher.startWorkflow('onboarding-v1', 'user-workflow-1');
 
             const result = await matcher.cancelWorkflow(instance.id);
             expect(result).to.be.true;

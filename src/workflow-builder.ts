@@ -1,9 +1,9 @@
 /**
  * Workflow Builder DSL
- * 
+ *
  * Provides a fluent API for constructing workflow definitions programmatically.
  * This makes workflow creation more intuitive and type-safe.
- * 
+ *
  * @example
  * ```typescript
  * const workflow = WorkflowBuilder.create('approval-flow', 'Document Approval')
@@ -315,7 +315,7 @@ export function linearWorkflow(
             input?: Record<string, any>;
         };
         timeoutMs?: number;
-    }>
+    }>,
 ): WorkflowDefinition {
     if (steps.length === 0) {
         throw new Error('Linear workflow must have at least one step');
@@ -354,34 +354,34 @@ export function approvalWorkflow(
         rejectedAssignment?: Partial<Assignment>;
         reviewerTag?: string;
         reviewTimeoutMs?: number;
-    }
+    },
 ): WorkflowDefinition {
     return WorkflowBuilder.create(id, name)
         .step('submit')
-            .name('Submit')
-            .assignment(options.submitAssignment)
-            .targetUser('initiator')
-            .defaultNext('review')
-            .done()
+        .name('Submit')
+        .assignment(options.submitAssignment)
+        .targetUser('initiator')
+        .defaultNext('review')
+        .done()
         .step('review')
-            .name('Review')
-            .assignment(options.reviewAssignment)
-            .targetUser(options.reviewerTag ? { tag: options.reviewerTag } : 'initiator')
-            .timeout(options.reviewTimeoutMs ?? 86400000)
-            .route('result.decision === "approve"', 'complete')
-            .route('result.decision === "reject"', 'rejected')
-            .defaultNext('complete')
-            .done()
+        .name('Review')
+        .assignment(options.reviewAssignment)
+        .targetUser(options.reviewerTag ? { tag: options.reviewerTag } : 'initiator')
+        .timeout(options.reviewTimeoutMs ?? 86400000)
+        .route('result.decision === "approve"', 'complete')
+        .route('result.decision === "reject"', 'rejected')
+        .defaultNext('complete')
+        .done()
         .step('complete')
-            .name('Completed')
-            .assignment(options.completeAssignment ?? { tags: ['notification'], title: 'Approved' })
-            .targetUser('initiator')
-            .done()
+        .name('Completed')
+        .assignment(options.completeAssignment ?? { tags: ['notification'], title: 'Approved' })
+        .targetUser('initiator')
+        .done()
         .step('rejected')
-            .name('Rejected')
-            .assignment(options.rejectedAssignment ?? { tags: ['notification'], title: 'Rejected' })
-            .targetUser('initiator')
-            .done()
+        .name('Rejected')
+        .assignment(options.rejectedAssignment ?? { tags: ['notification'], title: 'Rejected' })
+        .targetUser('initiator')
+        .done()
         .initialStep('submit')
         .build();
 }

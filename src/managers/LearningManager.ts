@@ -10,7 +10,19 @@
  * rules (tags/weights, CIDR, skill thresholds) - it never makes an ineligible
  * assignment eligible.
  */
-import type { RedisClientType, LearningFeatures, LearningOutcome, LearningRewards, LearningDecisionRecord, LearningEpisodeRecord, LearningSignals, LearningSample, LearningStats, LearningTagStat, AutoRoutingWeightsOptions } from '../types/matcher';
+import type {
+    RedisClientType,
+    LearningFeatures,
+    LearningOutcome,
+    LearningRewards,
+    LearningDecisionRecord,
+    LearningEpisodeRecord,
+    LearningSignals,
+    LearningSample,
+    LearningStats,
+    LearningTagStat,
+    AutoRoutingWeightsOptions,
+} from '../types/matcher';
 import type { KeyBuilders } from '../utils/keys';
 import { synthesizeRoutingWeights } from '../learning/auto-weights';
 
@@ -168,7 +180,12 @@ export class LearningManager {
         return this.applyReward(assignmentId, reward, true);
     }
 
-    private async applyReward(assignmentId: string, reward: number, terminal: boolean, outcome?: LearningOutcome): Promise<boolean> {
+    private async applyReward(
+        assignmentId: string,
+        reward: number,
+        terminal: boolean,
+        outcome?: LearningOutcome,
+    ): Promise<boolean> {
         const decision = await this.getDecision(assignmentId);
         if (!decision) return false;
 

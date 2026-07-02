@@ -7,7 +7,7 @@ describe('TelemetryManager', function () {
         const { span, end } = telemetry.startSpan('test');
         expect(span).to.be.null;
         expect(end).to.be.a('function');
-        
+
         // Should not throw
         telemetry.recordSpanError(span, new Error('test'));
         telemetry.setSpanAttributes(span, { foo: 'bar' });
@@ -18,7 +18,7 @@ describe('TelemetryManager', function () {
         const telemetry = new TelemetryManager(true);
         const { span, end } = telemetry.startSpan('test');
         expect(span).to.be.null;
-        
+
         telemetry.recordSpanError(span, new Error('test'));
         end();
     });
@@ -26,10 +26,18 @@ describe('TelemetryManager', function () {
     it('should use tracer when provided', function () {
         const telemetry = new TelemetryManager(true);
         const mockSpan = {
-            end: () => { (mockSpan as any).ended = true; },
-            recordException: (e: Error) => { (mockSpan as any).error = e; },
-            setStatus: (s: any) => { (mockSpan as any).status = s; },
-            setAttribute: (k: string, v: any) => { (mockSpan as any).attributes[k] = v; },
+            end: () => {
+                (mockSpan as any).ended = true;
+            },
+            recordException: (e: Error) => {
+                (mockSpan as any).error = e;
+            },
+            setStatus: (s: any) => {
+                (mockSpan as any).status = s;
+            },
+            setAttribute: (k: string, v: any) => {
+                (mockSpan as any).attributes[k] = v;
+            },
             attributes: {} as Record<string, any>,
             ended: false,
             error: null as Error | null,
@@ -40,12 +48,12 @@ describe('TelemetryManager', function () {
                 (mockSpan as any).name = name;
                 (mockSpan as any).attributes = { ...options.attributes };
                 return mockSpan;
-            }
+            },
         };
 
         telemetry.setTracer(mockTracer);
         const { span, end } = telemetry.startSpan('test-span', { attr1: 'val1' });
-        
+
         expect(span).to.equal(mockSpan);
         expect((span as any).name).to.equal('test-span');
         expect((span as any).attributes.attr1).to.equal('val1');
@@ -64,10 +72,12 @@ describe('TelemetryManager', function () {
     it('should handle tracer errors gracefully', function () {
         const telemetry = new TelemetryManager(true);
         const mockTracer = {
-            startSpan: () => { throw new Error('tracer error'); }
+            startSpan: () => {
+                throw new Error('tracer error');
+            },
         };
         telemetry.setTracer(mockTracer);
-        
+
         const { span, end } = telemetry.startSpan('test');
         expect(span).to.be.null;
         end();

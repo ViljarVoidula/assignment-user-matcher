@@ -17,14 +17,14 @@ describe('Skill Thresholds - Unit Tests', function () {
         });
 
         it('should support wildcard patterns', function () {
-            const weights = { 'eng*': 70, 'support': 50 };
+            const weights = { 'eng*': 70, support: 50 };
             expect(getEffectiveWeight(weights, 'english')).to.equal(70);
             expect(getEffectiveWeight(weights, 'engineering')).to.equal(70);
             expect(getEffectiveWeight(weights, 'support')).to.equal(50);
         });
 
         it('should prefer exact match over wildcard', function () {
-            const weights = { 'english': 100, 'eng*': 50 };
+            const weights = { english: 100, 'eng*': 50 };
             expect(getEffectiveWeight(weights, 'english')).to.equal(100);
         });
     });
@@ -113,7 +113,7 @@ describe('Skill Thresholds - Integration Tests', function () {
 
         await matcher.matchUsersAssignments('user1');
         const assignments = await matcher.getCurrentAssignmentsForUser('user1');
-        
+
         expect(assignments).to.include('assignment1');
     });
 
@@ -134,7 +134,7 @@ describe('Skill Thresholds - Integration Tests', function () {
 
         await matcher.matchUsersAssignments('user2');
         const assignments = await matcher.getCurrentAssignmentsForUser('user2');
-        
+
         expect(assignments).to.not.include('assignment2');
     });
 
@@ -155,7 +155,7 @@ describe('Skill Thresholds - Integration Tests', function () {
 
         await matcher.matchUsersAssignments('user3');
         const assignments = await matcher.getCurrentAssignmentsForUser('user3');
-        
+
         expect(assignments).to.not.include('assignment3');
     });
 
@@ -176,7 +176,7 @@ describe('Skill Thresholds - Integration Tests', function () {
 
         await matcher.matchUsersAssignments('user4');
         const assignments = await matcher.getCurrentAssignmentsForUser('user4');
-        
+
         expect(assignments).to.include('assignment4');
     });
 
@@ -197,7 +197,7 @@ describe('Skill Thresholds - Integration Tests', function () {
 
         await matcher.matchUsersAssignments('user5');
         const assignments = await matcher.getCurrentAssignmentsForUser('user5');
-        
+
         expect(assignments).to.include('assignment5');
     });
 
@@ -250,7 +250,7 @@ describe('Skill Thresholds - Integration Tests', function () {
 
         await matcher.matchUsersAssignments('user6');
         const assignments = await matcher.getCurrentAssignmentsForUser('user6');
-        
+
         expect(assignments).to.include('multilang');
     });
 
@@ -270,7 +270,7 @@ describe('Skill Thresholds - Integration Tests', function () {
 
         await matcher.matchUsersAssignments('taguser');
         const assignments = await matcher.getCurrentAssignmentsForUser('taguser');
-        
+
         expect(assignments).to.not.include('threshold-assignment');
     });
 });

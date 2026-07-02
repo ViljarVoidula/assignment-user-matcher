@@ -18,7 +18,7 @@ import { extractMatchFeatures } from './learning/features';
 import { LearningManager } from './managers/LearningManager';
 import { ReliabilityManager } from './managers/ReliabilityManager';
 import { TelemetryManager } from './managers/TelemetryManager';
-import { WorkflowManager, type WorkflowHost } from './managers/WorkflowManager';
+import { WorkflowManager, type WorkflowHost, type MachineTaskHandler } from './managers/WorkflowManager';
 import type {
     RedisClientType,
     User,
@@ -45,10 +45,20 @@ import type {
     LearningTagStat,
     ReliabilityMetrics,
     CircuitBreakerState,
+    WorkflowEngineMetrics,
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
-export type { RedisClientType, User, Assignment, Stats, PendingAssignmentInfo, MatcherOptions, options, ReliabilityMetrics } from './types/matcher';
+export type {
+    RedisClientType,
+    User,
+    Assignment,
+    Stats,
+    PendingAssignmentInfo,
+    MatcherOptions,
+    options,
+    ReliabilityMetrics,
+} from './types/matcher';
 // Export workflow types
 export type {
     WorkflowDefinition,
@@ -79,7 +89,9 @@ export type {
     LearningStats,
     LearningTagStat,
     AutoRoutingWeightsOptions,
+    WorkflowEngineMetrics,
 } from './types/matcher';
+export type { MachineTaskHandler } from './managers/WorkflowManager';
 
 // Load Lua scripts from files
 const LUA_SCRIPTS_DIR = join(__dirname, 'lua');
@@ -144,10 +156,10 @@ export default class AssignmentMatcher implements WorkflowHost {
         this.relevantBatchSize = options?.relevantBatchSize ?? 50;
         this.enableDefaultMatching = options?.enableDefaultMatching ?? true;
         this.redisPrefix = options?.redisPrefix ?? '';
-        
+
         // Initialize key builders
         this.keys = createKeyBuilders({ prefix: this.redisPrefix });
-        
+
         this.usersKey = this.keys.users();
         this.assignmentsKey = this.keys.assignments();
         this.assignmentsRefKey = this.keys.assignmentsRef();
@@ -179,6 +191,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             workflowSnapshotDefinitions: options?.workflowSnapshotDefinitions ?? true,
             streamConsumerName: this.streamConsumerName,
             circuitBreakerPersistState: options?.circuitBreakerPersistState ?? false,
+            circuitBreakerShared: options?.circuitBreakerShared ?? false,
             enableReliabilityMetrics: options?.enableReliabilityMetrics ?? true,
             deadLetterQueueAlertThreshold: options?.deadLetterQueueAlertThreshold ?? 100,
         });
@@ -200,21 +213,19 @@ export default class AssignmentMatcher implements WorkflowHost {
             trackTagStats: this.enableAutoRoutingWeights,
             autoWeights: options?.autoRoutingWeights,
         });
-        
-        this.workflow = new WorkflowManager(
-            this.redisClient,
-            this.keys,
-            this.reliability,
-            this.telemetry,
-            this,
-            {
-                enableWorkflows: this.enableWorkflows,
-                streamConsumerGroup: this.streamConsumerGroup,
-                streamConsumerName: this.streamConsumerName,
-                reclaimIntervalMs: options?.workflowReclaimPollIntervalMs ?? 5000,
-                reclaimMinIdleMs: options?.workflowOrphanReclaimMs ?? 60000,
-            }
-        );
+
+        this.workflow = new WorkflowManager(this.redisClient, this.keys, this.reliability, this.telemetry, this, {
+            enableWorkflows: this.enableWorkflows,
+            streamConsumerGroup: this.streamConsumerGroup,
+            streamConsumerName: this.streamConsumerName,
+            reclaimIntervalMs: options?.workflowReclaimPollIntervalMs ?? 5000,
+            reclaimMinIdleMs: options?.workflowOrphanReclaimMs ?? 60000,
+            retentionMs: options?.workflowInstanceRetentionMs,
+            retryBackoffMs: options?.workflowRetryBackoffMs,
+            eventBatchSize: options?.workflowEventBatchSize,
+            pollBlockMs: options?.workflowPollBlockMs,
+            maxEventsPerSecond: options?.workflowMaxEventsPerSecond,
+        });
 
         this.readyPromise = this.initRedis();
     }
@@ -297,10 +308,7 @@ export default class AssignmentMatcher implements WorkflowHost {
     /**
      * Get events from the Dead Letter Queue.
      */
-    async getDeadLetterEvents(
-        limit: number = 100,
-        offset: number = 0,
-    ): Promise<DeadLetterEntry[]> {
+    async getDeadLetterEvents(limit: number = 100, offset: number = 0): Promise<DeadLetterEntry[]> {
         await this.readyPromise;
         return this.reliability.getDeadLetterEvents(limit, offset);
     }
@@ -557,9 +565,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             // the flat priorWeight.
             const previousLearned: Record<string, number> = user.learnedRoutingWeights ?? {};
             const existingForSynthesis = user.routingWeights
-                ? Object.fromEntries(
-                      Object.entries(user.routingWeights).filter(([tag]) => !(tag in previousLearned)),
-                  )
+                ? Object.fromEntries(Object.entries(user.routingWeights).filter(([tag]) => !(tag in previousLearned)))
                 : undefined;
 
             const learned = await this.learning.getLearnedRoutingWeights(id, knownTags, existingForSynthesis);
@@ -592,7 +598,6 @@ export default class AssignmentMatcher implements WorkflowHost {
         const tags: string[] = await this.redisClient.sMembers(this.allTagsKey);
         return tags.filter((t) => t !== 'default');
     }
-
 
     // ============================================================================
     // OpenTelemetry Tracing Hooks
@@ -696,7 +701,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         // Fetch tags and owner in case it's pending
         const [tagsCsv, owner] = await Promise.all([
             this.redisClient.hGet(assignmentTagsKey, 'tags'),
-            this.redisClient.hGet(this.assignmentOwnerKey, id)
+            this.redisClient.hGet(this.assignmentOwnerKey, id),
         ]);
 
         let tags: string[] = [];
@@ -705,7 +710,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         }
 
         const multi = this.redisClient.multi();
-        
+
         // 1. Remove from Queued state
         multi.hDel(this.assignmentsRefKey, id);
         multi.del(assignmentPriorityKey);
@@ -757,7 +762,7 @@ export default class AssignmentMatcher implements WorkflowHost {
     /**
      * Get assignments with pagination support for efficient querying of large datasets.
      * Uses cursor-based pagination across statuses.
-     * 
+     *
      * @param options.cursor - Cursor for pagination (null/undefined for first page)
      * @param options.limit - Maximum number of assignments to return per page (default: 100)
      * @param options.status - Filter by status: 'queued' | 'pending' | 'accepted' | 'all' (default: 'all')
@@ -851,7 +856,9 @@ export default class AssignmentMatcher implements WorkflowHost {
         _assignmentId?: string,
         skillThresholds?: Record<string, number>,
     ): Promise<[number, number]> {
-        return Promise.resolve(calculateMatchScore(user, assignmentTags, assignmentPriority, this.enableDefaultMatching, skillThresholds));
+        return Promise.resolve(
+            calculateMatchScore(user, assignmentTags, assignmentPriority, this.enableDefaultMatching, skillThresholds),
+        );
     }
 
     private matchScore: (
@@ -898,11 +905,11 @@ export default class AssignmentMatcher implements WorkflowHost {
         const assignmentPriorityKey = this.keys.assignmentPriority(id);
         // Fetch tags to update per-tag indices
         const assignmentTagsKey = this.keys.assignmentTags(id);
-        const [existsRef, tagsCsv] = await this.redisClient
+        const [existsRef, tagsCsv] = (await this.redisClient
             .multi()
             .hExists(this.assignmentsRefKey, id)
             .hGet(assignmentTagsKey, 'tags')
-            .exec() as unknown as [boolean, string | null];
+            .exec()) as unknown as [boolean, string | null];
         const tags = (tagsCsv && tagsCsv.length > 0 ? tagsCsv.split(',') : []) as string[];
 
         const multi = this.redisClient.multi();
@@ -985,7 +992,9 @@ export default class AssignmentMatcher implements WorkflowHost {
         // In weighted + default scoring path, only explicit positive weights may match.
         if (this.enableDefaultMatching && !hasRoutingWeights) {
             const defaultInPos = positiveWeights.find((t) => t.tag === 'default');
-            const defaultZero = zeroWeightTags.some((tag) => tag === 'default' || (tag.endsWith('*') && 'default'.startsWith(tag.slice(0, -1))));
+            const defaultZero = zeroWeightTags.some(
+                (tag) => tag === 'default' || (tag.endsWith('*') && 'default'.startsWith(tag.slice(0, -1))),
+            );
             if (!defaultInPos && !defaultZero) positiveWeights.push({ tag: 'default', weight: 1 });
         }
 
@@ -1013,15 +1022,18 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         const unionKeysWithWeights = expandedPositive.map((pw) => ({
             key: this.keys.tagAssignments(pw.tag),
-            weight: pw.weight
+            weight: pw.weight,
         }));
 
         const multi = this.redisClient.multi();
         // Weighted union of positive tag assignment zsets
         if (unionKeysWithWeights.length > 0) {
-            multi.zUnionStore(tempKey, unionKeysWithWeights as [typeof unionKeysWithWeights[0], ...typeof unionKeysWithWeights]);
+            multi.zUnionStore(
+                tempKey,
+                unionKeysWithWeights as [(typeof unionKeysWithWeights)[0], ...typeof unionKeysWithWeights],
+            );
         }
-        
+
         const excludeKeys: string[] = [];
         // Optional exclude set for zero-weight tags
         if (finalZeroTags.length > 0) {
@@ -1030,13 +1042,13 @@ export default class AssignmentMatcher implements WorkflowHost {
             multi.expire(tempZeroKey, 5);
             excludeKeys.push(tempZeroKey);
         }
-        
+
         // Always exclude rejected assignments
         excludeKeys.push(rejectedKey);
 
         // Final = candidates - exclude (zero weights + rejected)
         multi.zDiffStore(tempFinalKey, [tempKey, ...excludeKeys]);
-        
+
         // Set short TTLs to clean up
         multi.expire(tempKey, 5);
         multi.expire(tempFinalKey, 5);
@@ -1057,8 +1069,15 @@ export default class AssignmentMatcher implements WorkflowHost {
             // Also fetch assignment JSON to access allowedCidrs for network matching
             batched.hGet(this.assignmentsRefKey, assignmentId);
         }
-        const flat = await batched.exec() as unknown as (string | null)[];
-        const details = [] as Array<{ id: string; basePriority: number; tags: string; allowedCidrs?: string[]; skillThresholds?: Record<string, number>; raw?: Record<string, any> }>;
+        const flat = (await batched.exec()) as unknown as (string | null)[];
+        const details = [] as Array<{
+            id: string;
+            basePriority: number;
+            tags: string;
+            allowedCidrs?: string[];
+            skillThresholds?: Record<string, number>;
+            raw?: Record<string, any>;
+        }>;
         for (let i = 0; i < top.length; i++) {
             const assignmentId = (top[i] as any).value;
             const priority = Number(flat[i * 3]) || 0;
@@ -1097,7 +1116,13 @@ export default class AssignmentMatcher implements WorkflowHost {
 
             for (const d of details) {
                 if (!checkCidrMatch(user.ip, d.allowedCidrs)) continue;
-                const [score, combinedPriority] = await this.matchScore(user, d.tags, d.basePriority, d.id, d.skillThresholds);
+                const [score, combinedPriority] = await this.matchScore(
+                    user,
+                    d.tags,
+                    d.basePriority,
+                    d.id,
+                    d.skillThresholds,
+                );
                 if (!score || !combinedPriority) continue;
 
                 const context: LearningAssignmentContext = {
@@ -1109,9 +1134,10 @@ export default class AssignmentMatcher implements WorkflowHost {
                 const predicted = this.learning.predict(features, modelWeights);
                 // Shadow mode observes without influencing ranking.
                 // Epsilon-greedy exploration adds random jitter to gather data on under-served candidates.
-                const exploration = !this.learning.shadowMode && this.learning.shouldExplore()
-                    ? Math.random() * this.learning.boostFactor
-                    : 0;
+                const exploration =
+                    !this.learning.shadowMode && this.learning.shouldExplore()
+                        ? Math.random() * this.learning.boostFactor
+                        : 0;
                 const effectivePriority = this.learning.shadowMode
                     ? combinedPriority
                     : combinedPriority + this.learning.boostFactor * predicted + exploration;
@@ -1142,7 +1168,13 @@ export default class AssignmentMatcher implements WorkflowHost {
                 }
 
                 // Use custom matchScore (supports weights and thresholds) for a final check and tie-break
-                const [score, combinedPriority] = await this.matchScore(user, d.tags, d.basePriority, d.id, d.skillThresholds);
+                const [score, combinedPriority] = await this.matchScore(
+                    user,
+                    d.tags,
+                    d.basePriority,
+                    d.id,
+                    d.skillThresholds,
+                );
                 if (score && combinedPriority) {
                     userAssignments.push({ id: d.id, priority: combinedPriority });
                     selected.push({ id: d.id, tags: d.tags });
@@ -1161,7 +1193,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             for (let i = 0; i < selected.length; i++) {
                 const s = selected[i];
                 const json = jsons[i];
-                
+
                 // Remove from reference and per-assignment hashes
                 rm.hDel(this.assignmentsRefKey, s.id);
                 rm.del(this.keys.assignmentPriority(s.id));
@@ -1264,7 +1296,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         multi.hDel(this.pendingAssignmentsKey, assignmentId);
         multi.zRem(this.pendingAssignmentsExpiryKey, assignmentId);
         multi.hDel(this.assignmentOwnerKey, assignmentId);
-        
+
         // Store in accepted assignments
         if (json) {
             multi.hSet(this.acceptedAssignmentsKey, assignmentId, json);
@@ -1290,16 +1322,16 @@ export default class AssignmentMatcher implements WorkflowHost {
         if (!isAssigned) throw new Error('Assignment not found for user');
 
         const json = await this.redisClient.hGet(this.pendingAssignmentsKey, assignmentId);
-        
+
         const multi = this.redisClient.multi();
         multi.sRem(this.keys.userAssignments(userId), `assignment:${assignmentId}`);
         multi.hDel(this.pendingAssignmentsKey, assignmentId);
         multi.zRem(this.pendingAssignmentsExpiryKey, assignmentId);
         multi.hDel(this.assignmentOwnerKey, assignmentId);
-        
+
         // Add to rejected list to prevent immediate re-assignment
         multi.sAdd(this.keys.userRejected(userId), assignmentId);
-        
+
         await multi.exec();
 
         if (this.enableLearning) {
@@ -1319,16 +1351,12 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Complete an assignment with a result payload.
      * Moves the assignment from 'accepted' to 'completed' state and publishes an event
      * for workflow orchestration.
-     * 
+     *
      * @param userId - The user completing the assignment
      * @param assignmentId - The assignment being completed
      * @param result - Optional result payload for routing decisions
      */
-    async completeAssignment(
-        userId: string,
-        assignmentId: string,
-        result?: AssignmentResult,
-    ): Promise<boolean> {
+    async completeAssignment(userId: string, assignmentId: string, result?: AssignmentResult): Promise<boolean> {
         await this.readyPromise;
 
         // Verify assignment is in accepted state
@@ -1343,7 +1371,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         // Move from accepted to completed
         const multi = this.redisClient.multi();
         multi.hDel(this.acceptedAssignmentsKey, assignmentId);
-        
+
         // Store in completed with result metadata
         const completedData = {
             ...assignment,
@@ -1376,16 +1404,12 @@ export default class AssignmentMatcher implements WorkflowHost {
 
     /**
      * Fail an assignment explicitly (e.g., user reports inability to complete).
-     * 
+     *
      * @param userId - The user failing the assignment
      * @param assignmentId - The assignment being failed
      * @param reason - Optional reason for failure
      */
-    async failAssignment(
-        userId: string,
-        assignmentId: string,
-        reason?: string,
-    ): Promise<boolean> {
+    async failAssignment(userId: string, assignmentId: string, reason?: string): Promise<boolean> {
         await this.readyPromise;
 
         const json = await this.redisClient.hGet(this.acceptedAssignmentsKey, assignmentId);
@@ -1435,15 +1459,13 @@ export default class AssignmentMatcher implements WorkflowHost {
 
     /**
      * Register a workflow definition.
-     * 
+     *
      * @param definition - The workflow definition to register
      */
     /**
      * Register a new workflow definition.
      */
-    async registerWorkflow(
-        definition: WorkflowDefinitionInput | WorkflowDefinition,
-    ): Promise<WorkflowDefinition> {
+    async registerWorkflow(definition: WorkflowDefinitionInput | WorkflowDefinition): Promise<WorkflowDefinition> {
         await this.readyPromise;
         return this.workflow.registerWorkflow(definition);
     }
@@ -1526,8 +1548,6 @@ export default class AssignmentMatcher implements WorkflowHost {
         return this.workflow.cancelWorkflow(instanceId);
     }
 
-
-
     /**
      * Check and process expired workflow steps.
      * Should be called periodically.
@@ -1536,7 +1556,6 @@ export default class AssignmentMatcher implements WorkflowHost {
         await this.readyPromise;
         return this.workflow.processExpiredWorkflowSteps();
     }
-
 
     /**
      * Publish a workflow event to the Redis Stream.
@@ -1563,8 +1582,50 @@ export default class AssignmentMatcher implements WorkflowHost {
         return this.workflow.stopOrchestrator();
     }
 
+    /**
+     * Register a machine task handler by name. Machine steps with a matching
+     * machineTask.handler run through this handler; unmatched handlers fall
+     * back to the executeMachineTask host hook.
+     */
+    registerMachineHandler(name: string, handler: MachineTaskHandler): void {
+        this.workflow.registerMachineHandler(name, handler);
+    }
 
+    /**
+     * Process due delayed event retries. Called automatically by the
+     * orchestrator; exposed for deployments that run their own schedulers.
+     */
+    async drainScheduledRetries(): Promise<number> {
+        await this.readyPromise;
+        return this.workflow.drainScheduledRetries();
+    }
 
+    /**
+     * Backfill workflow indexes (active-instance index) from records created
+     * before these indexes existed. Safe to run multiple times.
+     */
+    async backfillWorkflowIndexes(): Promise<number> {
+        await this.readyPromise;
+        return this.workflow.backfillWorkflowIndexes();
+    }
+
+    /**
+     * Remove terminal workflow instances last updated more than olderThanMs
+     * ago, including registry, per-user, and index entries.
+     */
+    async pruneWorkflowInstances(olderThanMs: number): Promise<number> {
+        await this.readyPromise;
+        return this.workflow.pruneWorkflowInstances(olderThanMs);
+    }
+
+    /**
+     * Operational metrics for the workflow engine: active instances, retry
+     * queue depth, DLQ size, and event stream statistics.
+     */
+    async getWorkflowMetrics(): Promise<WorkflowEngineMetrics> {
+        await this.readyPromise;
+        return this.workflow.getWorkflowMetrics();
+    }
 
     async processExpiredMatches(): Promise<number> {
         await this.readyPromise;
@@ -1734,14 +1795,12 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Get assignments specifically targeted at a user through active workflows.
      * These take priority over general pool assignments for deterministic matching.
      */
-    private async getWorkflowTargetedAssignments(
-        userId: string,
-    ): Promise<Array<{ id: string; priority: number }>> {
+    private async getWorkflowTargetedAssignments(userId: string): Promise<Array<{ id: string; priority: number }>> {
         const targeted: Array<{ id: string; priority: number }> = [];
 
         // Scan queued assignments for those with _targetUserId matching this user
         const queuedAssignments = await this.redisClient.hGetAll(this.assignmentsRefKey);
-        
+
         for (const [assignmentId, json] of Object.entries(queuedAssignments)) {
             try {
                 const assignment = JSON.parse(json);
