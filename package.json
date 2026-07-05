@@ -30,7 +30,7 @@
         "benchmark:learning": "ts-node benchmark-learning.ts",
         "build:docs": "npx typedoc --plugin typedoc-plugin-markdown",
         "prettier": "prettier --write .",
-        "build": "rimraf dist && tsc",
+        "build": "rimraf dist && tsc && mkdir -p dist/lua && cp src/lua/*.lua dist/lua/",
         "prepublishOnly": "pnpm run build",
         "release:patch": "bash ./scripts/release-patch-local.sh.example"
     },

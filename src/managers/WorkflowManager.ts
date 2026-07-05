@@ -93,6 +93,11 @@ export class WorkflowManager {
         }
     }
 
+    private isNoGroupError(err: unknown): boolean {
+        const message = err instanceof Error ? err.message : String(err ?? '');
+        return message.includes('NOGROUP');
+    }
+
     setLuaScriptSha(sha: string): void {
         this.luaScriptSha = sha;
     }
@@ -567,6 +572,9 @@ export class WorkflowManager {
         this.orchestratorRunning = true;
         this.orchestratorAbortController = new AbortController();
 
+        // Ensure the stream and group exist even if Redis was flushed since init.
+        await this.initStreamConsumerGroup();
+
         // Setup subscriber client with reconnection handling
         await this.setupSubscriberClient();
 
@@ -747,6 +755,11 @@ export class WorkflowManager {
                     }
                 } catch (err: any) {
                     if (this.orchestratorAbortController?.signal.aborted) break;
+
+                    if (this.isNoGroupError(err)) {
+                        await this.initStreamConsumerGroup();
+                        continue;
+                    }
 
                     console.error('Orchestrator read error:', err);
                     await this.reliability.recordCircuitBreakerFailure();
@@ -1066,6 +1079,10 @@ export class WorkflowManager {
                 }
             }
         } catch (err) {
+            if (this.isNoGroupError(err)) {
+                await this.initStreamConsumerGroup();
+                return 0;
+            }
             console.error('Error in XAUTOCLAIM:', err);
         }
         return totalReclaimed;

@@ -1493,6 +1493,42 @@ describe('WorkflowManager', function () {
             expect(reclaimed).to.equal(0);
         });
 
+        it('should recreate consumer group when XAUTOCLAIM returns NOGROUP', async function () {
+            const host: WorkflowHost = {
+                async addAssignment(a: Assignment) {
+                    return a;
+                },
+                async matchUsersAssignments() {
+                    return [];
+                },
+            };
+
+            const mgr = new WorkflowManager(redisClient, keys, reliability, telemetry, host, {
+                enableWorkflows: true,
+                streamConsumerGroup: 'nogroup-reclaim-group',
+                streamConsumerName: 'nogroup-reclaim-consumer',
+                reclaimIntervalMs: 1,
+            });
+            await mgr.init();
+
+            const subscriber = redisClient.duplicate();
+            await subscriber.connect();
+            (mgr as any).subscriberClient = subscriber;
+
+            const xGroupCreateSpy = sinon.spy(redisClient, 'xGroupCreate');
+            const xAutoClaimStub = sinon
+                .stub(subscriber, 'xAutoClaim')
+                .rejects(new Error("NOGROUP No such key 'demo:events:stream' or consumer group 'orchestrator'"));
+
+            const reclaimed = await mgr.reclaimOrphanedMessages();
+            expect(reclaimed).to.equal(0);
+            expect(xGroupCreateSpy.called).to.equal(true);
+
+            xAutoClaimStub.restore();
+            xGroupCreateSpy.restore();
+            await subscriber.quit();
+        });
+
         it('should ack already-processed events without reprocessing', async function () {
             this.timeout(10000);
 

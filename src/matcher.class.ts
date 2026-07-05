@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { checkCidrMatch } from './utils/cidr';
+import { checkGeoMatch, isValidLatitude, isValidLongitude } from './utils/geo';
 import { createKeyBuilders, type KeyBuilders } from './utils/keys';
 import {
     getAllAssignmentsFromStores,
@@ -9,7 +10,6 @@ import {
     getAssignmentById,
     getAssignmentsByIdsBatch,
     getAssignmentsPaginatedFromStores,
-    type AssignmentStatus,
     type PaginationOptions,
     type PaginationResult,
     type AssignmentCounts,
@@ -27,7 +27,6 @@ import type {
     Stats,
     PendingAssignmentInfo,
     MatcherOptions,
-    options,
     WorkflowDefinition,
     WorkflowDefinitionInput,
     WorkflowDefinitionSummary,
@@ -44,6 +43,8 @@ import type {
     LearningSample,
     LearningStats,
     LearningTagStat,
+    GeoMatchResult,
+    GeoMatchingFunction,
     ReliabilityMetrics,
     CircuitBreakerState,
     WorkflowEngineMetrics,
@@ -58,6 +59,8 @@ export type {
     PendingAssignmentInfo,
     MatcherOptions,
     options,
+    GeoMatchResult,
+    GeoMatchingFunction,
     ReliabilityMetrics,
     WorkflowInstanceStatus,
     WorkflowRouting,
@@ -152,6 +155,10 @@ export default class AssignmentMatcher implements WorkflowHost {
     private enableAutoRoutingWeights: boolean;
     private learning: LearningManager;
     private learningFeatureExtractor: LearningFeatureExtractor;
+    private enableGeoMatching: boolean;
+    private geoDefaultMaxDistanceKm?: number;
+    private geoScoreWeight: number;
+    private geoMatchingFunction?: GeoMatchingFunction;
 
     constructor(
         public redisClient: RedisClientType,
@@ -179,6 +186,10 @@ export default class AssignmentMatcher implements WorkflowHost {
         this.calculatePriority = options?.prioritizationFunction ?? this.calculatePriority;
         this.usingDefaultMatchScore = !options?.matchingFunction;
         this.matchScore = options?.matchingFunction ?? this.defaultMatchScore.bind(this);
+        this.enableGeoMatching = options?.enableGeoMatching ?? false;
+        this.geoDefaultMaxDistanceKm = options?.geoDefaultMaxDistanceKm;
+        this.geoScoreWeight = options?.geoScoreWeight ?? 0;
+        this.geoMatchingFunction = options?.geoMatchingFunction;
 
         // Workflow options
         this.enableWorkflows = options?.enableWorkflows ?? false;
@@ -671,7 +682,7 @@ export default class AssignmentMatcher implements WorkflowHost {
                 value: id,
             });
 
-        if (latitude && longitude) {
+        if (isValidLatitude(latitude) && isValidLongitude(longitude)) {
             multi.geoAdd(assignmentGeoKey, {
                 longitude,
                 latitude,
@@ -870,6 +881,30 @@ export default class AssignmentMatcher implements WorkflowHost {
         skillThresholds?: Record<string, number>,
     ) => Promise<[number, number]>;
 
+    private async evaluateGeoMatch(user: User, assignment: Assignment): Promise<GeoMatchResult> {
+        if (this.geoMatchingFunction) {
+            return this.geoMatchingFunction({
+                user,
+                assignment,
+                defaultMaxDistanceKm: this.geoDefaultMaxDistanceKm,
+            });
+        }
+
+        return checkGeoMatch(user, assignment, {
+            enabled: this.enableGeoMatching,
+            defaultMaxDistanceKm: this.geoDefaultMaxDistanceKm,
+        });
+    }
+
+    private calculateGeoBoost(geoMatch: GeoMatchResult): number {
+        if (!this.enableGeoMatching || this.geoScoreWeight <= 0) return 0;
+        if (typeof geoMatch.distanceKm !== 'number' || typeof geoMatch.effectiveMaxDistanceKm !== 'number') return 0;
+        if (geoMatch.effectiveMaxDistanceKm <= 0) return 0;
+
+        const ratio = 1 - geoMatch.distanceKm / geoMatch.effectiveMaxDistanceKm;
+        return this.geoScoreWeight * Math.max(0, ratio);
+    }
+
     private async calculatePriority(...args: (Assignment | undefined)[]) {
         const [assignment] = args;
         return calculateDefaultPriority(assignment?.createdAt);
@@ -972,6 +1007,10 @@ export default class AssignmentMatcher implements WorkflowHost {
                 }
             }
         }
+        // Workflow-targeted assignments above are deterministically targeted at this
+        // user (not drawn from the shared tag pool below), so the claim-race filtering
+        // at the end of this function must never strip them out.
+        const workflowTargetedCount = userAssignments.length;
 
         // Priority 2: Build candidate assignments using per-tag zset union with user weights for scalability.
         const positiveWeights: Array<{ tag: string; weight: number }> = [];
@@ -1077,7 +1116,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             tags: string;
             allowedCidrs?: string[];
             skillThresholds?: Record<string, number>;
-            raw?: Record<string, any>;
+            raw?: Assignment;
         }>;
         for (let i = 0; i < top.length; i++) {
             const assignmentId = (top[i] as any).value;
@@ -1086,10 +1125,10 @@ export default class AssignmentMatcher implements WorkflowHost {
             const assignmentJson = flat[i * 3 + 2];
             let allowedCidrs: string[] | undefined;
             let skillThresholds: Record<string, number> | undefined;
-            let raw: Record<string, any> | undefined;
+            let raw: Assignment | undefined;
             if (assignmentJson) {
                 try {
-                    const parsed = JSON.parse(assignmentJson);
+                    const parsed = JSON.parse(assignmentJson) as Assignment;
                     allowedCidrs = parsed.allowedCidrs;
                     skillThresholds = parsed.skillThresholds;
                     raw = parsed;
@@ -1117,6 +1156,10 @@ export default class AssignmentMatcher implements WorkflowHost {
 
             for (const d of details) {
                 if (!checkCidrMatch(user.ip, d.allowedCidrs)) continue;
+
+                const geoMatch = await this.evaluateGeoMatch(user, d.raw ?? { id: d.id, tags: [] });
+                if (!geoMatch.eligible) continue;
+
                 const [score, combinedPriority] = await this.matchScore(
                     user,
                     d.tags,
@@ -1125,6 +1168,7 @@ export default class AssignmentMatcher implements WorkflowHost {
                     d.skillThresholds,
                 );
                 if (!score || !combinedPriority) continue;
+                const geoAdjustedPriority = combinedPriority + this.calculateGeoBoost(geoMatch);
 
                 const context: LearningAssignmentContext = {
                     ...(d.raw ?? {}),
@@ -1140,8 +1184,8 @@ export default class AssignmentMatcher implements WorkflowHost {
                         ? Math.random() * this.learning.boostFactor
                         : 0;
                 const effectivePriority = this.learning.shadowMode
-                    ? combinedPriority
-                    : combinedPriority + this.learning.boostFactor * predicted + exploration;
+                    ? geoAdjustedPriority
+                    : geoAdjustedPriority + this.learning.boostFactor * predicted + exploration;
                 eligible.push({ detail: d, combinedPriority, features, predicted, effectivePriority });
             }
 
@@ -1168,6 +1212,11 @@ export default class AssignmentMatcher implements WorkflowHost {
                     continue; // Skip this assignment - user IP doesn't match allowed CIDRs
                 }
 
+                const geoMatch = await this.evaluateGeoMatch(user, d.raw ?? { id: d.id, tags: [] });
+                if (!geoMatch.eligible) {
+                    continue;
+                }
+
                 // Use custom matchScore (supports weights and thresholds) for a final check and tie-break
                 const [score, combinedPriority] = await this.matchScore(
                     user,
@@ -1177,47 +1226,69 @@ export default class AssignmentMatcher implements WorkflowHost {
                     d.skillThresholds,
                 );
                 if (score && combinedPriority) {
-                    userAssignments.push({ id: d.id, priority: combinedPriority });
+                    userAssignments.push({ id: d.id, priority: combinedPriority + this.calculateGeoBoost(geoMatch) });
                     selected.push({ id: d.id, tags: d.tags });
                 }
             }
         }
 
-        // Batch-remove all selected assignments from indexes and references to reduce round trips
+        // Claim, then clean up. The candidate read above (zDiffStore/zRangeWithScores)
+        // is a snapshot taken before this point, and getUserRelatedAssignments runs
+        // concurrently across users - matchUsersAssignments() Promise.all's the bulk
+        // path, and a per-user matchUsersAssignments(userId) call can race a bulk
+        // pass too. Without a single atomic gate, two concurrent callers can both
+        // still see the same assignment as available and both hand it to their user.
+        // HDEL on assignmentsRefKey is atomic and idempotent (returns 1 only for
+        // whichever caller actually deletes the field), so it's used here as that
+        // gate: only assignments this call actually wins are kept: anything already
+        // claimed by a concurrent caller since the snapshot read is dropped instead
+        // of being double-assigned.
+        const claimedIds = new Set<string>();
         if (selected.length > 0) {
-            // Fetch JSONs first to store in pending
             const jsonPromises = selected.map((s) => this.redisClient.hGet(this.assignmentsRefKey, s.id));
             const jsons = await Promise.all(jsonPromises);
             const now = Date.now();
 
-            const rm = this.redisClient.multi();
-            for (let i = 0; i < selected.length; i++) {
-                const s = selected[i];
-                const json = jsons[i];
-
-                // Remove from reference and per-assignment hashes
-                rm.hDel(this.assignmentsRefKey, s.id);
-                rm.del(this.keys.assignmentPriority(s.id));
-                rm.del(this.keys.assignmentTags(s.id));
-                // Remove from global zset
-                rm.zRem(this.assignmentsKey, s.id);
-                // Remove from per-tag zsets
-                const tags = (s.tags ? s.tags.split(',').filter(Boolean) : []) as string[];
-                for (const tag of tags) {
-                    rm.zRem(this.keys.tagAssignments(tag), s.id);
-                }
-
-                // Add to pending structures
-                if (json) {
-                    rm.hSet(this.pendingAssignmentsKey, s.id, json);
-                    rm.zAdd(this.pendingAssignmentsExpiryKey, { score: now + this.matchExpirationMs, value: s.id });
-                    rm.hSet(this.assignmentOwnerKey, s.id, user.id);
-                }
+            const claimMulti = this.redisClient.multi();
+            for (const s of selected) {
+                claimMulti.hDel(this.assignmentsRefKey, s.id);
             }
-            await rm.exec();
+            const claimResults = (await claimMulti.exec()) as unknown as number[];
+            for (let i = 0; i < selected.length; i++) {
+                if (Number(claimResults[i]) > 0) claimedIds.add(selected[i].id);
+            }
+
+            if (claimedIds.size > 0) {
+                const rm = this.redisClient.multi();
+                for (let i = 0; i < selected.length; i++) {
+                    const s = selected[i];
+                    if (!claimedIds.has(s.id)) continue; // lost the race - already claimed elsewhere
+                    const json = jsons[i];
+
+                    rm.del(this.keys.assignmentPriority(s.id));
+                    rm.del(this.keys.assignmentTags(s.id));
+                    // Remove from global zset
+                    rm.zRem(this.assignmentsKey, s.id);
+                    // Remove from per-tag zsets
+                    const tags = (s.tags ? s.tags.split(',').filter(Boolean) : []) as string[];
+                    for (const tag of tags) {
+                        rm.zRem(this.keys.tagAssignments(tag), s.id);
+                    }
+
+                    // Add to pending structures
+                    if (json) {
+                        rm.hSet(this.pendingAssignmentsKey, s.id, json);
+                        rm.zAdd(this.pendingAssignmentsExpiryKey, { score: now + this.matchExpirationMs, value: s.id });
+                        rm.hSet(this.assignmentOwnerKey, s.id, user.id);
+                    }
+                }
+                await rm.exec();
+            }
         }
 
-        return userAssignments;
+        const workflowTargeted = userAssignments.slice(0, workflowTargetedCount);
+        const tagScored = userAssignments.slice(workflowTargetedCount).filter((ua) => claimedIds.has(ua.id));
+        return [...workflowTargeted, ...tagScored];
     }
     async matchUsersAssignments(userId?: string): Promise<void> {
         await this.readyPromise;

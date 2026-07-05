@@ -6,6 +6,8 @@ export type {
     options,
     Stats,
     User,
+    GeoMatchResult,
+    GeoMatchingFunction,
     ReliabilityMetrics,
     AssignmentStatus,
 } from './matcher.class';
@@ -62,6 +64,7 @@ export { normalizeWorkflowDefinition, validateWorkflowDefinition } from './workf
 
 // Utility exports for advanced usage
 export * from './utils/cidr';
+export * from './utils/geo';
 export { createKeyBuilders, type KeyBuilders, type RedisKeyConfig } from './utils/keys';
 
 export { AssignmentMatcher };

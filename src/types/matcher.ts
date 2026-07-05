@@ -11,6 +11,11 @@ export interface User {
     // Optional IP address for network-based matching (IPv4 or IPv6)
     // Example: '192.168.1.100' or '2001:db8::1'
     ip?: string;
+    // Optional geographic coordinates for distance-based matching
+    latitude?: number;
+    longitude?: number;
+    // Optional user-side travel cap in kilometers
+    maxTravelDistanceKm?: number;
     [key: string]: any;
 }
 
@@ -26,8 +31,27 @@ export type Assignment = {
     // If specified, user's routingWeights must meet or exceed these values for each tag
     // Example: { english: 50, support: 30 } requires user to have at least 50 for english and 30 for support
     skillThresholds?: Record<string, number>;
+    // Optional assignment-side geographic coordinates
+    latitude?: number;
+    longitude?: number;
+    // Optional assignment-side service radius in kilometers
+    maxDistanceKm?: number;
+    // When true, users without valid coordinates are not eligible
+    requireGeo?: boolean;
     [key: string]: any;
 };
+
+export type GeoMatchResult = {
+    eligible: boolean;
+    distanceKm?: number;
+    effectiveMaxDistanceKm?: number;
+};
+
+export type GeoMatchingFunction = (args: {
+    user: User;
+    assignment: Assignment;
+    defaultMaxDistanceKm?: number;
+}) => Promise<GeoMatchResult>;
 
 export type Stats = {
     users?: number;
@@ -65,6 +89,14 @@ export type MatcherOptions = {
         assignmentId?: string,
         skillThresholds?: Record<string, number>,
     ) => Promise<[number, number]>;
+    /** Enable distance-based geolocation matching (default: false) */
+    enableGeoMatching?: boolean;
+    /** Global fallback cap in kilometers when assignment/user-specific caps are absent */
+    geoDefaultMaxDistanceKm?: number;
+    /** Proximity boost weight added to combined priority (default: 0) */
+    geoScoreWeight?: number;
+    /** Custom geolocation matcher override */
+    geoMatchingFunction?: GeoMatchingFunction;
     /** Enable workflow orchestration features */
     enableWorkflows?: boolean;
     /** Consumer group name for Redis Streams (defaults to 'orchestrator') */

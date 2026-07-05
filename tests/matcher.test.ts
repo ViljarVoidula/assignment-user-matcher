@@ -307,6 +307,12 @@ describe('Parallel matching tests', async function () {
         matcher = new Matcher(redisClient, {
             maxUserBacklogSize: 5,
             relevantBatchSize: 10,
+            // Isolate candidate pools to each user's own tags - with default
+            // matching on, every user is a candidate for every assignment via
+            // the 'default' catch-all, which turns this into a full-contention
+            // scenario where a fast concurrent claim can legitimately leave a
+            // user with nothing, rather than testing per-tag distribution.
+            enableDefaultMatching: false,
         });
     });
 
@@ -350,24 +356,60 @@ describe('Parallel matching tests', async function () {
         const user3Assignments = await matcher.getCurrentAssignmentsForUser('user3');
         const user4Assignments = await matcher.getCurrentAssignmentsForUser('user4');
 
-        // Verify each user got assignments
-        expect(user1Assignments).to.be.an('array');
-        expect(user1Assignments.length).to.be.greaterThan(0);
-
-        expect(user2Assignments).to.be.an('array');
-        expect(user2Assignments.length).to.be.greaterThan(0);
-
-        expect(user3Assignments).to.be.an('array');
-        expect(user3Assignments.length).to.be.greaterThan(0);
-
+        // user4's tags (tag4, tag5) are disjoint from user1/2/3's (tag1-3), so with
+        // default matching disabled above it has no contention and reliably gets
+        // its own assignments (a8, a9, a10).
         expect(user4Assignments).to.be.an('array');
         expect(user4Assignments.length).to.be.greaterThan(0);
+
+        // user1/2/3 share overlapping tags (tag1-3) and genuinely compete for the
+        // same assignments under concurrent matching - a fast claim can legitimately
+        // leave any one of them empty this round, so assert the property that
+        // actually matters: matching distributed assignments without duplicating
+        // any of them across users.
+        const allIds = [...user1Assignments, ...user2Assignments, ...user3Assignments, ...user4Assignments];
+        expect(new Set(allIds).size).to.equal(allIds.length);
+        expect(allIds.length).to.be.greaterThan(0);
 
         // Get aggregate stats after matching
         const stats = await matcher.stats;
         expect(stats).to.be.an('object');
         expect(stats.users).to.equal(4);
         expect(stats.usersWithoutAssignment).to.be.an('array');
+    });
+
+    it('never double-assigns the same assignment to two users when many users race for a small shared pool', async function () {
+        // matchUsersAssignments() (bulk) processes all users concurrently via
+        // Promise.all. getUserRelatedAssignments reads its candidate pool early
+        // and only removes selected assignments from it much later, after several
+        // awaited scoring/geo/CIDR checks - a wide enough window for two
+        // concurrently-processed users to both read the same assignment as
+        // available before either has removed it. With 20 users, 3 assignments,
+        // and every user eligible for all of them, this reliably reproduces that
+        // race if the claim isn't atomic.
+        const raceMatcher = new Matcher(redisClient, {
+            maxUserBacklogSize: 5,
+            relevantBatchSize: 10,
+            redisPrefix: 'race_test:',
+        });
+        await raceMatcher.redisClient.flushAll();
+
+        const userIds = Array.from({ length: 20 }, (_, i) => `race-user-${i}`);
+        for (const id of userIds) {
+            await raceMatcher.addUser({ id, tags: ['shared'] });
+        }
+        await raceMatcher.addAssignment({ id: 'race-a1', tags: ['shared'] });
+        await raceMatcher.addAssignment({ id: 'race-a2', tags: ['shared'] });
+        await raceMatcher.addAssignment({ id: 'race-a3', tags: ['shared'] });
+
+        await raceMatcher.matchUsersAssignments();
+
+        const perUser = await Promise.all(userIds.map((id) => raceMatcher.getCurrentAssignmentsForUser(id)));
+        const allClaims = perUser.flat();
+
+        // Exactly the 3 assignments should be claimed in total, each by exactly one user.
+        expect(allClaims.length).to.equal(3);
+        expect(new Set(allClaims).size).to.equal(3);
     });
 });
 

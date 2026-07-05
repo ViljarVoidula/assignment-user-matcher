@@ -350,36 +350,53 @@ describe('Matcher CIDR/Network Matching Tests', function () {
         });
 
         it('should match when assignment allows both IPv4 and IPv6 ranges', async function () {
-            await matcher.addUser({
+            // Dedicated matcher with default matching disabled and per-user-exclusive
+            // tags: with 'support' shared + default matching on, both users are
+            // candidates for both assignments and whichever is matched first
+            // legitimately claims both (up to its own backlog cap) - correct
+            // engine behavior, but not what this test means to exercise. The point
+            // here is that a single assignment's allowedCidrs list containing both
+            // an IPv4 and an IPv6 range matches a user of either family, so give
+            // each user their own dedicated assignment to check that independently.
+            const dualStackMatcher = new Matcher(redisClient, {
+                maxUserBacklogSize: 5,
+                relevantBatchSize: 20,
+                redisPrefix: 'cidr_dualstack_test:',
+                enableDefaultMatching: false,
+            });
+            await dualStackMatcher.redisClient.flushAll();
+
+            await dualStackMatcher.addUser({
                 id: 'user_ipv4',
-                tags: ['support'],
+                tags: ['support-v4'],
                 ip: '192.168.1.100',
             });
 
-            await matcher.addUser({
+            await dualStackMatcher.addUser({
                 id: 'user_ipv6',
-                tags: ['support'],
+                tags: ['support-v6'],
                 ip: '2001:db8::1',
             });
 
-            await matcher.addAssignment({
+            await dualStackMatcher.addAssignment({
                 id: 'assignment1',
-                tags: ['support'],
+                tags: ['support-v4'],
                 priority: 100,
                 allowedCidrs: ['192.168.1.0/24', '2001:db8::/32'],
             });
 
-            await matcher.addAssignment({
+            await dualStackMatcher.addAssignment({
                 id: 'assignment2',
-                tags: ['support'],
+                tags: ['support-v6'],
                 priority: 100,
                 allowedCidrs: ['192.168.1.0/24', '2001:db8::/32'],
             });
 
-            await matcher.matchUsersAssignments();
+            await dualStackMatcher.matchUsersAssignments('user_ipv4');
+            await dualStackMatcher.matchUsersAssignments('user_ipv6');
 
-            const ipv4Assignments = await matcher.getCurrentAssignmentsForUser('user_ipv4');
-            const ipv6Assignments = await matcher.getCurrentAssignmentsForUser('user_ipv6');
+            const ipv4Assignments = await dualStackMatcher.getCurrentAssignmentsForUser('user_ipv4');
+            const ipv6Assignments = await dualStackMatcher.getCurrentAssignmentsForUser('user_ipv6');
 
             expect(ipv4Assignments.length).to.be.greaterThan(0);
             expect(ipv6Assignments.length).to.be.greaterThan(0);

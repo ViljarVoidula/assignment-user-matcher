@@ -58,20 +58,19 @@ describe('Assignment pagination and querying tests', () => {
         });
 
         it('should return assignments from all statuses combined', async () => {
-            await matcher.addAssignment({ id: 'queued', tags: ['t1'] });
+            // Exclusive per-status tags + a single user targeted via matchUsersAssignments(userId)
+            // keep this deterministic: 'queued' has no matching user so it can never be
+            // picked up, and 'pending'/'accepted' are only reachable by u1, so there's no
+            // contention over which assignment ends up in which status (see the identical
+            // pattern used by the getAssignmentCounts tests above).
+            await matcherNoDefault.addAssignment({ id: 'queued', tags: ['queued-tag'] });
+            await matcherNoDefault.addAssignment({ id: 'pending', tags: ['pending-tag'] });
+            await matcherNoDefault.addAssignment({ id: 'accepted', tags: ['accepted-tag'] });
+            await matcherNoDefault.addUser({ id: 'u1', tags: ['pending-tag', 'accepted-tag'] });
+            await matcherNoDefault.matchUsersAssignments('u1');
+            await matcherNoDefault.acceptAssignment('u1', 'accepted');
 
-            await matcher.addAssignment({ id: 'pending', tags: ['t1'] });
-            await matcher.addUser({ id: 'u1', tags: ['t1'] });
-            await matcher.matchUsersAssignments();
-
-            await matcher.addAssignment({ id: 'accepted', tags: ['t1'] });
-            await matcher.addUser({ id: 'u2', tags: ['t1'] });
-            await matcher.matchUsersAssignments();
-            // Note: matchUsersAssignments() might pick up 'accepted' or 'pending' depending on timing,
-            // but we want to ensure one is accepted.
-            await matcher.acceptAssignment('u2', 'accepted');
-
-            const assignments = await matcher.getAllAssignments();
+            const assignments = await matcherNoDefault.getAllAssignments();
             expect(assignments).to.have.lengthOf(3);
             const ids = assignments.map((a: any) => a.id);
             expect(ids).to.include('queued');
@@ -293,21 +292,21 @@ describe('Assignment pagination and querying tests', () => {
         });
 
         it('should paginate across multiple statuses with status=all', async () => {
-            await matcher.addAssignment({ id: 'q1', tags: ['t1'] });
-            await matcher.addAssignment({ id: 'p1', tags: ['t1'] });
-            await matcher.addUser({ id: 'u1', tags: ['t1'] });
-            await matcher.matchUsersAssignments();
-            await matcher.addAssignment({ id: 'a1', tags: ['t1'] });
-            await matcher.addUser({ id: 'u2', tags: ['t1'] });
-            await matcher.matchUsersAssignments();
-            await matcher.acceptAssignment('u2', 'a1');
+            // Exclusive per-status tags + matchUsersAssignments(userId) keep this
+            // deterministic - see the identical pattern above.
+            await matcherNoDefault.addAssignment({ id: 'q1', tags: ['q1-tag'] });
+            await matcherNoDefault.addAssignment({ id: 'p1', tags: ['p1-tag'] });
+            await matcherNoDefault.addAssignment({ id: 'a1', tags: ['a1-tag'] });
+            await matcherNoDefault.addUser({ id: 'u1', tags: ['p1-tag', 'a1-tag'] });
+            await matcherNoDefault.matchUsersAssignments('u1');
+            await matcherNoDefault.acceptAssignment('u1', 'a1');
 
             // We have 1 in each state
-            const res1 = await matcher.getAssignmentsPaginated({ status: 'all', limit: 2 });
+            const res1 = await matcherNoDefault.getAssignmentsPaginated({ status: 'all', limit: 2 });
             expect(res1.assignments).to.have.lengthOf(2);
             expect(res1.nextCursor).to.not.be.null;
 
-            const res2 = await matcher.getAssignmentsPaginated({ status: 'all', limit: 2, cursor: res1.nextCursor! });
+            const res2 = await matcherNoDefault.getAssignmentsPaginated({ status: 'all', limit: 2, cursor: res1.nextCursor! });
             expect(res2.assignments).to.have.lengthOf(1);
             expect(res2.nextCursor).to.be.null;
         });
