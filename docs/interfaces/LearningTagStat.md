@@ -23,7 +23,7 @@ Number of reward observations for this tag
 
 #### Defined in
 
-[src/types/matcher.ts:494](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L494)
+[src/types/matcher.ts:529](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L529)
 
 ---
 
@@ -35,7 +35,7 @@ rewardSum / count (0 when no observations)
 
 #### Defined in
 
-[src/types/matcher.ts:498](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L498)
+[src/types/matcher.ts:533](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L533)
 
 ---
 
@@ -47,7 +47,7 @@ Sum of observed rewards for this tag
 
 #### Defined in
 
-[src/types/matcher.ts:496](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L496)
+[src/types/matcher.ts:531](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L531)
 
 ---
 
@@ -57,4 +57,4 @@ Sum of observed rewards for this tag
 
 #### Defined in
 
-[src/types/matcher.ts:492](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L492)
+[src/types/matcher.ts:527](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L527)

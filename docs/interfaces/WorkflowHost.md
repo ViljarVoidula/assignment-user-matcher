@@ -32,7 +32,7 @@
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:25](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/managers/WorkflowManager.ts#L25)
+[src/managers/WorkflowManager.ts:25](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/managers/WorkflowManager.ts#L25)
 
 ---
 
@@ -55,7 +55,7 @@
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/managers/WorkflowManager.ts#L27)
+[src/managers/WorkflowManager.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/managers/WorkflowManager.ts#L27)
 
 ---
 
@@ -75,4 +75,4 @@
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/managers/WorkflowManager.ts#L26)
+[src/managers/WorkflowManager.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/managers/WorkflowManager.ts#L26)

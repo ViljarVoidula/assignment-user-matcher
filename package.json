@@ -20,7 +20,7 @@
         }
     },
     "author": "Viljar Võidula",
-    "license": "MIT",
+    "license": "SEE LICENSE IN LICENCE",
     "private": false,
     "dependencies": {
         "redis": "5.10.0"

@@ -690,6 +690,15 @@ export default class AssignmentMatcher implements WorkflowHost {
             });
         }
 
+        // Index hard vetoes both ways: assignment -> users for cleanup,
+        // user -> assignments for exclusion via ZDIFFSTORE during matching.
+        if (assignment.vetoedUsers && assignment.vetoedUsers.length > 0) {
+            multi.sAdd(this.keys.assignmentVetoed(id), assignment.vetoedUsers);
+            for (const vetoedUserId of assignment.vetoedUsers) {
+                multi.sAdd(this.keys.userVetoed(vetoedUserId), id);
+            }
+        }
+
         // Also index assignment into per-tag sorted sets (by priority)
         // This enables efficient weighted matching via ZUNIONSTORE.
         const indexTags = [...tags, ...(this.enableDefaultMatching ? ['default'] : [])];
@@ -713,10 +722,11 @@ export default class AssignmentMatcher implements WorkflowHost {
         const assignmentTagsKey = this.keys.assignmentTags(id);
         const assignmentGeoKey = this.keys.assignmentsGeo();
 
-        // Fetch tags and owner in case it's pending
-        const [tagsCsv, owner] = await Promise.all([
+        // Fetch tags, owner (in case it's pending), and vetoed users for index cleanup
+        const [tagsCsv, owner, vetoedUsers] = await Promise.all([
             this.redisClient.hGet(assignmentTagsKey, 'tags'),
             this.redisClient.hGet(this.assignmentOwnerKey, id),
+            this.redisClient.sMembers(this.keys.assignmentVetoed(id)),
         ]);
 
         let tags: string[] = [];
@@ -735,6 +745,10 @@ export default class AssignmentMatcher implements WorkflowHost {
             multi.zRem(this.keys.tagAssignments(tag), id.toString());
         }
         multi.zRem(assignmentGeoKey, id.toString());
+        multi.del(this.keys.assignmentVetoed(id));
+        for (const vetoedUserId of vetoedUsers) {
+            multi.sRem(this.keys.userVetoed(vetoedUserId), id);
+        }
 
         // 2. Remove from Pending state
         multi.hDel(this.pendingAssignmentsKey, id);
@@ -758,6 +772,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             .multi()
             .del(this.keys.userAssignments(userId))
             .del(this.keys.userRejected(userId))
+            .del(this.keys.userVetoed(userId))
             .zRem(this.keys.userActivity(), userId)
             .hDel(this.usersKey, userId);
         await multi.exec();
@@ -1083,10 +1098,11 @@ export default class AssignmentMatcher implements WorkflowHost {
             excludeKeys.push(tempZeroKey);
         }
 
-        // Always exclude rejected assignments
+        // Always exclude rejected and vetoed assignments
         excludeKeys.push(rejectedKey);
+        excludeKeys.push(this.keys.userVetoed(user.id));
 
-        // Final = candidates - exclude (zero weights + rejected)
+        // Final = candidates - exclude (zero weights + rejected + vetoed)
         multi.zDiffStore(tempFinalKey, [tempKey, ...excludeKeys]);
 
         // Set short TTLs to clean up
@@ -1876,6 +1892,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         for (const [assignmentId, json] of Object.entries(queuedAssignments)) {
             try {
                 const assignment = JSON.parse(json);
+                // Hard veto applies even to deterministic workflow targeting
+                if (assignment.vetoedUsers?.includes(userId)) continue;
                 if (assignment._targetUserId === userId && assignment._workflowInstanceId) {
                     // This is a workflow assignment targeted at this user
                     targeted.push({

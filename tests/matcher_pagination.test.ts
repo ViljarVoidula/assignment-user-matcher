@@ -306,7 +306,11 @@ describe('Assignment pagination and querying tests', () => {
             expect(res1.assignments).to.have.lengthOf(2);
             expect(res1.nextCursor).to.not.be.null;
 
-            const res2 = await matcherNoDefault.getAssignmentsPaginated({ status: 'all', limit: 2, cursor: res1.nextCursor! });
+            const res2 = await matcherNoDefault.getAssignmentsPaginated({
+                status: 'all',
+                limit: 2,
+                cursor: res1.nextCursor!,
+            });
             expect(res2.assignments).to.have.lengthOf(1);
             expect(res2.nextCursor).to.be.null;
         });

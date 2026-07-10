@@ -12,6 +12,9 @@
 
 - [id](User.md#id)
 - [ip](User.md#ip)
+- [latitude](User.md#latitude)
+- [longitude](User.md#longitude)
+- [maxTravelDistanceKm](User.md#maxtraveldistancekm)
 - [routingWeights](User.md#routingweights)
 - [tags](User.md#tags)
 
@@ -23,7 +26,7 @@
 
 #### Defined in
 
-[src/types/matcher.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L6)
+[src/types/matcher.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L6)
 
 ---
 
@@ -33,7 +36,37 @@
 
 #### Defined in
 
-[src/types/matcher.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L13)
+[src/types/matcher.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L13)
+
+---
+
+### latitude
+
+• `Optional` **latitude**: `number`
+
+#### Defined in
+
+[src/types/matcher.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L15)
+
+---
+
+### longitude
+
+• `Optional` **longitude**: `number`
+
+#### Defined in
+
+[src/types/matcher.ts:16](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L16)
+
+---
+
+### maxTravelDistanceKm
+
+• `Optional` **maxTravelDistanceKm**: `number`
+
+#### Defined in
+
+[src/types/matcher.ts:18](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L18)
 
 ---
 
@@ -43,7 +76,7 @@
 
 #### Defined in
 
-[src/types/matcher.ts:10](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L10)
+[src/types/matcher.ts:10](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L10)
 
 ---
 
@@ -53,4 +86,4 @@
 
 #### Defined in
 
-[src/types/matcher.ts:7](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L7)
+[src/types/matcher.ts:7](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L7)

@@ -36,3 +36,6 @@ benchmark-*
 assignment-engine.code-workspace
 docs/workflow-canvas-demo-plan.md
 CLAUDE.md
+.github/skills
+.claude/skills
+.impeccable

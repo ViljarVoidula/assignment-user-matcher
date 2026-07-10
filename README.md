@@ -75,6 +75,10 @@ await assignmentMatcher.addUser({
 Note: `usingDefaultMatchScore` is an internal implementation detail and is **not** a public option.
 Configure hard veto behavior only through `routingWeights` values.
 
+Assignments can also veto specific users from their side: setting `vetoedUsers: ['user_1']` on an
+assignment guarantees those users are never matched to it, no matter how well their tags, weights,
+or other criteria fit (this also overrides workflow targeting).
+
 3.  **Prioritization Engine:**
     Assignments are typically processed in the order they are received or by a custom prioritization function you can provide. This ensures that older or more critical assignments get attention first. The library aims to match the highest priority assignments to available, suitable users.
 
@@ -279,6 +283,7 @@ Adds a new assignment to be matched.
     - `tags: string[]`: Array of tags required for the assignment.
     - `createdAt: number`: Timestamp (e.g., `new Date().getTime()`) indicating when the assignment was created. Used for default prioritization (older assignments get higher priority). Can be influenced by `prioritizationFunction`.
     - `priority?: number | string`: Optional explicit priority. If `prioritizationFunction` is used, this might be an input to it.
+    - `vetoedUsers?: string[]`: Optional list of user IDs that must never receive this assignment, regardless of any other matching criteria (tags, `routingWeights`, priority, or workflow targeting). Vetoed assignments are excluded from a user's candidate pool before scoring, so the veto adds no per-match overhead. To change an assignment's vetoes, remove and re-add the assignment.
 
 ### `matchUsersAssignments(): Promise<void>`
 
@@ -1032,4 +1037,4 @@ Consumers can `import AssignmentMatcher from 'assignment-user-matcher'` or `cons
 
 ## License
 
-This library is licensed under the MIT License. (Assuming MIT - please update if incorrect)
+This library is proprietary, commercially-licensed software — see [`LICENCE`](./LICENCE) for the full terms. No use, copying, modification, or distribution is permitted without the Owner's prior written permission (the LICENCE file's non-commercial fair-use footnote covers limited evaluation/academic use with written confirmation from the Owner). Contact viljar@forgemaster.ai for licensing.

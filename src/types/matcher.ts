@@ -31,6 +31,9 @@ export type Assignment = {
     // If specified, user's routingWeights must meet or exceed these values for each tag
     // Example: { english: 50, support: 30 } requires user to have at least 50 for english and 30 for support
     skillThresholds?: Record<string, number>;
+    // Optional list of user IDs that must never receive this assignment,
+    // regardless of any other matching criteria (hard veto)
+    vetoedUsers?: string[];
     // Optional assignment-side geographic coordinates
     latitude?: number;
     longitude?: number;

@@ -18,6 +18,7 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         users: () => `${prefix}users`,
         userAssignments: (userId: string) => `${prefix}user:${userId}:assignments`,
         userRejected: (userId: string) => `${prefix}user:${userId}:rejected`,
+        userVetoed: (userId: string) => `${prefix}user:${userId}:vetoed`,
         userActivity: () => `${prefix}users:activity`,
 
         // Assignment keys
@@ -26,6 +27,7 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         assignmentsGeo: () => `${prefix}assignments:geo`,
         assignmentPriority: (id: string) => `${prefix}assignment:${id}:priority`,
         assignmentTags: (id: string) => `${prefix}assignment:${id}:tags`,
+        assignmentVetoed: (id: string) => `${prefix}assignment:${id}:vetoed`,
 
         // Pending/accepted state keys
         pendingAssignmentsData: () => `${prefix}assignments:pending:data`,

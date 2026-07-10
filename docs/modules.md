@@ -49,6 +49,8 @@
 
 - [Assignment](modules.md#assignment)
 - [AssignmentStatus](modules.md#assignmentstatus)
+- [GeoMatchResult](modules.md#geomatchresult)
+- [GeoMatchingFunction](modules.md#geomatchingfunction)
 - [KeyBuilders](modules.md#keybuilders)
 - [LearningFeatureExtractor](modules.md#learningfeatureextractor)
 - [LearningFeatures](modules.md#learningfeatures)
@@ -74,10 +76,15 @@
 
 - [approvalWorkflow](modules.md#approvalworkflow)
 - [checkCidrMatch](modules.md#checkcidrmatch)
+- [checkGeoMatch](modules.md#checkgeomatch)
 - [cosineSimilarity](modules.md#cosinesimilarity)
 - [createKeyBuilders](modules.md#createkeybuilders)
 - [extractMatchFeatures](modules.md#extractmatchfeatures)
+- [hasValidCoordinates](modules.md#hasvalidcoordinates)
+- [haversineDistanceKm](modules.md#haversinedistancekm)
 - [isIpInCidr](modules.md#isipincidr)
+- [isValidLatitude](modules.md#isvalidlatitude)
+- [isValidLongitude](modules.md#isvalidlongitude)
 - [linearWorkflow](modules.md#linearworkflow)
 - [normalizeWorkflowDefinition](modules.md#normalizeworkflowdefinition)
 - [parseCIDR](modules.md#parsecidr)
@@ -110,13 +117,18 @@ Renames and re-exports [AssignmentMatcher](classes/AssignmentMatcher.md)
 | :----------------- | :----------------------------- |
 | `allowedCidrs?`    | `string`[]                     |
 | `id`               | `string`                       |
+| `latitude?`        | `number`                       |
+| `longitude?`       | `number`                       |
+| `maxDistanceKm?`   | `number`                       |
 | `priority?`        | `number`                       |
+| `requireGeo?`      | `boolean`                      |
 | `skillThresholds?` | `Record`\<`string`, `number`\> |
 | `tags`             | `string`[]                     |
+| `vetoedUsers?`     | `string`[]                     |
 
 #### Defined in
 
-[src/types/matcher.ts:17](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L17)
+[src/types/matcher.ts:22](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L22)
 
 ---
 
@@ -126,7 +138,52 @@ Renames and re-exports [AssignmentMatcher](classes/AssignmentMatcher.md)
 
 #### Defined in
 
-[src/queries/pagination.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/queries/pagination.ts#L6)
+[src/queries/pagination.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/queries/pagination.ts#L6)
+
+---
+
+### GeoMatchResult
+
+Ƭ **GeoMatchResult**: `Object`
+
+#### Type declaration
+
+| Name                      | Type      |
+| :------------------------ | :-------- |
+| `distanceKm?`             | `number`  |
+| `effectiveMaxDistanceKm?` | `number`  |
+| `eligible`                | `boolean` |
+
+#### Defined in
+
+[src/types/matcher.ts:47](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L47)
+
+---
+
+### GeoMatchingFunction
+
+Ƭ **GeoMatchingFunction**: (`args`: \{ `assignment`: [`Assignment`](modules.md#assignment) ; `defaultMaxDistanceKm?`: `number` ; `user`: [`User`](interfaces/User.md) }) => `Promise`\<[`GeoMatchResult`](modules.md#geomatchresult)\>
+
+#### Type declaration
+
+▸ (`args`): `Promise`\<[`GeoMatchResult`](modules.md#geomatchresult)\>
+
+##### Parameters
+
+| Name                         | Type                                  |
+| :--------------------------- | :------------------------------------ |
+| `args`                       | `Object`                              |
+| `args.assignment`            | [`Assignment`](modules.md#assignment) |
+| `args.defaultMaxDistanceKm?` | `number`                              |
+| `args.user`                  | [`User`](interfaces/User.md)          |
+
+##### Returns
+
+`Promise`\<[`GeoMatchResult`](modules.md#geomatchresult)\>
+
+#### Defined in
+
+[src/types/matcher.ts:53](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L53)
 
 ---
 
@@ -136,7 +193,7 @@ Renames and re-exports [AssignmentMatcher](classes/AssignmentMatcher.md)
 
 #### Defined in
 
-[src/utils/keys.ts:87](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/utils/keys.ts#L87)
+[src/utils/keys.ts:89](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/keys.ts#L89)
 
 ---
 
@@ -163,7 +220,7 @@ Pluggable feature extractor for the learning layer
 
 #### Defined in
 
-[src/types/matcher.ts:456](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L456)
+[src/types/matcher.ts:491](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L491)
 
 ---
 
@@ -175,7 +232,7 @@ Sparse feature vector describing a user/assignment match context
 
 #### Defined in
 
-[src/types/matcher.ts:446](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L446)
+[src/types/matcher.ts:481](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L481)
 
 ---
 
@@ -187,7 +244,7 @@ Assignment lifecycle outcomes that generate learning rewards
 
 #### Defined in
 
-[src/types/matcher.ts:440](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L440)
+[src/types/matcher.ts:475](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L475)
 
 ---
 
@@ -199,7 +256,7 @@ Reward values per lifecycle outcome
 
 #### Defined in
 
-[src/types/matcher.ts:443](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L443)
+[src/types/matcher.ts:478](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L478)
 
 ---
 
@@ -211,7 +268,7 @@ Named external signal values (e.g. { accuracy: 0.95, csat: 0.8 })
 
 #### Defined in
 
-[src/types/matcher.ts:482](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L482)
+[src/types/matcher.ts:517](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L517)
 
 ---
 
@@ -240,7 +297,7 @@ Signature for machine task handlers registered via registerMachineHandler().
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:35](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/managers/WorkflowManager.ts#L35)
+[src/managers/WorkflowManager.ts:35](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/managers/WorkflowManager.ts#L35)
 
 ---
 
@@ -258,11 +315,15 @@ Signature for machine task handlers registered via registerMachineHandler().
 | `deadLetterQueueAlertThreshold?`   | `number`                                                                                                                                                                                                                           | Alert threshold for Dead Letter Queue size (default: 100)                                                                                                                                                                                                                                                                         |
 | `enableAutoRoutingWeights?`        | `boolean`                                                                                                                                                                                                                          | Track per-user, per-tag reward statistics and enable automatic routingWeights generation from RL outcomes (requires enableLearning). Default: false.                                                                                                                                                                              |
 | `enableDefaultMatching?`           | `boolean`                                                                                                                                                                                                                          | -                                                                                                                                                                                                                                                                                                                                 |
+| `enableGeoMatching?`               | `boolean`                                                                                                                                                                                                                          | Enable distance-based geolocation matching (default: false)                                                                                                                                                                                                                                                                       |
 | `enableGracefulDegradation?`       | `boolean`                                                                                                                                                                                                                          | Enable graceful degradation mode when Redis is unavailable (default: false)                                                                                                                                                                                                                                                       |
 | `enableLearning?`                  | `boolean`                                                                                                                                                                                                                          | Enable the contextual-bandit learning layer (default: false)                                                                                                                                                                                                                                                                      |
 | `enableOpenTelemetry?`             | `boolean`                                                                                                                                                                                                                          | Enable OpenTelemetry tracing (default: false)                                                                                                                                                                                                                                                                                     |
 | `enableReliabilityMetrics?`        | `boolean`                                                                                                                                                                                                                          | Enable circuit breaker and reliability metrics (default: true when telemetry enabled)                                                                                                                                                                                                                                             |
 | `enableWorkflows?`                 | `boolean`                                                                                                                                                                                                                          | Enable workflow orchestration features                                                                                                                                                                                                                                                                                            |
+| `geoDefaultMaxDistanceKm?`         | `number`                                                                                                                                                                                                                           | Global fallback cap in kilometers when assignment/user-specific caps are absent                                                                                                                                                                                                                                                   |
+| `geoMatchingFunction?`             | [`GeoMatchingFunction`](modules.md#geomatchingfunction)                                                                                                                                                                            | Custom geolocation matcher override                                                                                                                                                                                                                                                                                               |
+| `geoScoreWeight?`                  | `number`                                                                                                                                                                                                                           | Proximity boost weight added to combined priority (default: 0)                                                                                                                                                                                                                                                                    |
 | `idleUserTimeoutMs?`               | `number`                                                                                                                                                                                                                           | Opt-in idle user auto-rejection. When set, users that have pending (not yet accepted/rejected) assignments and show no activity for this many milliseconds are removed from the matching pool by processIdleUsers(), and their pending assignments are requeued. Disabled when undefined (default), preserving existing behavior. |
 | `learningBoostFactor?`             | `number`                                                                                                                                                                                                                           | Multiplier applied to predicted reward when re-ranking candidates (default: 1)                                                                                                                                                                                                                                                    |
 | `learningDecisionTtlMs?`           | `number`                                                                                                                                                                                                                           | TTL for stored decision contexts in ms (default: 604800000 = 7 days)                                                                                                                                                                                                                                                              |
@@ -305,7 +366,7 @@ Signature for machine task handlers registered via registerMachineHandler().
 
 #### Defined in
 
-[src/types/matcher.ts:46](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L46)
+[src/types/matcher.ts:73](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L73)
 
 ---
 
@@ -325,7 +386,7 @@ Signature for machine task handlers registered via registerMachineHandler().
 
 #### Defined in
 
-[src/types/matcher.ts:38](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L38)
+[src/types/matcher.ts:65](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L65)
 
 ---
 
@@ -343,7 +404,7 @@ Signature for machine task handlers registered via registerMachineHandler().
 
 #### Defined in
 
-[src/types/matcher.ts:32](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L32)
+[src/types/matcher.ts:59](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L59)
 
 ---
 
@@ -365,7 +426,7 @@ Operational metrics for the workflow engine
 
 #### Defined in
 
-[src/types/matcher.ts:179](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L179)
+[src/types/matcher.ts:214](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L214)
 
 ---
 
@@ -377,7 +438,7 @@ Event types for workflow lifecycle
 
 #### Defined in
 
-[src/types/matcher.ts:197](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L197)
+[src/types/matcher.ts:232](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L232)
 
 ---
 
@@ -389,7 +450,7 @@ Status of a workflow instance
 
 #### Defined in
 
-[src/types/matcher.ts:306](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L306)
+[src/types/matcher.ts:341](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L341)
 
 ---
 
@@ -401,7 +462,7 @@ Target user selector for workflow assignment steps
 
 #### Defined in
 
-[src/types/matcher.ts:203](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L203)
+[src/types/matcher.ts:238](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L238)
 
 ---
 
@@ -413,7 +474,7 @@ Step execution mode
 
 #### Defined in
 
-[src/types/matcher.ts:200](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L200)
+[src/types/matcher.ts:235](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L235)
 
 ---
 
@@ -427,7 +488,7 @@ Use MatcherOptions instead
 
 #### Defined in
 
-[src/types/matcher.ts:176](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/types/matcher.ts#L176)
+[src/types/matcher.ts:211](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/types/matcher.ts#L211)
 
 ## Variables
 
@@ -437,7 +498,7 @@ Use MatcherOptions instead
 
 #### Defined in
 
-[src/learning/auto-weights.ts:19](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/learning/auto-weights.ts#L19)
+[src/learning/auto-weights.ts:19](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/learning/auto-weights.ts#L19)
 
 ## Functions
 
@@ -467,7 +528,7 @@ Create an approval workflow with submit -> review -> complete/rejected pattern.
 
 #### Defined in
 
-[src/workflow-builder.ts:347](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/workflow-builder.ts#L347)
+[src/workflow-builder.ts:347](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/workflow-builder.ts#L347)
 
 ---
 
@@ -491,7 +552,40 @@ Returns true if no CIDRs are specified (open assignment) or if IP matches any CI
 
 #### Defined in
 
-[src/utils/cidr.ts:139](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/utils/cidr.ts#L139)
+[src/utils/cidr.ts:139](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/cidr.ts#L139)
+
+---
+
+### checkGeoMatch
+
+▸ **checkGeoMatch**(`user`, `assignment`, `options?`): [`GeoMatchResult`](modules.md#geomatchresult)
+
+Check if a user-assignment pair is geo-eligible.
+
+An assignment that never configured coordinates hasn't opted into geo
+matching, so it stays open to all users (backward compatible). But once an
+assignment does specify coordinates, a user with no location can't satisfy
+that distance criterion and is denied by default - mirroring checkCidrMatch's
+"restriction present, matching data missing -> deny". requireGeo remains as
+an explicit, redundant-but-safe way to force denial in that case.
+
+#### Parameters
+
+| Name                            | Type                                  |
+| :------------------------------ | :------------------------------------ |
+| `user`                          | [`User`](interfaces/User.md)          |
+| `assignment`                    | [`Assignment`](modules.md#assignment) |
+| `options?`                      | `Object`                              |
+| `options.defaultMaxDistanceKm?` | `number`                              |
+| `options.enabled?`              | `boolean`                             |
+
+#### Returns
+
+[`GeoMatchResult`](modules.md#geomatchresult)
+
+#### Defined in
+
+[src/utils/geo.ts:49](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/geo.ts#L49)
 
 ---
 
@@ -515,7 +609,7 @@ Returns 0 for mismatched lengths or zero-magnitude vectors.
 
 #### Defined in
 
-[src/learning/features.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/learning/features.ts#L15)
+[src/learning/features.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/learning/features.ts#L15)
 
 ---
 
@@ -542,6 +636,7 @@ Creates Redis key builder functions with a given prefix
 | `assignmentOwner`          | () => `string`                                           |
 | `assignmentPriority`       | (`id`: `string`) => `string`                             |
 | `assignmentTags`           | (`id`: `string`) => `string`                             |
+| `assignmentVetoed`         | (`id`: `string`) => `string`                             |
 | `assignments`              | () => `string`                                           |
 | `assignmentsGeo`           | () => `string`                                           |
 | `assignmentsRef`           | () => `string`                                           |
@@ -572,6 +667,7 @@ Creates Redis key builder functions with a given prefix
 | `userActivity`             | () => `string`                                           |
 | `userAssignments`          | (`userId`: `string`) => `string`                         |
 | `userRejected`             | (`userId`: `string`) => `string`                         |
+| `userVetoed`               | (`userId`: `string`) => `string`                         |
 | `users`                    | () => `string`                                           |
 | `workflowAssignmentLink`   | (`assignmentId`: `string`) => `string`                   |
 | `workflowAuditStream`      | () => `string`                                           |
@@ -586,7 +682,7 @@ Creates Redis key builder functions with a given prefix
 
 #### Defined in
 
-[src/utils/keys.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/utils/keys.ts#L13)
+[src/utils/keys.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/keys.ts#L13)
 
 ---
 
@@ -610,7 +706,51 @@ tag-overlap ratio, and optional embedding similarity.
 
 #### Defined in
 
-[src/learning/features.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/learning/features.ts#L33)
+[src/learning/features.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/learning/features.ts#L33)
+
+---
+
+### hasValidCoordinates
+
+▸ **hasValidCoordinates**(`latitude`, `longitude`): `boolean`
+
+#### Parameters
+
+| Name        | Type      |
+| :---------- | :-------- |
+| `latitude`  | `unknown` |
+| `longitude` | `unknown` |
+
+#### Returns
+
+`boolean`
+
+#### Defined in
+
+[src/utils/geo.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/geo.ts#L23)
+
+---
+
+### haversineDistanceKm
+
+▸ **haversineDistanceKm**(`lat1`, `lon1`, `lat2`, `lon2`): `number`
+
+#### Parameters
+
+| Name   | Type     |
+| :----- | :------- |
+| `lat1` | `number` |
+| `lon1` | `number` |
+| `lat2` | `number` |
+| `lon2` | `number` |
+
+#### Returns
+
+`number`
+
+#### Defined in
+
+[src/utils/geo.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/geo.ts#L27)
 
 ---
 
@@ -633,7 +773,47 @@ Check if an IP address is within a CIDR range
 
 #### Defined in
 
-[src/utils/cidr.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/utils/cidr.ts#L119)
+[src/utils/cidr.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/cidr.ts#L119)
+
+---
+
+### isValidLatitude
+
+▸ **isValidLatitude**(`value`): value is number
+
+#### Parameters
+
+| Name    | Type      |
+| :------ | :-------- |
+| `value` | `unknown` |
+
+#### Returns
+
+value is number
+
+#### Defined in
+
+[src/utils/geo.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/geo.ts#L15)
+
+---
+
+### isValidLongitude
+
+▸ **isValidLongitude**(`value`): value is number
+
+#### Parameters
+
+| Name    | Type      |
+| :------ | :-------- |
+| `value` | `unknown` |
+
+#### Returns
+
+value is number
+
+#### Defined in
+
+[src/utils/geo.ts:19](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/geo.ts#L19)
 
 ---
 
@@ -657,7 +837,7 @@ Create a simple linear workflow with automatic step chaining.
 
 #### Defined in
 
-[src/workflow-builder.ts:304](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/workflow-builder.ts#L304)
+[src/workflow-builder.ts:304](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/workflow-builder.ts#L304)
 
 ---
 
@@ -677,7 +857,7 @@ Create a simple linear workflow with automatic step chaining.
 
 #### Defined in
 
-[src/workflow-validation.ts:80](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/workflow-validation.ts#L80)
+[src/workflow-validation.ts:80](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/workflow-validation.ts#L80)
 
 ---
 
@@ -700,7 +880,7 @@ Returns { network: BigInt, prefixLength: number, isIPv6: boolean } or null
 
 #### Defined in
 
-[src/utils/cidr.ts:93](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/utils/cidr.ts#L93)
+[src/utils/cidr.ts:93](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/cidr.ts#L93)
 
 ---
 
@@ -723,7 +903,7 @@ Returns { value: BigInt, isIPv6: boolean } or null if invalid
 
 #### Defined in
 
-[src/utils/cidr.ts:69](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/utils/cidr.ts#L69)
+[src/utils/cidr.ts:69](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/cidr.ts#L69)
 
 ---
 
@@ -745,7 +925,7 @@ Parse an IPv4 address into a BigInt representation
 
 #### Defined in
 
-[src/utils/cidr.ts:9](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/utils/cidr.ts#L9)
+[src/utils/cidr.ts:9](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/cidr.ts#L9)
 
 ---
 
@@ -768,7 +948,7 @@ Handles full, compressed (::), and IPv4-mapped formats
 
 #### Defined in
 
-[src/utils/cidr.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/utils/cidr.ts#L26)
+[src/utils/cidr.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/utils/cidr.ts#L26)
 
 ---
 
@@ -793,7 +973,7 @@ Synthesize a routingWeights map from per-tag reward statistics.
 
 #### Defined in
 
-[src/learning/auto-weights.ts:37](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/learning/auto-weights.ts#L37)
+[src/learning/auto-weights.ts:37](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/learning/auto-weights.ts#L37)
 
 ---
 
@@ -813,7 +993,7 @@ Synthesize a routingWeights map from per-tag reward statistics.
 
 #### Defined in
 
-[src/workflow-validation.ts:30](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/workflow-validation.ts#L30)
+[src/workflow-validation.ts:30](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/workflow-validation.ts#L30)
 
 ---
 
@@ -836,4 +1016,4 @@ Convenience function to create a new workflow builder.
 
 #### Defined in
 
-[src/workflow-builder.ts:294](https://github.com/ViljarVoidula/assignment-user-matcher/blob/d4f8d56dce2452af0f96c1a85e94fb29dbe2afd5/src/workflow-builder.ts#L294)
+[src/workflow-builder.ts:294](https://github.com/ViljarVoidula/assignment-user-matcher/blob/fb907b9fa03f8b108af924838157f4245941a522/src/workflow-builder.ts#L294)
