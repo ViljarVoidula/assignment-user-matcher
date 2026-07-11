@@ -287,7 +287,7 @@ Adds a new assignment to be matched.
 
 ### `matchUsersAssignments(): Promise<void>`
 
-Triggers the matching process. This method iterates through pending assignments and tries to match them with suitable, available users based on tags and user backlog capacity.
+Triggers the matching process. This method iterates through pending assignments and tries to match them with suitable, available users based on tags and user backlog capacity. With no `userId`, every eligible user is evaluated in parallel by default and contested assignments go to whoever's claim resolves first - see the `fairness` option in [Options](#options) to make the best-scoring candidate win deterministically (`'best-match'`), or to additionally balance load across users (`'balanced'`, `'spread-work'`).
 
 ### `getCurrentAssignmentsForUser(userId: string): Promise<Assignment[]>`
 
@@ -364,6 +364,51 @@ type Options = {
     // Use `startIdleUserInterval(intervalMs)` / `stopIdleUserInterval()` to run
     // the check periodically. Disabled when undefined (default).
     idleUserTimeoutMs?: number; // Default: undefined (disabled)
+
+    // Who wins when several users are eligible for the same assignment
+    // during bulk matching (matchUsersAssignments() with no userId)?
+    //   'first-come'  - whoever's claim reaches Redis first (fastest; the
+    //                   winner is arbitrary). This is the default.
+    //   'best-match'  - the highest-scoring eligible user, deterministically.
+    //   'balanced'    - best match wins, but near-ties (within ~5% of the
+    //                   typical candidate score) go to whoever has less work.
+    //   'spread-work' - work is spread as evenly as skills allow: every
+    //                   assignment already on someone's plate discounts their
+    //                   next bid by half the typical candidate score, so
+    //                   finishing work fast never just means drowning in more.
+    // The numbers behind 'balanced' / 'spread-work' are derived automatically
+    // from each matching pass's candidate scores - nothing to calibrate. Both
+    // also include an hourly guardrail by default: nobody receives at more
+    // than double the team's average grant rate (see fairnessMaxPerWindow).
+    // Switchable at runtime via `setFairness(mode)` / `getFairness()`.
+    fairness?: 'first-come' | 'best-match' | 'balanced' | 'spread-work'; // Default: 'first-come'
+
+    // Hard ceiling on how many assignments one user can be *granted* within a
+    // rolling time window, in any fairness mode other than 'first-come'. The
+    // backlog cap alone can't protect diligent users: fast workers keep
+    // freeing backlog slots and keep winning, so speed is rewarded with ever
+    // more work. This counts grants regardless of how quickly they were
+    // cleared; at the cap, contested work spills to the next-best eligible
+    // user (or stays queued) until the window rolls. Workflow-targeted
+    // assignments are direct handoffs and bypass the cap.
+    // Left undefined, the 'balanced' / 'spread-work' presets default it to a
+    // team-relative guardrail - max(maxUserBacklogSize, 2x the team's average
+    // grants in the window), recomputed each pass, so it adapts to any
+    // deployment's volume. Set a number to pin the ceiling, or Infinity to
+    // disable the window cap entirely.
+    fairnessMaxPerWindow?: number; // Default: auto for 'balanced'/'spread-work', else disabled
+    fairnessWindowMs?: number; // Default: 3600000 (one hour)
+
+    // Expert alternative to `fairness` - the raw switches behind it:
+    // enableFairTiebreaker is exactly `fairness: 'best-match'` when true;
+    // fairnessLoadPenalty is an absolute score discount per assignment
+    // already on a user's backlog, and fairnessTieBand treats scores in the
+    // same band-sized bucket as tied (less-loaded user wins). Explicit values
+    // here override what a `fairness` preset would derive. Runtime toggles:
+    // `setFairTiebreaker(enabled)` / `isFairTiebreakerEnabled()`.
+    enableFairTiebreaker?: boolean; // Default: false
+    fairnessLoadPenalty?: number; // Default: 0 (off)
+    fairnessTieBand?: number; // Default: 0 (off)
 
     // A custom function to determine the priority of an assignment.
     // The function receives assignment objects (or undefined if fewer than 3 are available for comparison)

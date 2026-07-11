@@ -15,6 +15,7 @@ import {
     type AssignmentCounts,
 } from './queries/pagination';
 import { calculateMatchScore, calculateDefaultPriority } from './scoring/match-score';
+import { arbitrateFair, resolveFairnessKnobs } from './scoring/fair-arbitration';
 import { extractMatchFeatures } from './learning/features';
 import { LearningManager } from './managers/LearningManager';
 import { ReliabilityManager } from './managers/ReliabilityManager';
@@ -48,6 +49,7 @@ import type {
     ReliabilityMetrics,
     CircuitBreakerState,
     WorkflowEngineMetrics,
+    FairnessMode,
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
@@ -59,6 +61,7 @@ export type {
     PendingAssignmentInfo,
     MatcherOptions,
     options,
+    FairnessMode,
     GeoMatchResult,
     GeoMatchingFunction,
     ReliabilityMetrics,
@@ -159,6 +162,12 @@ export default class AssignmentMatcher implements WorkflowHost {
     private geoDefaultMaxDistanceKm?: number;
     private geoScoreWeight: number;
     private geoMatchingFunction?: GeoMatchingFunction;
+    private enableFairTiebreaker: boolean;
+    private fairnessMode?: FairnessMode;
+    private fairnessLoadPenalty: number;
+    private fairnessTieBand: number;
+    private fairnessMaxPerWindow?: number;
+    private fairnessWindowMs: number;
 
     constructor(
         public redisClient: RedisClientType,
@@ -190,6 +199,13 @@ export default class AssignmentMatcher implements WorkflowHost {
         this.geoDefaultMaxDistanceKm = options?.geoDefaultMaxDistanceKm;
         this.geoScoreWeight = options?.geoScoreWeight ?? 0;
         this.geoMatchingFunction = options?.geoMatchingFunction;
+        this.enableFairTiebreaker = options?.enableFairTiebreaker ?? false;
+        this.fairnessMode = options?.fairness;
+        if (this.fairnessMode) this.enableFairTiebreaker = this.fairnessMode !== 'first-come';
+        this.fairnessLoadPenalty = options?.fairnessLoadPenalty ?? 0;
+        this.fairnessTieBand = options?.fairnessTieBand ?? 0;
+        this.fairnessMaxPerWindow = options?.fairnessMaxPerWindow;
+        this.fairnessWindowMs = options?.fairnessWindowMs ?? 3600000;
 
         // Workflow options
         this.enableWorkflows = options?.enableWorkflows ?? false;
@@ -513,6 +529,34 @@ export default class AssignmentMatcher implements WorkflowHost {
     async getLearningShadowMode(): Promise<boolean> {
         await this.readyPromise;
         return this.learning.shadowMode;
+    }
+
+    /**
+     * Toggle fair-tiebreaker global best-match arbitration at runtime.
+     * See `MatcherOptions.enableFairTiebreaker` for what this changes.
+     */
+    setFairTiebreaker(enabled: boolean): void {
+        this.enableFairTiebreaker = !!enabled;
+    }
+
+    /** Current runtime fair-tiebreaker state. */
+    isFairTiebreakerEnabled(): boolean {
+        return this.enableFairTiebreaker;
+    }
+
+    /**
+     * Switch the bulk-matching fairness policy at runtime. See
+     * `MatcherOptions.fairness` for what each mode does.
+     */
+    setFairness(mode: FairnessMode): void {
+        this.fairnessMode = mode;
+        this.enableFairTiebreaker = mode !== 'first-come';
+    }
+
+    /** Current runtime fairness policy. */
+    getFairness(): FairnessMode {
+        if (!this.enableFairTiebreaker) return 'first-come';
+        return this.fairnessMode ?? 'best-match';
     }
 
     // ============================================================================
@@ -1006,7 +1050,30 @@ export default class AssignmentMatcher implements WorkflowHost {
         return relevantAssignments.map((assignment) => ({ id: assignment.id, priority }));
     }
 
-    private async getUserRelatedAssignments(user: User) {
+    /**
+     * Read-only candidate discovery for one user: workflow-targeted lookups,
+     * the weighted per-tag zset union/diff, and per-candidate scoring
+     * (learning-influenced or plain, matching the existing behavior exactly).
+     * Does NOT claim anything - see claimSelected() for that. Split out so
+     * matchAllUsersFair() can evaluate every user's candidates before any of
+     * them claim, enabling global (cross-user) score comparison.
+     *
+     * `capToBacklog` (default true, matching prior inline behavior): stop
+     * scoring once this user's own maxUserBacklogSize worth of candidates has
+     * been found. matchAllUsersFair() passes false - capping per-user during
+     * discovery would silently drop a user's lower-priority candidates before
+     * global arbitration ever runs, e.g. a user whose top picks all lose to a
+     * higher scorer should still be considered for their next-best options,
+     * not left with nothing because discovery stopped early.
+     */
+    private async computeCandidatesForUser(
+        user: User,
+        capToBacklog = true,
+    ): Promise<{
+        userAssignments: Array<{ id: string; priority: number }>;
+        selected: Array<{ id: string; tags: string }>;
+        workflowTargetedCount: number;
+    }> {
         const userAssignments: Array<{ id: string; priority: number }> = [];
         const routingWeights = user.routingWeights;
         const hasRoutingWeights = Boolean(routingWeights && Object.keys(routingWeights).length > 0);
@@ -1018,7 +1085,7 @@ export default class AssignmentMatcher implements WorkflowHost {
                 // Workflow assignments take precedence - add them first with highest priority
                 userAssignments.push(...workflowAssignments);
                 if (userAssignments.length >= this.maxUserBacklogSize) {
-                    return userAssignments;
+                    return { userAssignments, selected: [], workflowTargetedCount: userAssignments.length };
                 }
             }
         }
@@ -1056,10 +1123,10 @@ export default class AssignmentMatcher implements WorkflowHost {
         // In weighted default matching, users must define at least one positive weight.
         // If they don't, nothing should be assigned and queue remains intact.
         if (hasRoutingWeights && this.usingDefaultMatchScore && positiveWeights.length === 0) {
-            return userAssignments;
+            return { userAssignments, selected: [], workflowTargetedCount };
         }
 
-        if (positiveWeights.length === 0) return userAssignments;
+        if (positiveWeights.length === 0) return { userAssignments, selected: [], workflowTargetedCount };
 
         // Expand wildcards
         const expandedPositive = await this.expandTagWildcards(positiveWeights);
@@ -1068,7 +1135,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             : [];
         const finalZeroTags = expandedZero.map((t) => t.tag);
 
-        if (expandedPositive.length === 0) return userAssignments;
+        if (expandedPositive.length === 0) return { userAssignments, selected: [], workflowTargetedCount };
 
         const tempKey = this.keys.tempUserCandidates(user.id);
         const tempZeroKey = this.keys.tempUserExclude(user.id);
@@ -1114,7 +1181,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         // Pull top-N in ascending score to preserve previous behavior on ties (lex ascending)
         const top = await this.redisClient.zRangeWithScores(tempFinalKey, 0, this.relevantBatchSize - 1);
 
-        if (top.length === 0) return userAssignments;
+        if (top.length === 0) return { userAssignments, selected: [], workflowTargetedCount };
 
         // Fetch per-assignment stored (base) priority and tags in a single pipeline (fewer round trips)
         const batched = this.redisClient.multi();
@@ -1208,7 +1275,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             eligible.sort((a, b) => b.effectivePriority - a.effectivePriority);
 
             for (const c of eligible) {
-                if (userAssignments.length >= this.maxUserBacklogSize) break;
+                if (capToBacklog && userAssignments.length >= this.maxUserBacklogSize) break;
                 userAssignments.push({ id: c.detail.id, priority: c.effectivePriority });
                 selected.push({ id: c.detail.id, tags: c.detail.tags });
                 await this.learning.recordDecision(
@@ -1221,7 +1288,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             }
         } else {
             for (const d of details) {
-                if (userAssignments.length >= this.maxUserBacklogSize) break;
+                if (capToBacklog && userAssignments.length >= this.maxUserBacklogSize) break;
 
                 // Check CIDR restrictions: if assignment has allowedCidrs, user must have matching IP
                 if (!checkCidrMatch(user.ip, d.allowedCidrs)) {
@@ -1248,64 +1315,313 @@ export default class AssignmentMatcher implements WorkflowHost {
             }
         }
 
-        // Claim, then clean up. The candidate read above (zDiffStore/zRangeWithScores)
-        // is a snapshot taken before this point, and getUserRelatedAssignments runs
-        // concurrently across users - matchUsersAssignments() Promise.all's the bulk
-        // path, and a per-user matchUsersAssignments(userId) call can race a bulk
-        // pass too. Without a single atomic gate, two concurrent callers can both
-        // still see the same assignment as available and both hand it to their user.
-        // HDEL on assignmentsRefKey is atomic and idempotent (returns 1 only for
-        // whichever caller actually deletes the field), so it's used here as that
-        // gate: only assignments this call actually wins are kept: anything already
-        // claimed by a concurrent caller since the snapshot read is dropped instead
-        // of being double-assigned.
+        return { userAssignments, selected, workflowTargetedCount };
+    }
+
+    /**
+     * Atomically claims a set of tag-scored candidate assignments for one
+     * user and returns which ones it actually won. The candidate read that
+     * produces `selected` (zDiffStore/zRangeWithScores in
+     * computeCandidatesForUser) is a snapshot taken before this point, and
+     * candidate computation runs concurrently across users -
+     * matchUsersAssignments() Promise.all's the bulk path, and a per-user
+     * matchUsersAssignments(userId) call can race a bulk pass too. Without a
+     * single atomic gate, two concurrent callers can both still see the same
+     * assignment as available and both hand it to their user. HDEL on
+     * assignmentsRefKey is atomic and idempotent (returns 1 only for
+     * whichever caller actually deletes the field), so it's used here as
+     * that gate: only assignments this call actually wins are kept - anything
+     * already claimed by a concurrent caller since the snapshot read is
+     * dropped instead of being double-assigned.
+     */
+    private async claimSelected(user: User, selected: Array<{ id: string; tags: string }>): Promise<Set<string>> {
         const claimedIds = new Set<string>();
-        if (selected.length > 0) {
-            const jsonPromises = selected.map((s) => this.redisClient.hGet(this.assignmentsRefKey, s.id));
-            const jsons = await Promise.all(jsonPromises);
-            const now = Date.now();
+        if (selected.length === 0) return claimedIds;
 
-            const claimMulti = this.redisClient.multi();
-            for (const s of selected) {
-                claimMulti.hDel(this.assignmentsRefKey, s.id);
-            }
-            const claimResults = (await claimMulti.exec()) as unknown as number[];
-            for (let i = 0; i < selected.length; i++) {
-                if (Number(claimResults[i]) > 0) claimedIds.add(selected[i].id);
-            }
+        const jsonPromises = selected.map((s) => this.redisClient.hGet(this.assignmentsRefKey, s.id));
+        const jsons = await Promise.all(jsonPromises);
+        const now = Date.now();
 
-            if (claimedIds.size > 0) {
-                const rm = this.redisClient.multi();
-                for (let i = 0; i < selected.length; i++) {
-                    const s = selected[i];
-                    if (!claimedIds.has(s.id)) continue; // lost the race - already claimed elsewhere
-                    const json = jsons[i];
-
-                    rm.del(this.keys.assignmentPriority(s.id));
-                    rm.del(this.keys.assignmentTags(s.id));
-                    // Remove from global zset
-                    rm.zRem(this.assignmentsKey, s.id);
-                    // Remove from per-tag zsets
-                    const tags = (s.tags ? s.tags.split(',').filter(Boolean) : []) as string[];
-                    for (const tag of tags) {
-                        rm.zRem(this.keys.tagAssignments(tag), s.id);
-                    }
-
-                    // Add to pending structures
-                    if (json) {
-                        rm.hSet(this.pendingAssignmentsKey, s.id, json);
-                        rm.zAdd(this.pendingAssignmentsExpiryKey, { score: now + this.matchExpirationMs, value: s.id });
-                        rm.hSet(this.assignmentOwnerKey, s.id, user.id);
-                    }
-                }
-                await rm.exec();
-            }
+        const claimMulti = this.redisClient.multi();
+        for (const s of selected) {
+            claimMulti.hDel(this.assignmentsRefKey, s.id);
+        }
+        const claimResults = (await claimMulti.exec()) as unknown as number[];
+        for (let i = 0; i < selected.length; i++) {
+            if (Number(claimResults[i]) > 0) claimedIds.add(selected[i].id);
         }
 
+        if (claimedIds.size > 0) {
+            const rm = this.redisClient.multi();
+            for (let i = 0; i < selected.length; i++) {
+                const s = selected[i];
+                if (!claimedIds.has(s.id)) continue; // lost the race - already claimed elsewhere
+                const json = jsons[i];
+
+                rm.del(this.keys.assignmentPriority(s.id));
+                rm.del(this.keys.assignmentTags(s.id));
+                // Remove from global zset
+                rm.zRem(this.assignmentsKey, s.id);
+                // Remove from per-tag zsets
+                const tags = (s.tags ? s.tags.split(',').filter(Boolean) : []) as string[];
+                for (const tag of tags) {
+                    rm.zRem(this.keys.tagAssignments(tag), s.id);
+                }
+
+                // Add to pending structures
+                if (json) {
+                    rm.hSet(this.pendingAssignmentsKey, s.id, json);
+                    rm.zAdd(this.pendingAssignmentsExpiryKey, { score: now + this.matchExpirationMs, value: s.id });
+                    rm.hSet(this.assignmentOwnerKey, s.id, user.id);
+                }
+            }
+            await rm.exec();
+        }
+
+        return claimedIds;
+    }
+
+    private async getUserRelatedAssignments(user: User) {
+        const { userAssignments, selected, workflowTargetedCount } = await this.computeCandidatesForUser(user);
+        const claimedIds = await this.claimSelected(user, selected);
         const workflowTargeted = userAssignments.slice(0, workflowTargetedCount);
         const tagScored = userAssignments.slice(workflowTargetedCount).filter((ua) => claimedIds.has(ua.id));
         return [...workflowTargeted, ...tagScored];
     }
+
+    /**
+     * Opt-in alternative to the default parallel bulk path (see
+     * MatcherOptions.enableFairTiebreaker): evaluates every user's eligible
+     * candidates first (read-only, nobody claims yet), flattens them into one
+     * global list sorted by score descending, then claims greedily in that
+     * order. This guarantees the best-fit eligible candidate wins each
+     * contested assignment, rather than whichever user's independent claim
+     * happened to reach Redis first.
+     *
+     * Known limitation: when combined with enableLearning, computeCandidatesForUser
+     * still records a bandit decision for every scored candidate at evaluation
+     * time, including ones that lose the global tiebreak here - the learning
+     * layer's per-user candidate ordering isn't itself part of the fairness
+     * comparison in this mode. Fine for the common case (fairness without
+     * learning), but a consumer combining both should be aware.
+     */
+    private async matchAllUsersFair(): Promise<void> {
+        let users: any[] = [];
+        let cursor = '0';
+        do {
+            const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.usersKey, cursor, { COUNT: 500 });
+            users.push(...entries.map((t: { field: string; value: string }) => JSON.parse(t.value)));
+            cursor = nextCursor;
+        } while (cursor !== '0');
+
+        // Rolling-window grant cap: an explicit finite fairnessMaxPerWindow
+        // always applies; the 'balanced' / 'spread-work' presets additionally
+        // default a team-relative guardrail when no explicit cap is given
+        // (fairnessMaxPerWindow: Infinity opts out of that too).
+        const explicitCap = this.fairnessMaxPerWindow;
+        const usesAutoCap =
+            explicitCap === undefined && (this.fairnessMode === 'balanced' || this.fairnessMode === 'spread-work');
+        const windowActive = usesAutoCap || (explicitCap !== undefined && Number.isFinite(explicitCap));
+        const windowStart = Date.now() - this.fairnessWindowMs;
+
+        // Phase 1: per-user backlog + window usage, one pipelined batch - the
+        // rolling cap costs one extra command per user here, not a round trip.
+        const usage = await Promise.all(
+            users.map(async (user) => {
+                const [backlog, grantsInWindow] = await Promise.all([
+                    this.redisClient.sCard(this.keys.userAssignments(user.id)),
+                    windowActive
+                        ? this.redisClient.zCount(this.keys.userWindowGrants(user.id), windowStart, '+inf')
+                        : Promise.resolve(0),
+                ]);
+                return { user, backlog, grantsInWindow };
+            }),
+        );
+
+        // The preset guardrail is scale-free on purpose: no fixed number fits
+        // every deployment, but "nobody receives at more than double the
+        // team's average rate" is safe anywhere. The maxUserBacklogSize floor
+        // keeps a cold-started (empty-window) team from throttling itself.
+        let windowCap = Infinity;
+        if (explicitCap !== undefined && Number.isFinite(explicitCap)) {
+            windowCap = explicitCap;
+        } else if (usesAutoCap) {
+            const totalGrants = usage.reduce((sum, u) => sum + u.grantsInWindow, 0);
+            windowCap = Math.max(this.maxUserBacklogSize, Math.ceil((2 * totalGrants) / Math.max(1, usage.length)));
+        }
+
+        // Phase 2: read-only candidate discovery for users with headroom.
+        const perUser = await Promise.all(
+            usage.map(async ({ user, backlog, grantsInWindow }) => {
+                const windowRemaining = windowActive ? Math.max(0, windowCap - grantsInWindow) : Infinity;
+
+                if (backlog >= this.maxUserBacklogSize) {
+                    return {
+                        user,
+                        backlog,
+                        windowRemaining,
+                        candidates: { userAssignments: [], selected: [], workflowTargetedCount: 0 },
+                    };
+                }
+                if (windowRemaining <= 0) {
+                    // No tag-scored grant can land this pass, so skip candidate
+                    // scoring - but workflow-targeted assignments are direct
+                    // handoffs that bypass the window cap and must still flow.
+                    const workflowAssignments = this.enableWorkflows
+                        ? await this.getWorkflowTargetedAssignments(user.id)
+                        : [];
+                    return {
+                        user,
+                        backlog,
+                        windowRemaining,
+                        candidates: {
+                            userAssignments: workflowAssignments,
+                            selected: [],
+                            workflowTargetedCount: workflowAssignments.length,
+                        },
+                    };
+                }
+                // capToBacklog=false: this user's full candidate set is needed for
+                // global arbitration below, not just as many as their own cap allows.
+                const candidates = await this.computeCandidatesForUser(user, false);
+                return { user, backlog, windowRemaining, candidates };
+            }),
+        );
+
+        // Workflow-targeted assignments are deterministically targeted at one
+        // user each - not contested across users - so claim them immediately,
+        // exactly like the non-fair path does.
+        await Promise.all(
+            perUser.map(({ user, candidates }) => {
+                const workflowOnly = candidates.userAssignments.slice(0, candidates.workflowTargetedCount);
+                if (workflowOnly.length === 0) return Promise.resolve(0);
+                return this.redisClient.sAdd(
+                    this.keys.userAssignments(user.id),
+                    workflowOnly.map((a) => `assignment:${a.id}`),
+                );
+            }),
+        );
+
+        // Flatten every user's tag-scored candidates into one global list of
+        // {user, assignment, score} pairs for cross-user arbitration.
+        const globalPairs: Array<{ user: any; userId: string; id: string; tags: string; priority: number }> = [];
+        for (const { user, candidates } of perUser) {
+            const priorityById = new Map(candidates.userAssignments.map((ua) => [ua.id, ua.priority]));
+            for (const s of candidates.selected) {
+                globalPairs.push({
+                    user,
+                    userId: user.id,
+                    id: s.id,
+                    tags: s.tags,
+                    priority: priorityById.get(s.id) ?? 0,
+                });
+            }
+        }
+
+        const backlogUsed = new Map<string, number>(
+            perUser.map(({ user, backlog, candidates }) => [user.id, backlog + candidates.workflowTargetedCount]),
+        );
+
+        // Fold the rolling-window cap into a per-user award ceiling: a user
+        // may take at most min(backlog headroom, window headroom) more
+        // tag-scored assignments this pass. Workflow-targeted grants above
+        // are exempt from the window but still occupy backlog.
+        let maxByUser: Map<string, number> | undefined;
+        if (windowActive) {
+            maxByUser = new Map(
+                perUser.map(({ user, backlog, windowRemaining, candidates }) => [
+                    user.id,
+                    backlog +
+                        candidates.workflowTargetedCount +
+                        Math.max(
+                            0,
+                            Math.min(this.maxUserBacklogSize - backlog - candidates.workflowTargetedCount, windowRemaining),
+                        ),
+                ]),
+            );
+        }
+
+        // Arbitrate winners in memory (see arbitrateFair for the ordering:
+        // best score wins, optionally load-penalized / tie-banded), then claim
+        // in one batched claimSelected() call per user (all users in parallel)
+        // rather than one claim round trip per pair - arbitration already
+        // decides who wins every contested assignment within this process, so
+        // per-pair claims would only re-discover that same answer at O(pairs)
+        // sequential Redis round trips. The atomic HDEL gate inside
+        // claimSelected() still protects against claims from OTHER processes:
+        // a failed claim means the assignment is gone entirely (a concurrent
+        // process won it), so the tentative winner's backlog slot is released
+        // and the remaining pairs are re-arbitrated in another round. In the
+        // common single-process case the first round claims everything and no
+        // further rounds run.
+        // A fairness preset ('balanced' / 'spread-work') derives its load
+        // penalty from this pass's candidate scores; explicit expert knobs
+        // always win over the preset.
+        const knobs = resolveFairnessKnobs(
+            this.fairnessMode,
+            globalPairs.map((p) => p.priority),
+            { loadPenalty: this.fairnessLoadPenalty, tieBand: this.fairnessTieBand },
+        );
+
+        const settled = new Set<string>();
+        let remaining = globalPairs;
+        while (remaining.length > 0) {
+            const { winners, deferred } = arbitrateFair(remaining, backlogUsed, settled, {
+                maxUserBacklogSize: this.maxUserBacklogSize,
+                maxByUser,
+                loadPenalty: knobs.loadPenalty,
+                tieBand: knobs.tieBand,
+            });
+
+            const tentative = new Map<string, { user: any; pairs: Array<{ id: string; tags: string }> }>();
+            for (const w of winners) {
+                const bucket = tentative.get(w.userId) ?? { user: w.user, pairs: [] };
+                bucket.pairs.push({ id: w.id, tags: w.tags });
+                tentative.set(w.userId, bucket);
+            }
+
+            if (tentative.size === 0) break;
+
+            let anyLost = false;
+            await Promise.all(
+                Array.from(tentative.values()).map(async ({ user, pairs }) => {
+                    const claimedIds = await this.claimSelected(user, pairs);
+                    const won = pairs.filter((p) => claimedIds.has(p.id));
+                    if (won.length < pairs.length) {
+                        anyLost = true;
+                        backlogUsed.set(user.id, (backlogUsed.get(user.id) ?? 0) - (pairs.length - won.length));
+                    }
+                    // Won or lost, the assignment is no longer available to anyone.
+                    for (const p of pairs) settled.add(p.id);
+                    if (won.length > 0) {
+                        const grantMulti = this.redisClient.multi();
+                        grantMulti.sAdd(
+                            this.keys.userAssignments(user.id),
+                            won.map((p) => `assignment:${p.id}`),
+                        );
+                        if (windowActive) {
+                            // Rolling-window bookkeeping: trim entries that
+                            // have aged out, record these grants, and let the
+                            // whole set expire if the user goes idle.
+                            const grantsKey = this.keys.userWindowGrants(user.id);
+                            const now = Date.now();
+                            grantMulti.zRemRangeByScore(grantsKey, '-inf', now - this.fairnessWindowMs);
+                            grantMulti.zAdd(
+                                grantsKey,
+                                won.map((p) => ({ score: now, value: `${now}:${p.id}` })),
+                            );
+                            grantMulti.pExpire(grantsKey, this.fairnessWindowMs);
+                        }
+                        await grantMulti.exec();
+                    }
+                }),
+            );
+
+            if (!anyLost) break;
+            remaining = deferred.filter((pair) => !settled.has(pair.id));
+        }
+    }
+
     async matchUsersAssignments(userId?: string): Promise<void> {
         await this.readyPromise;
 
@@ -1328,13 +1644,17 @@ export default class AssignmentMatcher implements WorkflowHost {
             return;
         }
 
+        if (this.enableFairTiebreaker) {
+            return this.matchAllUsersFair();
+        }
+
         // Otherwise, process all users in parallel as before.
         let users: any[] = [];
         let cursor = '0';
 
         // Fetch all users in a single loop
         do {
-            const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.usersKey, cursor);
+            const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.usersKey, cursor, { COUNT: 500 });
             users.push(...entries.map((t: { field: string; value: string }) => JSON.parse(t.value)));
             cursor = nextCursor;
         } while (cursor !== '0');

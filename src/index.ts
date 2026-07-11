@@ -10,6 +10,7 @@ export type {
     GeoMatchingFunction,
     ReliabilityMetrics,
     AssignmentStatus,
+    FairnessMode,
 } from './matcher.class';
 
 // Workflow type exports

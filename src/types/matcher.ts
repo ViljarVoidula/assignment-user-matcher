@@ -70,6 +70,12 @@ export type PendingAssignmentInfo = {
     expiresAt: number | null;
 };
 
+/**
+ * Bulk-matching fairness policy. See `MatcherOptions.fairness` for what each
+ * value does.
+ */
+export type FairnessMode = 'first-come' | 'best-match' | 'balanced' | 'spread-work';
+
 export type MatcherOptions = {
     relevantBatchSize?: number;
     redisPrefix?: string;
@@ -92,6 +98,100 @@ export type MatcherOptions = {
         assignmentId?: string,
         skillThresholds?: Record<string, number>,
     ) => Promise<[number, number]>;
+    /**
+     * Opt-in global best-match arbitration for bulk matching (default: false,
+     * preserving existing behavior). When `matchUsersAssignments()` is called
+     * with no userId, every eligible user is normally evaluated in parallel
+     * and independently claims every assignment they qualify for — when two
+     * or more users are eligible for the same assignment, whichever user's
+     * claim reaches Redis first wins, regardless of their relative score.
+     * With this enabled, candidates are instead collected across *all* users
+     * first, sorted by score descending, and claimed greedily in that order —
+     * so the best-fit eligible candidate wins each assignment deterministically.
+     * Uses plain weighted-tag/geo score (the same formula as the non-learning
+     * path) as the fairness comparator; the contextual-bandit learning layer,
+     * if enabled, still re-ranks each user's own accepted backlog ordering but
+     * does not influence which user wins a contested assignment in this mode.
+     */
+    enableFairTiebreaker?: boolean;
+    /**
+     * One-word fairness policy for bulk matching — the friendly alternative
+     * to tuning `enableFairTiebreaker` / `fairnessLoadPenalty` /
+     * `fairnessTieBand` by hand:
+     *
+     * - `'first-come'` (default): whoever's claim reaches Redis first wins a
+     *   contested assignment — fastest, but the winner is arbitrary.
+     * - `'best-match'`: the highest-scoring eligible user wins every
+     *   contested assignment, deterministically.
+     * - `'balanced'`: best match wins, but near-ties (scores within ~5% of
+     *   the typical candidate score) go to whoever is carrying less work.
+     * - `'spread-work'`: work is spread as evenly as skills allow — each
+     *   assignment already on someone's plate discounts their next bid by
+     *   half the typical candidate score, so being good (and fast) doesn't
+     *   mean drowning in work while capable teammates sit idle.
+     *
+     * The underlying numbers are derived automatically from the candidate
+     * scores of each matching pass, so there is nothing to calibrate.
+     * `'balanced'` and `'spread-work'` also include a rolling-window
+     * guardrail by default: nobody receives at more than double the team's
+     * average grant rate over `fairnessWindowMs` (one hour unless changed) —
+     * see `fairnessMaxPerWindow` to set an explicit ceiling instead, or pass
+     * `Infinity` there to opt out.
+     * Setting `fairnessLoadPenalty` / `fairnessTieBand` explicitly overrides
+     * the derived values; setting `fairness` overrides
+     * `enableFairTiebreaker`. Switchable at runtime via `setFairness(mode)`.
+     */
+    fairness?: FairnessMode;
+    /**
+     * Hard cap on how many assignments a single user may be granted within a
+     * rolling time window (default: undefined, disabled; applies in any
+     * `fairness` mode other than `'first-come'`). The backlog cap alone can't
+     * protect diligent users: someone who accepts and completes work quickly
+     * keeps freeing backlog slots and keeps winning, so speed is rewarded
+     * with ever more work. This cap counts *granted* assignments over
+     * `fairnessWindowMs` regardless of how fast they were cleared; once a
+     * user hits it, contested assignments spill to the next-best eligible
+     * user (or stay queued) until the window rolls. Workflow-targeted
+     * assignments are direct handoffs and bypass the cap so workflows never
+     * stall.
+     *
+     * When left undefined, the `'balanced'` / `'spread-work'` presets supply
+     * a team-relative guardrail automatically: `max(maxUserBacklogSize,
+     * 2 x the team's average grants in the window)`, recomputed each pass, so
+     * it adapts to any deployment's volume without configuration. Set an
+     * explicit number to pin the ceiling, or `Infinity` to disable the
+     * window cap entirely.
+     */
+    fairnessMaxPerWindow?: number;
+    /**
+     * Rolling window length in milliseconds for `fairnessMaxPerWindow`
+     * (default: 3600000 — one hour).
+     */
+    fairnessWindowMs?: number;
+    /**
+     * Load-penalized scoring for fair-tiebreaker arbitration (default: 0,
+     * disabled; requires `enableFairTiebreaker`). Each assignment already on
+     * a user's backlog — including ones won earlier in the same matching
+     * pass — subtracts this amount from their effective score when competing
+     * for the next contested assignment. Pure best-score-wins arbitration
+     * otherwise saturates the top scorer to `maxUserBacklogSize` every pass;
+     * a penalty makes distribution progressive: the specialist still wins
+     * their first picks, but once loaded they lose marginal contests to an
+     * idle, still-capable candidate. Pick a value relative to your score
+     * scale (base priority + summed routing weights).
+     */
+    fairnessLoadPenalty?: number;
+    /**
+     * Tie-band arbitration for fair-tiebreaker mode (default: 0, disabled;
+     * requires `enableFairTiebreaker`). Candidate scores falling in the same
+     * band-sized bucket (`floor(score / fairnessTieBand)`) are treated as
+     * tied, and the tie goes to the user currently carrying the least work.
+     * Scores in different buckets still resolve strictly by score, so clear
+     * skill differences always dominate — only near-ties get load-balanced.
+     * Note the bucket boundaries are fixed, so two scores less than a band
+     * apart can still straddle a boundary and resolve by score.
+     */
+    fairnessTieBand?: number;
     /** Enable distance-based geolocation matching (default: false) */
     enableGeoMatching?: boolean;
     /** Global fallback cap in kilometers when assignment/user-specific caps are absent */
