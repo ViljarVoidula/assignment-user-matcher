@@ -22,8 +22,8 @@
 
 #### Parameters
 
-| Name         | Type                                     |
-| :----------- | :--------------------------------------- |
+| Name | Type |
+| :------ | :------ |
 | `assignment` | [`Assignment`](../modules.md#assignment) |
 
 #### Returns
@@ -32,9 +32,9 @@
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:25](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/managers/WorkflowManager.ts#L25)
+[src/managers/WorkflowManager.ts:25](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/managers/WorkflowManager.ts#L25)
 
----
+___
 
 ### executeMachineTask
 
@@ -42,12 +42,12 @@
 
 #### Parameters
 
-| Name              | Type                                          |
-| :---------------- | :-------------------------------------------- |
-| `args`            | `Object`                                      |
+| Name | Type |
+| :------ | :------ |
+| `args` | `Object` |
 | `args.definition` | [`WorkflowDefinition`](WorkflowDefinition.md) |
-| `args.instance`   | [`WorkflowInstance`](WorkflowInstance.md)     |
-| `args.step`       | [`WorkflowStep`](WorkflowStep.md)             |
+| `args.instance` | [`WorkflowInstance`](WorkflowInstance.md) |
+| `args.step` | [`WorkflowStep`](WorkflowStep.md) |
 
 #### Returns
 
@@ -55,9 +55,9 @@
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/managers/WorkflowManager.ts#L27)
+[src/managers/WorkflowManager.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/managers/WorkflowManager.ts#L27)
 
----
+___
 
 ### matchUsersAssignments
 
@@ -65,8 +65,8 @@
 
 #### Parameters
 
-| Name     | Type     |
-| :------- | :------- |
+| Name | Type |
+| :------ | :------ |
 | `userId` | `string` |
 
 #### Returns
@@ -75,4 +75,4 @@
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/managers/WorkflowManager.ts#L26)
+[src/managers/WorkflowManager.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/managers/WorkflowManager.ts#L26)

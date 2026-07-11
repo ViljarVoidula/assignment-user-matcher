@@ -76,6 +76,24 @@ export type PendingAssignmentInfo = {
  */
 export type FairnessMode = 'first-come' | 'best-match' | 'balanced' | 'spread-work';
 
+/**
+ * Runtime-mutable subset of the bulk-matching fairness knobs. Pass any subset
+ * to `AssignmentMatcher.setFairnessConfig()` to retune fairness without
+ * reconstructing the matcher; each field carries the same semantics as the
+ * identically-named `MatcherOptions` field and is picked up on the next
+ * `matchUsersAssignments()` call. Absent fields are left unchanged; pass
+ * `fairness` or `fairnessMaxPerWindow` as `undefined` explicitly to clear them
+ * back to their auto-derived behavior.
+ */
+export interface FairnessConfig {
+    fairness?: FairnessMode;
+    enableFairTiebreaker?: boolean;
+    fairnessLoadPenalty?: number;
+    fairnessTieBand?: number;
+    fairnessMaxPerWindow?: number;
+    fairnessWindowMs?: number;
+}
+
 export type MatcherOptions = {
     relevantBatchSize?: number;
     redisPrefix?: string;
@@ -139,7 +157,9 @@ export type MatcherOptions = {
      * `Infinity` there to opt out.
      * Setting `fairnessLoadPenalty` / `fairnessTieBand` explicitly overrides
      * the derived values; setting `fairness` overrides
-     * `enableFairTiebreaker`. Switchable at runtime via `setFairness(mode)`.
+     * `enableFairTiebreaker`. Switchable at runtime via `setFairness(mode)`;
+     * every fairness knob (not just the mode) can be retuned live with
+     * `setFairnessConfig(config)`.
      */
     fairness?: FairnessMode;
     /**

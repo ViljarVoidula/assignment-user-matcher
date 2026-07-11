@@ -11,6 +11,7 @@ export type {
     ReliabilityMetrics,
     AssignmentStatus,
     FairnessMode,
+    FairnessConfig,
 } from './matcher.class';
 
 // Workflow type exports

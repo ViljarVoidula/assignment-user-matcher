@@ -380,7 +380,10 @@ type Options = {
     // from each matching pass's candidate scores - nothing to calibrate. Both
     // also include an hourly guardrail by default: nobody receives at more
     // than double the team's average grant rate (see fairnessMaxPerWindow).
-    // Switchable at runtime via `setFairness(mode)` / `getFairness()`.
+    // Switchable at runtime via `setFairness(mode)` / `getFairness()`, or
+    // retune every fairness knob below at once with
+    // `setFairnessConfig(partial)` / `getFairnessConfig()` - changes apply on
+    // the next `matchUsersAssignments()` call, no reconstruction needed.
     fairness?: 'first-come' | 'best-match' | 'balanced' | 'spread-work'; // Default: 'first-come'
 
     // Hard ceiling on how many assignments one user can be *granted* within a

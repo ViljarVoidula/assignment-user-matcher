@@ -22,9 +22,9 @@ Number of consecutive failures
 
 #### Defined in
 
-[src/types/matcher.ts:539](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/types/matcher.ts#L539)
+[src/types/matcher.ts:559](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L559)
 
----
+___
 
 ### lastFailureTime
 
@@ -34,16 +34,16 @@ Timestamp of last failure
 
 #### Defined in
 
-[src/types/matcher.ts:541](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/types/matcher.ts#L541)
+[src/types/matcher.ts:561](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L561)
 
----
+___
 
 ### state
 
-• **state**: `"closed"` \| `"open"` \| `"half-open"`
+• **state**: ``"closed"`` \| ``"open"`` \| ``"half-open"``
 
 Current state of the circuit breaker
 
 #### Defined in
 
-[src/types/matcher.ts:537](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/types/matcher.ts#L537)
+[src/types/matcher.ts:557](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L557)

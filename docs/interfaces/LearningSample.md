@@ -19,9 +19,9 @@ Raw training sample for offline/batch model updates
 
 #### Defined in
 
-[src/types/matcher.ts:621](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/types/matcher.ts#L621)
+[src/types/matcher.ts:641](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L641)
 
----
+___
 
 ### reward
 
@@ -29,4 +29,4 @@ Raw training sample for offline/batch model updates
 
 #### Defined in
 
-[src/types/matcher.ts:622](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/types/matcher.ts#L622)
+[src/types/matcher.ts:642](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L642)

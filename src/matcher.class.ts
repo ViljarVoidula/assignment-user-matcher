@@ -50,6 +50,7 @@ import type {
     CircuitBreakerState,
     WorkflowEngineMetrics,
     FairnessMode,
+    FairnessConfig,
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
@@ -62,6 +63,7 @@ export type {
     MatcherOptions,
     options,
     FairnessMode,
+    FairnessConfig,
     GeoMatchResult,
     GeoMatchingFunction,
     ReliabilityMetrics,
@@ -545,18 +547,57 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     /**
-     * Switch the bulk-matching fairness policy at runtime. See
-     * `MatcherOptions.fairness` for what each mode does.
+     * Switch the bulk-matching fairness policy at runtime — shorthand for
+     * `setFairnessConfig({ fairness: mode })`. See `MatcherOptions.fairness`
+     * for what each mode does.
      */
     setFairness(mode: FairnessMode): void {
-        this.fairnessMode = mode;
-        this.enableFairTiebreaker = mode !== 'first-come';
+        this.setFairnessConfig({ fairness: mode });
+    }
+
+    /**
+     * Retune any subset of the bulk-matching fairness knobs at runtime without
+     * reconstructing the matcher. Absent fields are left unchanged; the new
+     * values take effect on the next `matchUsersAssignments()` call (a match
+     * already in flight keeps the values it started with). Merge semantics
+     * mirror the constructor exactly — in particular, an explicit `fairness`
+     * overrides `enableFairTiebreaker`. See `MatcherOptions` for each field.
+     */
+    setFairnessConfig(config: FairnessConfig): void {
+        if ('enableFairTiebreaker' in config) this.enableFairTiebreaker = !!config.enableFairTiebreaker;
+        if ('fairness' in config) {
+            this.fairnessMode = config.fairness;
+            if (this.fairnessMode) this.enableFairTiebreaker = this.fairnessMode !== 'first-come';
+        }
+        if ('fairnessLoadPenalty' in config) this.fairnessLoadPenalty = config.fairnessLoadPenalty ?? 0;
+        if ('fairnessTieBand' in config) this.fairnessTieBand = config.fairnessTieBand ?? 0;
+        if ('fairnessMaxPerWindow' in config) this.fairnessMaxPerWindow = config.fairnessMaxPerWindow;
+        if ('fairnessWindowMs' in config) this.fairnessWindowMs = config.fairnessWindowMs ?? 3600000;
     }
 
     /** Current runtime fairness policy. */
     getFairness(): FairnessMode {
         if (!this.enableFairTiebreaker) return 'first-come';
         return this.fairnessMode ?? 'best-match';
+    }
+
+    /** Snapshot of the live fairness configuration. */
+    getFairnessConfig(): {
+        fairness: FairnessMode;
+        enableFairTiebreaker: boolean;
+        fairnessLoadPenalty: number;
+        fairnessTieBand: number;
+        fairnessMaxPerWindow: number | undefined;
+        fairnessWindowMs: number;
+    } {
+        return {
+            fairness: this.getFairness(),
+            enableFairTiebreaker: this.enableFairTiebreaker,
+            fairnessLoadPenalty: this.fairnessLoadPenalty,
+            fairnessTieBand: this.fairnessTieBand,
+            fairnessMaxPerWindow: this.fairnessMaxPerWindow,
+            fairnessWindowMs: this.fairnessWindowMs,
+        };
     }
 
     // ============================================================================

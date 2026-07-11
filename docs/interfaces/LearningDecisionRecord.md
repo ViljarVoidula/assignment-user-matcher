@@ -23,9 +23,9 @@ Stored decision context awaiting an outcome
 
 #### Defined in
 
-[src/types/matcher.ts:596](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/types/matcher.ts#L596)
+[src/types/matcher.ts:616](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L616)
 
----
+___
 
 ### features
 
@@ -33,9 +33,9 @@ Stored decision context awaiting an outcome
 
 #### Defined in
 
-[src/types/matcher.ts:597](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/types/matcher.ts#L597)
+[src/types/matcher.ts:617](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L617)
 
----
+___
 
 ### predictedReward
 
@@ -43,9 +43,9 @@ Stored decision context awaiting an outcome
 
 #### Defined in
 
-[src/types/matcher.ts:598](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/types/matcher.ts#L598)
+[src/types/matcher.ts:618](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L618)
 
----
+___
 
 ### tags
 
@@ -55,9 +55,9 @@ Assignment tags captured at decision time (used for auto routing weights)
 
 #### Defined in
 
-[src/types/matcher.ts:600](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/types/matcher.ts#L600)
+[src/types/matcher.ts:620](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L620)
 
----
+___
 
 ### timestamp
 
@@ -65,9 +65,9 @@ Assignment tags captured at decision time (used for auto routing weights)
 
 #### Defined in
 
-[src/types/matcher.ts:601](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/types/matcher.ts#L601)
+[src/types/matcher.ts:621](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L621)
 
----
+___
 
 ### userId
 
@@ -75,4 +75,4 @@ Assignment tags captured at decision time (used for auto routing weights)
 
 #### Defined in
 
-[src/types/matcher.ts:595](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/types/matcher.ts#L595)
+[src/types/matcher.ts:615](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L615)

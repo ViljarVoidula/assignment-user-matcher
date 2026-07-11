@@ -15,13 +15,13 @@
 
 ### cursor
 
-• `Optional` **cursor**: `null` \| `string`
+• `Optional` **cursor**: ``null`` \| `string`
 
 #### Defined in
 
-[src/queries/pagination.ts:9](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/queries/pagination.ts#L9)
+[src/queries/pagination.ts:9](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/queries/pagination.ts#L9)
 
----
+___
 
 ### includeTotal
 
@@ -29,9 +29,9 @@
 
 #### Defined in
 
-[src/queries/pagination.ts:12](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/queries/pagination.ts#L12)
+[src/queries/pagination.ts:12](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/queries/pagination.ts#L12)
 
----
+___
 
 ### limit
 
@@ -39,14 +39,14 @@
 
 #### Defined in
 
-[src/queries/pagination.ts:10](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/queries/pagination.ts#L10)
+[src/queries/pagination.ts:10](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/queries/pagination.ts#L10)
 
----
+___
 
 ### status
 
-• `Optional` **status**: [`AssignmentStatus`](../modules.md#assignmentstatus) \| `"all"`
+• `Optional` **status**: [`AssignmentStatus`](../modules.md#assignmentstatus) \| ``"all"``
 
 #### Defined in
 
-[src/queries/pagination.ts:11](https://github.com/ViljarVoidula/assignment-user-matcher/blob/9740691a6c978ed597b8a107d0d77e8dbb4c9423/src/queries/pagination.ts#L11)
+[src/queries/pagination.ts:11](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/queries/pagination.ts#L11)
