@@ -82,5 +82,9 @@ jobs:
             - name: Build package
               run: pnpm run build # Runs "rimraf dist && tsc"
 
+            # Publish via npm directly rather than `pnpm publish --provenance`:
+            # pnpm's provenance support shells out to npm internally and
+            # forwards pnpm-only flags like --no-git-checks along with it,
+            # which newer npm (EUNKNOWNCONFIG) rejects as an unknown flag.
             - name: Publish to NPM
-              run: pnpm publish --no-git-checks --provenance
+              run: npm publish --provenance
