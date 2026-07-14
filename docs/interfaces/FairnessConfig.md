@@ -29,9 +29,9 @@ back to their auto-derived behavior.
 
 #### Defined in
 
-[src/types/matcher.ts:90](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L90)
+[src/types/matcher.ts:90](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L90)
 
-___
+---
 
 ### fairness
 
@@ -39,9 +39,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:89](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L89)
+[src/types/matcher.ts:89](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L89)
 
-___
+---
 
 ### fairnessLoadPenalty
 
@@ -49,9 +49,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:91](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L91)
+[src/types/matcher.ts:91](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L91)
 
-___
+---
 
 ### fairnessMaxPerWindow
 
@@ -59,9 +59,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:93](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L93)
+[src/types/matcher.ts:93](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L93)
 
-___
+---
 
 ### fairnessTieBand
 
@@ -69,9 +69,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:92](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L92)
+[src/types/matcher.ts:92](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L92)
 
-___
+---
 
 ### fairnessWindowMs
 
@@ -79,4 +79,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:94](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L94)
+[src/types/matcher.ts:94](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L94)

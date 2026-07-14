@@ -26,9 +26,9 @@ Default timeout for steps in milliseconds
 
 #### Defined in
 
-[src/types/matcher.ts:431](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L431)
+[src/types/matcher.ts:563](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L563)
 
-___
+---
 
 ### id
 
@@ -38,9 +38,9 @@ Unique identifier for this workflow definition
 
 #### Defined in
 
-[src/types/matcher.ts:421](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L421)
+[src/types/matcher.ts:553](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L553)
 
-___
+---
 
 ### initialStepId
 
@@ -50,9 +50,9 @@ The entry point step ID
 
 #### Defined in
 
-[src/types/matcher.ts:427](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L427)
+[src/types/matcher.ts:559](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L559)
 
-___
+---
 
 ### metadata
 
@@ -62,9 +62,9 @@ Metadata for the workflow
 
 #### Defined in
 
-[src/types/matcher.ts:433](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L433)
+[src/types/matcher.ts:565](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L565)
 
-___
+---
 
 ### name
 
@@ -74,9 +74,9 @@ Human-readable name
 
 #### Defined in
 
-[src/types/matcher.ts:423](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L423)
+[src/types/matcher.ts:555](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L555)
 
-___
+---
 
 ### steps
 
@@ -86,9 +86,9 @@ All steps in this workflow
 
 #### Defined in
 
-[src/types/matcher.ts:429](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L429)
+[src/types/matcher.ts:561](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L561)
 
-___
+---
 
 ### version
 
@@ -98,4 +98,4 @@ Version for schema evolution
 
 #### Defined in
 
-[src/types/matcher.ts:425](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L425)
+[src/types/matcher.ts:557](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L557)

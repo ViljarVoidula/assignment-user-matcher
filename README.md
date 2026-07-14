@@ -437,6 +437,27 @@ type Options = {
         assignmentId?: string,
     ) => Promise<[number, number]>;
 
+    // ========== Decision Traces & Explainability ==========
+
+    // Persist an auditable decision trace for every routing decision. Each
+    // matched assignment gets a MatchDecisionTrace — winner, arbitration mode,
+    // and every evaluated candidate with score breakdown and exclusion
+    // reasons — appended to a capped Redis stream and queryable via
+    // getDecisionTraces(). Captured while the decision happens, never
+    // reconstructed. Toggleable at runtime via setDecisionTraces(enabled).
+    enableDecisionTraces?: boolean; // Default: false
+
+    // Retention (entry count) for the trace stream, and how many candidates
+    // are stored per trace (the chosen candidate is always kept).
+    decisionTraceMaxEntries?: number; // Default: 1000
+    decisionTraceMaxCandidates?: number; // Default: 25
+
+    // Real-time hook invoked with each MatchDecisionTrace as decisions are
+    // made (e.g. push to a websocket). Setting it activates capture even when
+    // enableDecisionTraces is false — traces then stream to the callback only
+    // and are not persisted. Callback errors never affect matching.
+    onMatchDecision?: (trace: MatchDecisionTrace) => void;
+
     // ========== Reinforcement Learning Options ==========
 
     // Enable the adaptive learning layer (contextual bandit re-ranking).
@@ -478,6 +499,93 @@ type Options = {
     learningFeedbackTtlMs?: number; // Default: 604800000 (7 days)
 };
 ```
+
+## Decision Traces & Explainability
+
+Every routing decision the engine makes can be explained and audited. Two
+complementary tools cover the two questions teams actually ask:
+
+- **"Why did this assignment go to that user?"** — decision traces, the
+  auditable record captured _while the decision was made_.
+- **"Who could receive this assignment right now, and why (not)?"** —
+  `explainMatch()`, an on-demand evaluation against live state.
+
+### Decision traces (`enableDecisionTraces`)
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+    enableDecisionTraces: true,
+    // Optional real-time feed (dashboards, sockets). Works even without
+    // persistence: setting only onMatchDecision streams traces to the
+    // callback and skips storage.
+    onMatchDecision: (trace) => io.emit('match:decision', trace),
+});
+
+await matcher.matchUsersAssignments();
+
+const [trace] = await matcher.getDecisionTraces({ assignmentId: 'ticket-42' });
+// {
+//   assignmentId: 'ticket-42',
+//   chosenUserId: 'alice',
+//   mode: 'best-match',            // how the winner was arbitrated
+//   matchedAt: 1752404712345,
+//   candidates: [
+//     { userId: 'alice', eligible: true,  chosen: true,  score: 101,
+//       effectivePriority: 201, reasons: [ { kind: 'tagWeight', tag: 'english', weight: 100 }, ... ] },
+//     { userId: 'bob',   eligible: false, chosen: false, score: 0,
+//       effectivePriority: 0,   reasons: [ { kind: 'veto', tag: 'german', pattern: 'german' } ] },
+//   ],
+// }
+```
+
+Traces are appended to a capped Redis stream (`decisionTraceMaxEntries`,
+default 1000), so the audit record survives restarts and is shared across
+replicas. Query with `getDecisionTraces({ assignmentId?, userId?, limit? })`
+(newest first), wipe with `clearDecisionTraces()`, and toggle at runtime with
+`setDecisionTraces(enabled)` / `isDecisionTracesEnabled()`.
+
+What a trace contains:
+
+- The winner, the arbitration mode (`'first-come'`, `'best-match'`,
+  `'balanced'`, `'spread-work'`, `'direct'` for per-user matching, or
+  `'workflow'` for deterministic workflow-targeted handoffs), and the moment
+  of the decision.
+- Every candidate evaluated in that matching pass with its full score
+  breakdown: matched routing weights (`tagWeight`, wildcard `pattern`
+  included), the implicit `defaultTag`, `tagOverlap` for unweighted users,
+  `geoDistance`/`geoBoost`, `learningBoost` (with `shadowMode` flag),
+  `skillThreshold` failures, `cidrMismatch`, and `customScore` when a custom
+  `matchingFunction` owns scoring.
+- Users excluded before scoring by hard rules — zero-weight `veto` entries,
+  `assignmentVeto` (the assignment's `vetoedUsers`), and `rejectedPreviously` —
+  are struck out in the trace even though the Redis-side prefilter kept them
+  out of the scoring pass entirely.
+
+Honesty notes: in the default `'first-come'` mode users evaluate and claim in
+parallel, so a candidate whose snapshot read happened after the winner's claim
+may be absent from the trace (they never evaluated it); fair modes evaluate
+everyone read-only first and always capture the full candidate field. Reason
+kinds are additive over time — treat unknown `kind` values as forward
+compatibility, not errors.
+
+### On-demand explanations (`explainMatch`)
+
+```typescript
+const explanation = await matcher.explainMatch('ticket-42');
+// { assignmentId, status: 'queued' | 'pending' | 'accepted' | 'completed' | 'not_found',
+//   ownerId, evaluatedAt, candidates: MatchCandidateTrace[] }
+
+// Or scope to specific users:
+await matcher.explainMatch('ticket-42', { userIds: ['alice', 'bob'] });
+```
+
+`explainMatch()` recomputes eligibility for every user (or the given ids)
+against the assignment's current state using the engine's own scoring
+internals — vetoes, prior rejections, backlog, thresholds, CIDR, geo, weight
+breakdown, learning influence — and works in any lifecycle state (for matched
+assignments the current owner is flagged `chosen`). Because it evaluates _now_
+rather than at decision time, use it for support tooling and dry-runs
+("who would get this?"), and decision traces for the compliance-grade record.
 
 ## Adaptive Matching with Reinforcement Learning
 
@@ -1085,4 +1193,4 @@ Consumers can `import AssignmentMatcher from 'assignment-user-matcher'` or `cons
 
 ## License
 
-This library is proprietary, commercially-licensed software — see [`LICENCE`](./LICENCE) for the full terms. No use, copying, modification, or distribution is permitted without the Owner's prior written permission (the LICENCE file's non-commercial fair-use footnote covers limited evaluation/academic use with written confirmation from the Owner). Contact viljar@forgemaster.ai for licensing.
+[MIT](./LICENCE) — free for commercial and non-commercial use.

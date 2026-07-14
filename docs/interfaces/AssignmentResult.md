@@ -22,9 +22,9 @@ Arbitrary result data for routing decisions
 
 #### Defined in
 
-[src/types/matcher.ts:513](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L513)
+[src/types/matcher.ts:645](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L645)
 
-___
+---
 
 ### error
 
@@ -34,9 +34,9 @@ Error message if failed
 
 #### Defined in
 
-[src/types/matcher.ts:515](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L515)
+[src/types/matcher.ts:647](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L647)
 
-___
+---
 
 ### success
 
@@ -46,4 +46,4 @@ Outcome: success or failure
 
 #### Defined in
 
-[src/types/matcher.ts:511](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ba693b056eb384a6e211569ec45a23e047e546f9/src/types/matcher.ts#L511)
+[src/types/matcher.ts:643](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L643)

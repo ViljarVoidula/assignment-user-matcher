@@ -94,6 +94,111 @@ export interface FairnessConfig {
     fairnessWindowMs?: number;
 }
 
+// ============================================================================
+// Decision traces & explainability
+// ============================================================================
+
+/**
+ * One factor that contributed to (or excluded) a candidate in a routing
+ * decision. Discriminated on `kind` so consumers can render/aggregate without
+ * string parsing. Positive factors carry their contribution; exclusions carry
+ * the rule that fired and the values it compared.
+ */
+export type MatchTraceReason =
+    /** A positive routing weight matched an assignment tag (pattern set when matched via wildcard) */
+    | { kind: 'tagWeight'; tag: string; weight: number; pattern?: string }
+    /** The internal 'default' tag matched with its implicit weight (enableDefaultMatching) */
+    | { kind: 'defaultTag'; weight: number }
+    /** Unweighted tag-intersection scoring (users without routingWeights) */
+    | { kind: 'tagOverlap'; matchedTags: string[]; overlapRatio: number }
+    /** A custom `matchingFunction` produced the score; no further breakdown is available */
+    | { kind: 'customScore'; score: number }
+    /** A zero-weight routing entry hard-vetoed an assignment tag */
+    | { kind: 'veto'; tag: string; pattern: string }
+    /** The user is in the assignment's `vetoedUsers` list */
+    | { kind: 'assignmentVeto' }
+    /** The user previously rejected this assignment */
+    | { kind: 'rejectedPreviously' }
+    /** The user has routingWeights but no positive entries, so nothing is eligible */
+    | { kind: 'noPositiveWeights' }
+    /** A `skillThresholds` requirement was not met */
+    | { kind: 'skillThreshold'; skill: string; required: number; actual: number }
+    /** The user's IP is outside the assignment's `allowedCidrs` */
+    | { kind: 'cidrMismatch'; ip?: string }
+    /** Geo distance evaluation (exclusion when `withinRange` is false) */
+    | { kind: 'geoDistance'; distanceKm?: number; maxDistanceKm?: number; withinRange: boolean }
+    /** Proximity boost added to the effective priority (`geoScoreWeight`) */
+    | { kind: 'geoBoost'; boost: number }
+    /** The user's backlog is at `maxUserBacklogSize` */
+    | { kind: 'backlogFull'; backlog: number; limit: number }
+    /** Learning-layer re-ranking contribution (zero influence when `shadowMode`) */
+    | { kind: 'learningBoost'; predicted: number; boost: number; shadowMode: boolean }
+    /** Deterministic workflow-targeted handoff; tag/weight selection was bypassed */
+    | { kind: 'workflowTargeted' };
+
+/** One user's evaluation within a routing decision or explanation. */
+export interface MatchCandidateTrace {
+    userId: string;
+    /** Whether the user could have received the assignment under the hard rules */
+    eligible: boolean;
+    /** Whether this user actually received (or currently owns) the assignment */
+    chosen: boolean;
+    /** Pure match score (routing-weight sum or tag-overlap ratio); 0 when excluded */
+    score: number;
+    /** What arbitration compares: base priority + score + geo boost + learning boost */
+    effectivePriority: number;
+    reasons: MatchTraceReason[];
+}
+
+/** How the winning user of a decision was arbitrated. */
+export type MatchDecisionMode = FairnessMode | 'direct' | 'workflow';
+
+/**
+ * The auditable record of one routing decision, captured while the decision
+ * was made (not reconstructed after the fact). `candidates` holds every user
+ * evaluated in the matching pass plus users excluded by hard rules (vetoes,
+ * prior rejections); users that were never candidates for the assignment do
+ * not appear.
+ */
+export interface MatchDecisionTrace {
+    id: string;
+    assignmentId: string;
+    chosenUserId: string;
+    matchedAt: number;
+    mode: MatchDecisionMode;
+    /** Chosen candidate first, then eligible candidates by effective priority */
+    candidates: MatchCandidateTrace[];
+}
+
+/**
+ * On-demand answer to "who could receive this assignment, and why (not)?" —
+ * recomputed from live state by `explainMatch()`. For matched assignments the
+ * current owner is flagged `chosen`; for the record of the decision as it
+ * actually happened, use decision traces instead.
+ */
+export interface MatchExplanation {
+    assignmentId: string;
+    status: 'queued' | 'pending' | 'accepted' | 'completed' | 'not_found';
+    /**
+     * Current owner for pending assignments and completer for completed ones.
+     * `null` while queued and for accepted assignments (ownership metadata is
+     * released on acceptance — consult decision traces for the full history).
+     */
+    ownerId: string | null;
+    evaluatedAt: number;
+    candidates: MatchCandidateTrace[];
+}
+
+/** Filters for `getDecisionTraces()`. */
+export interface DecisionTraceQuery {
+    /** Only traces for this assignment (an assignment re-queued and re-matched has several) */
+    assignmentId?: string;
+    /** Only traces where this user was chosen */
+    userId?: string;
+    /** Maximum traces returned (default 50), newest first */
+    limit?: number;
+}
+
 export type MatcherOptions = {
     relevantBatchSize?: number;
     redisPrefix?: string;
@@ -212,6 +317,33 @@ export type MatcherOptions = {
      * apart can still straddle a boundary and resolve by score.
      */
     fairnessTieBand?: number;
+    // ========== Decision Traces & Explainability ==========
+    /**
+     * Persist an auditable decision trace for every routing decision
+     * (default: false). Each matched assignment gets a `MatchDecisionTrace` —
+     * winner, arbitration mode, and every evaluated candidate with score
+     * breakdown and exclusion reasons — appended to a capped Redis stream and
+     * queryable via `getDecisionTraces()`. Capture happens during the matching
+     * pass itself, so the record reflects what the engine actually did rather
+     * than a reconstruction. Toggleable at runtime via `setDecisionTraces()`.
+     */
+    enableDecisionTraces?: boolean;
+    /** Maximum decision traces retained in the Redis stream (default: 1000, approximate trim) */
+    decisionTraceMaxEntries?: number;
+    /**
+     * Maximum candidates stored per trace (default: 25). The chosen candidate
+     * is always kept; remaining slots go to the highest-ranked candidates.
+     */
+    decisionTraceMaxCandidates?: number;
+    /**
+     * Real-time hook invoked with each `MatchDecisionTrace` as decisions are
+     * made (e.g. to push onto a socket). Setting it activates trace capture
+     * even when `enableDecisionTraces` is false — in that case traces are
+     * streamed to the callback only and not persisted. Errors thrown by the
+     * callback are swallowed; they never affect matching.
+     */
+    onMatchDecision?: (trace: MatchDecisionTrace) => void;
+
     /** Enable distance-based geolocation matching (default: false) */
     enableGeoMatching?: boolean;
     /** Global fallback cap in kilometers when assignment/user-specific caps are absent */

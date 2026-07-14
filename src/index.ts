@@ -12,6 +12,12 @@ export type {
     AssignmentStatus,
     FairnessMode,
     FairnessConfig,
+    MatchTraceReason,
+    MatchCandidateTrace,
+    MatchDecisionTrace,
+    MatchDecisionMode,
+    MatchExplanation,
+    DecisionTraceQuery,
 } from './matcher.class';
 
 // Workflow type exports
@@ -54,6 +60,9 @@ export type {
     PaginationResult,
     AssignmentCounts,
 } from './matcher.class';
+
+// Decision-trace scoring explainer (same numbers as calculateMatchScore, plus reasons)
+export { explainMatchScore, type MatchScoreExplanation } from './scoring/match-score';
 
 // Learning feature helpers (for custom feature extractors)
 export { extractMatchFeatures, cosineSimilarity } from './learning/features';

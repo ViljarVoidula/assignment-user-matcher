@@ -14,9 +14,17 @@ import {
     type PaginationResult,
     type AssignmentCounts,
 } from './queries/pagination';
-import { calculateMatchScore, calculateDefaultPriority } from './scoring/match-score';
+import { calculateMatchScore, calculateDefaultPriority, explainMatchScore } from './scoring/match-score';
 import { arbitrateFair, resolveFairnessKnobs } from './scoring/fair-arbitration';
+import {
+    TraceCollector,
+    buildDecisionTraces,
+    buildWorkflowTraces,
+    sortCandidates,
+    type TraceUserContext,
+} from './tracing/decision-trace';
 import { extractMatchFeatures } from './learning/features';
+import { DecisionTraceManager } from './managers/DecisionTraceManager';
 import { LearningManager } from './managers/LearningManager';
 import { ReliabilityManager } from './managers/ReliabilityManager';
 import { TelemetryManager } from './managers/TelemetryManager';
@@ -51,6 +59,12 @@ import type {
     WorkflowEngineMetrics,
     FairnessMode,
     FairnessConfig,
+    MatchTraceReason,
+    MatchCandidateTrace,
+    MatchDecisionTrace,
+    MatchDecisionMode,
+    MatchExplanation,
+    DecisionTraceQuery,
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
@@ -69,6 +83,12 @@ export type {
     ReliabilityMetrics,
     WorkflowInstanceStatus,
     WorkflowRouting,
+    MatchTraceReason,
+    MatchCandidateTrace,
+    MatchDecisionTrace,
+    MatchDecisionMode,
+    MatchExplanation,
+    DecisionTraceQuery,
 } from './types/matcher';
 // Export workflow types
 export type {
@@ -171,6 +191,11 @@ export default class AssignmentMatcher implements WorkflowHost {
     private fairnessMaxPerWindow?: number;
     private fairnessWindowMs: number;
 
+    // Decision traces (explainability/audit) properties
+    private enableDecisionTraces: boolean;
+    private decisionTraceMaxCandidates: number;
+    private decisionTraces: DecisionTraceManager;
+
     constructor(
         public redisClient: RedisClientType,
         options?: MatcherOptions,
@@ -245,6 +270,14 @@ export default class AssignmentMatcher implements WorkflowHost {
             feedbackTtlMs: options?.learningFeedbackTtlMs,
             trackTagStats: this.enableAutoRoutingWeights,
             autoWeights: options?.autoRoutingWeights,
+        });
+
+        // Decision traces (opt-in explainability/audit records per routing decision)
+        this.enableDecisionTraces = options?.enableDecisionTraces ?? false;
+        this.decisionTraceMaxCandidates = options?.decisionTraceMaxCandidates ?? 25;
+        this.decisionTraces = new DecisionTraceManager(this.redisClient, this.keys, {
+            maxEntries: options?.decisionTraceMaxEntries ?? 1000,
+            onDecision: options?.onMatchDecision,
         });
 
         this.workflow = new WorkflowManager(this.redisClient, this.keys, this.reliability, this.telemetry, this, {
@@ -598,6 +631,329 @@ export default class AssignmentMatcher implements WorkflowHost {
             fairnessMaxPerWindow: this.fairnessMaxPerWindow,
             fairnessWindowMs: this.fairnessWindowMs,
         };
+    }
+
+    // ============================================================================
+    // Decision Traces & Explainability
+    // ============================================================================
+
+    /** Whether trace capture should run this pass (persistence flag or real-time hook). */
+    private get tracingActive(): boolean {
+        return this.enableDecisionTraces || this.decisionTraces.hasDecisionHook;
+    }
+
+    /**
+     * Toggle decision-trace persistence at runtime without reconstructing the
+     * matcher. Takes effect on the next matching pass (a pass already in
+     * flight keeps the value it started with).
+     */
+    setDecisionTraces(enabled: boolean): void {
+        this.enableDecisionTraces = !!enabled;
+    }
+
+    /** Current runtime decision-trace persistence state. */
+    isDecisionTracesEnabled(): boolean {
+        return this.enableDecisionTraces;
+    }
+
+    /**
+     * Query recorded decision traces, newest first. Only decisions made while
+     * `enableDecisionTraces` was active are stored — traces are captured as
+     * decisions happen, never reconstructed after the fact.
+     */
+    async getDecisionTraces(query?: DecisionTraceQuery): Promise<MatchDecisionTrace[]> {
+        await this.readyPromise;
+        return this.decisionTraces.getTraces(query);
+    }
+
+    /** Delete all recorded decision traces. */
+    async clearDecisionTraces(): Promise<number> {
+        await this.readyPromise;
+        return this.decisionTraces.clear();
+    }
+
+    /**
+     * Explain, from live state, which users could receive an assignment and
+     * why each one is or is not eligible: vetoes, prior rejections, skill
+     * thresholds, CIDR and geo constraints, backlog, the full score breakdown,
+     * and learning influence. Works for assignments in any lifecycle state;
+     * for matched assignments the current owner is flagged `chosen` (accepted
+     * assignments report `ownerId: null` because ownership metadata is
+     * released on acceptance — decision traces retain the full history).
+     *
+     * This is an on-demand recomputation against current state. For the
+     * auditable record of a decision as it actually happened, use
+     * `getDecisionTraces()`.
+     */
+    async explainMatch(assignmentId: string, opts?: { userIds?: string[] }): Promise<MatchExplanation> {
+        await this.readyPromise;
+        const evaluatedAt = Date.now();
+
+        let found = await getAssignmentById(this.redisClient, this.assignmentStoreKeys, assignmentId);
+        let status: MatchExplanation['status'];
+        if (found) {
+            status = (found._status ?? 'queued') as MatchExplanation['status'];
+        } else {
+            // getAssignmentById only covers queued/pending/accepted
+            const completedJson = await this.redisClient.hGet(this.completedAssignmentsKey, assignmentId);
+            if (!completedJson) {
+                return { assignmentId, status: 'not_found', ownerId: null, evaluatedAt, candidates: [] };
+            }
+            found = JSON.parse(completedJson);
+            status = 'completed';
+        }
+        const assignment = found as Assignment & { _status?: string; _completedBy?: string; _failedBy?: string };
+
+        let ownerId: string | null = null;
+        if (status === 'pending') {
+            ownerId = (await this.redisClient.hGet(this.assignmentOwnerKey, assignmentId)) ?? null;
+        } else if (status === 'completed') {
+            ownerId = assignment._completedBy ?? assignment._failedBy ?? null;
+        }
+
+        // Queued assignments may have had their priority retuned since creation
+        let basePriority = Number(assignment.priority) || 0;
+        if (status === 'queued') {
+            const stored = await this.redisClient.hGet(this.keys.assignmentPriority(assignmentId), 'priority');
+            if (stored !== null && stored !== undefined) basePriority = Number(stored) || 0;
+        }
+
+        // Mirror the tags CSV the scoring path sees (the stored tags hash appends 'default')
+        const tagsCsv = [...assignment.tags, ...(this.enableDefaultMatching ? ['default'] : [])].join(',');
+
+        let userList: User[];
+        if (opts?.userIds && opts.userIds.length > 0) {
+            const jsons = await this.redisClient.hmGet(this.usersKey, opts.userIds);
+            userList = jsons.filter((json: string | null): json is string => Boolean(json)).map((json) => JSON.parse(json));
+        } else {
+            const all = await this.redisClient.hGetAll(this.usersKey);
+            userList = Object.values(all).map((json) => JSON.parse(json as string));
+        }
+
+        const modelWeights = this.enableLearning ? await this.learning.getModel() : undefined;
+        const candidates = await Promise.all(
+            userList.map((user) =>
+                this.explainCandidate(user, assignment, assignmentId, tagsCsv, basePriority, ownerId, modelWeights),
+            ),
+        );
+        sortCandidates(candidates);
+
+        return { assignmentId, status, ownerId, evaluatedAt, candidates };
+    }
+
+    /** One user's full eligibility/score evaluation for explainMatch(). */
+    private async explainCandidate(
+        user: User,
+        assignment: Assignment,
+        assignmentId: string,
+        tagsCsv: string,
+        basePriority: number,
+        ownerId: string | null,
+        modelWeights?: Record<string, string>,
+    ): Promise<MatchCandidateTrace> {
+        const reasons: MatchTraceReason[] = [];
+        let eligible = true;
+
+        if (assignment.vetoedUsers?.includes(user.id)) {
+            reasons.push({ kind: 'assignmentVeto' });
+            eligible = false;
+        }
+
+        const [isRejected, backlog] = await Promise.all([
+            this.redisClient.sIsMember(this.keys.userRejected(user.id), assignmentId),
+            this.redisClient.sCard(this.keys.userAssignments(user.id)),
+        ]);
+        if (isRejected) {
+            reasons.push({ kind: 'rejectedPreviously' });
+            eligible = false;
+        }
+        if (backlog >= this.maxUserBacklogSize) {
+            reasons.push({ kind: 'backlogFull', backlog, limit: this.maxUserBacklogSize });
+            eligible = false;
+        }
+
+        const routingWeights = user.routingWeights;
+        const hasRoutingWeights = Boolean(routingWeights && Object.keys(routingWeights).length > 0);
+        if (
+            hasRoutingWeights &&
+            this.usingDefaultMatchScore &&
+            !Object.values(routingWeights!).some((w) => typeof w === 'number' && w > 0)
+        ) {
+            reasons.push({ kind: 'noPositiveWeights' });
+            eligible = false;
+        }
+
+        if (!checkCidrMatch(user.ip, assignment.allowedCidrs)) {
+            reasons.push({ kind: 'cidrMismatch', ip: user.ip });
+            eligible = false;
+        }
+
+        const geoMatch = await this.evaluateGeoMatch(user, assignment);
+        let geoBoost = 0;
+        if (!geoMatch.eligible) {
+            reasons.push({
+                kind: 'geoDistance',
+                distanceKm: geoMatch.distanceKm,
+                maxDistanceKm: geoMatch.effectiveMaxDistanceKm,
+                withinRange: false,
+            });
+            eligible = false;
+        } else {
+            geoBoost = this.calculateGeoBoost(geoMatch);
+            if (typeof geoMatch.distanceKm === 'number') {
+                reasons.push({
+                    kind: 'geoDistance',
+                    distanceKm: geoMatch.distanceKm,
+                    maxDistanceKm: geoMatch.effectiveMaxDistanceKm,
+                    withinRange: true,
+                });
+            }
+            if (geoBoost > 0) reasons.push({ kind: 'geoBoost', boost: geoBoost });
+        }
+
+        let score: number;
+        let combinedPriority: number;
+        if (this.usingDefaultMatchScore) {
+            const explained = explainMatchScore(
+                user,
+                tagsCsv,
+                basePriority,
+                this.enableDefaultMatching,
+                assignment.skillThresholds,
+            );
+            score = explained.score;
+            combinedPriority = explained.combinedPriority;
+            reasons.push(...explained.reasons);
+        } else {
+            [score, combinedPriority] = await this.matchScore(
+                user,
+                tagsCsv,
+                basePriority,
+                assignmentId,
+                assignment.skillThresholds,
+            );
+            reasons.push({ kind: 'customScore', score });
+        }
+        if (!score) eligible = false;
+
+        let learningBoost = 0;
+        if (this.enableLearning && modelWeights) {
+            const context: LearningAssignmentContext = { ...assignment, id: assignmentId, tags: assignment.tags };
+            const features = this.learningFeatureExtractor(user, context);
+            const predicted = this.learning.predict(features, modelWeights);
+            const shadowMode = this.learning.shadowMode;
+            learningBoost = shadowMode ? 0 : this.learning.boostFactor * predicted;
+            reasons.push({ kind: 'learningBoost', predicted, boost: learningBoost, shadowMode });
+        }
+
+        return {
+            userId: user.id,
+            eligible,
+            chosen: ownerId === user.id,
+            score,
+            effectivePriority: combinedPriority + geoBoost + learningBoost,
+            reasons,
+        };
+    }
+
+    /** Build and record this pass's decision traces; failures never break matching. */
+    private async recordPassTraces(
+        collector: TraceCollector,
+        winners: Map<string, string>,
+        workflowGrants: Array<{ assignmentId: string; userId: string; priority: number }>,
+        mode: MatchDecisionMode,
+        users: User[],
+    ): Promise<void> {
+        if (winners.size === 0 && workflowGrants.length === 0) return;
+        try {
+            // A workflow-targeted assignment is also tag-indexed, so the
+            // tag-scored path can claim it in the same pass. One decision,
+            // one trace: the deterministic targeting is the authoritative
+            // story, so the 'workflow' record wins.
+            for (const grant of workflowGrants) winners.delete(grant.assignmentId);
+
+            const matchedAt = Date.now();
+            const contexts = await this.getTraceUserContexts(users);
+            const traces = [
+                ...buildDecisionTraces({
+                    collector,
+                    winners,
+                    mode,
+                    users: contexts,
+                    maxCandidates: this.decisionTraceMaxCandidates,
+                    matchedAt,
+                }),
+                ...buildWorkflowTraces(workflowGrants, matchedAt),
+            ];
+            await this.decisionTraces.record(traces, this.enableDecisionTraces);
+        } catch (err) {
+            console.error('Failed to record decision traces:', err);
+        }
+    }
+
+    /** Exclusion sets used to enrich traces with prefiltered (vetoed/rejected) users. */
+    private async getTraceUserContexts(users: User[]): Promise<TraceUserContext[]> {
+        return Promise.all(
+            users.map(async (user) => {
+                const [rejected, vetoed] = await Promise.all([
+                    this.redisClient.sMembers(this.keys.userRejected(user.id)),
+                    this.redisClient.sMembers(this.keys.userVetoed(user.id)),
+                ]);
+                return { user, rejected: new Set<string>(rejected), vetoed: new Set<string>(vetoed) };
+            }),
+        );
+    }
+
+    /**
+     * Workflow-targeted assignments are re-granted idempotently on every
+     * matching pass until actioned; only first-time grants deserve a decision
+     * trace. Reads membership before the sAdd that follows.
+     */
+    private async filterNewWorkflowGrants(
+        user: User,
+        workflowTargeted: Array<{ id: string; priority: number }>,
+    ): Promise<Array<{ assignmentId: string; userId: string; priority: number }>> {
+        if (workflowTargeted.length === 0) return [];
+        const memberships = await this.redisClient.smIsMember(
+            this.keys.userAssignments(user.id),
+            workflowTargeted.map((w) => `assignment:${w.id}`),
+        );
+        return workflowTargeted
+            .filter((_, i) => !memberships[i])
+            .map((w) => ({ assignmentId: w.id, userId: user.id, priority: w.priority }));
+    }
+
+    /** Reasons for one scored candidate evaluation (trace capture only). */
+    private traceScoreReasons(
+        user: User,
+        detail: { tags: string; basePriority: number; skillThresholds?: Record<string, number> },
+        score: number,
+        geoMatch: GeoMatchResult,
+        geoBoost: number,
+        learning?: { predicted: number; boost: number; shadowMode: boolean },
+    ): MatchTraceReason[] {
+        const reasons: MatchTraceReason[] = this.usingDefaultMatchScore
+            ? explainMatchScore(user, detail.tags, detail.basePriority, this.enableDefaultMatching, detail.skillThresholds)
+                  .reasons
+            : [{ kind: 'customScore', score }];
+        if (typeof geoMatch.distanceKm === 'number') {
+            reasons.push({
+                kind: 'geoDistance',
+                distanceKm: geoMatch.distanceKm,
+                maxDistanceKm: geoMatch.effectiveMaxDistanceKm,
+                withinRange: true,
+            });
+        }
+        if (geoBoost > 0) reasons.push({ kind: 'geoBoost', boost: geoBoost });
+        if (learning) {
+            reasons.push({
+                kind: 'learningBoost',
+                predicted: learning.predicted,
+                boost: learning.boost,
+                shadowMode: learning.shadowMode,
+            });
+        }
+        return reasons;
     }
 
     // ============================================================================
@@ -1110,6 +1466,7 @@ export default class AssignmentMatcher implements WorkflowHost {
     private async computeCandidatesForUser(
         user: User,
         capToBacklog = true,
+        collector?: TraceCollector,
     ): Promise<{
         userAssignments: Array<{ id: string; priority: number }>;
         selected: Array<{ id: string; tags: string }>;
@@ -1279,10 +1636,35 @@ export default class AssignmentMatcher implements WorkflowHost {
             }> = [];
 
             for (const d of details) {
-                if (!checkCidrMatch(user.ip, d.allowedCidrs)) continue;
+                if (!checkCidrMatch(user.ip, d.allowedCidrs)) {
+                    collector?.record(d.id, d.tags, {
+                        userId: user.id,
+                        eligible: false,
+                        score: 0,
+                        effectivePriority: 0,
+                        reasons: [{ kind: 'cidrMismatch', ip: user.ip }],
+                    });
+                    continue;
+                }
 
                 const geoMatch = await this.evaluateGeoMatch(user, d.raw ?? { id: d.id, tags: [] });
-                if (!geoMatch.eligible) continue;
+                if (!geoMatch.eligible) {
+                    collector?.record(d.id, d.tags, {
+                        userId: user.id,
+                        eligible: false,
+                        score: 0,
+                        effectivePriority: 0,
+                        reasons: [
+                            {
+                                kind: 'geoDistance',
+                                distanceKm: geoMatch.distanceKm,
+                                maxDistanceKm: geoMatch.effectiveMaxDistanceKm,
+                                withinRange: false,
+                            },
+                        ],
+                    });
+                    continue;
+                }
 
                 const [score, combinedPriority] = await this.matchScore(
                     user,
@@ -1291,8 +1673,18 @@ export default class AssignmentMatcher implements WorkflowHost {
                     d.id,
                     d.skillThresholds,
                 );
-                if (!score || !combinedPriority) continue;
-                const geoAdjustedPriority = combinedPriority + this.calculateGeoBoost(geoMatch);
+                if (!score || !combinedPriority) {
+                    collector?.record(d.id, d.tags, {
+                        userId: user.id,
+                        eligible: false,
+                        score: 0,
+                        effectivePriority: Number(d.basePriority) || 0,
+                        reasons: this.traceScoreReasons(user, d, score, geoMatch, 0),
+                    });
+                    continue;
+                }
+                const traceGeoBoost = this.calculateGeoBoost(geoMatch);
+                const geoAdjustedPriority = combinedPriority + traceGeoBoost;
 
                 const context: LearningAssignmentContext = {
                     ...(d.raw ?? {}),
@@ -1311,6 +1703,17 @@ export default class AssignmentMatcher implements WorkflowHost {
                     ? geoAdjustedPriority
                     : geoAdjustedPriority + this.learning.boostFactor * predicted + exploration;
                 eligible.push({ detail: d, combinedPriority, features, predicted, effectivePriority });
+                collector?.record(d.id, d.tags, {
+                    userId: user.id,
+                    eligible: true,
+                    score,
+                    effectivePriority,
+                    reasons: this.traceScoreReasons(user, d, score, geoMatch, traceGeoBoost, {
+                        predicted,
+                        boost: effectivePriority - geoAdjustedPriority,
+                        shadowMode: this.learning.shadowMode,
+                    }),
+                });
             }
 
             eligible.sort((a, b) => b.effectivePriority - a.effectivePriority);
@@ -1333,11 +1736,32 @@ export default class AssignmentMatcher implements WorkflowHost {
 
                 // Check CIDR restrictions: if assignment has allowedCidrs, user must have matching IP
                 if (!checkCidrMatch(user.ip, d.allowedCidrs)) {
+                    collector?.record(d.id, d.tags, {
+                        userId: user.id,
+                        eligible: false,
+                        score: 0,
+                        effectivePriority: 0,
+                        reasons: [{ kind: 'cidrMismatch', ip: user.ip }],
+                    });
                     continue; // Skip this assignment - user IP doesn't match allowed CIDRs
                 }
 
                 const geoMatch = await this.evaluateGeoMatch(user, d.raw ?? { id: d.id, tags: [] });
                 if (!geoMatch.eligible) {
+                    collector?.record(d.id, d.tags, {
+                        userId: user.id,
+                        eligible: false,
+                        score: 0,
+                        effectivePriority: 0,
+                        reasons: [
+                            {
+                                kind: 'geoDistance',
+                                distanceKm: geoMatch.distanceKm,
+                                maxDistanceKm: geoMatch.effectiveMaxDistanceKm,
+                                withinRange: false,
+                            },
+                        ],
+                    });
                     continue;
                 }
 
@@ -1350,8 +1774,24 @@ export default class AssignmentMatcher implements WorkflowHost {
                     d.skillThresholds,
                 );
                 if (score && combinedPriority) {
-                    userAssignments.push({ id: d.id, priority: combinedPriority + this.calculateGeoBoost(geoMatch) });
+                    const geoBoost = this.calculateGeoBoost(geoMatch);
+                    userAssignments.push({ id: d.id, priority: combinedPriority + geoBoost });
                     selected.push({ id: d.id, tags: d.tags });
+                    collector?.record(d.id, d.tags, {
+                        userId: user.id,
+                        eligible: true,
+                        score,
+                        effectivePriority: combinedPriority + geoBoost,
+                        reasons: this.traceScoreReasons(user, d, score, geoMatch, geoBoost),
+                    });
+                } else {
+                    collector?.record(d.id, d.tags, {
+                        userId: user.id,
+                        eligible: false,
+                        score: 0,
+                        effectivePriority: Number(d.basePriority) || 0,
+                        reasons: this.traceScoreReasons(user, d, score, geoMatch, 0),
+                    });
                 }
             }
         }
@@ -1422,12 +1862,16 @@ export default class AssignmentMatcher implements WorkflowHost {
         return claimedIds;
     }
 
-    private async getUserRelatedAssignments(user: User) {
-        const { userAssignments, selected, workflowTargetedCount } = await this.computeCandidatesForUser(user);
+    private async getUserRelatedAssignments(user: User, collector?: TraceCollector) {
+        const { userAssignments, selected, workflowTargetedCount } = await this.computeCandidatesForUser(
+            user,
+            true,
+            collector,
+        );
         const claimedIds = await this.claimSelected(user, selected);
         const workflowTargeted = userAssignments.slice(0, workflowTargetedCount);
         const tagScored = userAssignments.slice(workflowTargetedCount).filter((ua) => claimedIds.has(ua.id));
-        return [...workflowTargeted, ...tagScored];
+        return { assignments: [...workflowTargeted, ...tagScored], claimedIds, workflowTargeted };
     }
 
     /**
@@ -1454,6 +1898,10 @@ export default class AssignmentMatcher implements WorkflowHost {
             users.push(...entries.map((t: { field: string; value: string }) => JSON.parse(t.value)));
             cursor = nextCursor;
         } while (cursor !== '0');
+
+        const collector = this.tracingActive ? new TraceCollector() : undefined;
+        const traceWinners = new Map<string, string>();
+        const workflowGrants: Array<{ assignmentId: string; userId: string; priority: number }> = [];
 
         // Rolling-window grant cap: an explicit finite fairnessMaxPerWindow
         // always applies; the 'balanced' / 'spread-work' presets additionally
@@ -1524,7 +1972,7 @@ export default class AssignmentMatcher implements WorkflowHost {
                 }
                 // capToBacklog=false: this user's full candidate set is needed for
                 // global arbitration below, not just as many as their own cap allows.
-                const candidates = await this.computeCandidatesForUser(user, false);
+                const candidates = await this.computeCandidatesForUser(user, false, collector);
                 return { user, backlog, windowRemaining, candidates };
             }),
         );
@@ -1533,10 +1981,14 @@ export default class AssignmentMatcher implements WorkflowHost {
         // user each - not contested across users - so claim them immediately,
         // exactly like the non-fair path does.
         await Promise.all(
-            perUser.map(({ user, candidates }) => {
+            perUser.map(async ({ user, candidates }) => {
                 const workflowOnly = candidates.userAssignments.slice(0, candidates.workflowTargetedCount);
-                if (workflowOnly.length === 0) return Promise.resolve(0);
-                return this.redisClient.sAdd(
+                if (workflowOnly.length === 0) return;
+                if (collector) {
+                    // Membership must be read before the sAdd below
+                    workflowGrants.push(...(await this.filterNewWorkflowGrants(user, workflowOnly)));
+                }
+                await this.redisClient.sAdd(
                     this.keys.userAssignments(user.id),
                     workflowOnly.map((a) => `assignment:${a.id}`),
                 );
@@ -1628,6 +2080,9 @@ export default class AssignmentMatcher implements WorkflowHost {
                 Array.from(tentative.values()).map(async ({ user, pairs }) => {
                     const claimedIds = await this.claimSelected(user, pairs);
                     const won = pairs.filter((p) => claimedIds.has(p.id));
+                    if (collector) {
+                        for (const p of won) traceWinners.set(p.id, user.id);
+                    }
                     if (won.length < pairs.length) {
                         anyLost = true;
                         backlogUsed.set(user.id, (backlogUsed.get(user.id) ?? 0) - (pairs.length - won.length));
@@ -1661,6 +2116,10 @@ export default class AssignmentMatcher implements WorkflowHost {
             if (!anyLost) break;
             remaining = deferred.filter((pair) => !settled.has(pair.id));
         }
+
+        if (collector) {
+            await this.recordPassTraces(collector, traceWinners, workflowGrants, this.getFairness(), users);
+        }
     }
 
     async matchUsersAssignments(userId?: string): Promise<void> {
@@ -1674,13 +2133,21 @@ export default class AssignmentMatcher implements WorkflowHost {
             const userMatchesCount = await this.redisClient.sCard(this.keys.userAssignments(user.id));
             if (userMatchesCount >= this.maxUserBacklogSize) return;
 
-            const relevantAssignments = await this.getUserRelatedAssignments(user);
-            const relevantAssignmentKeys = relevantAssignments
+            const collector = this.tracingActive ? new TraceCollector() : undefined;
+            const { assignments, claimedIds, workflowTargeted } = await this.getUserRelatedAssignments(user, collector);
+            // Membership must be read before the sAdd below
+            const newWorkflowGrants = collector ? await this.filterNewWorkflowGrants(user, workflowTargeted) : [];
+            const relevantAssignmentKeys = assignments
                 .sort((a, b) => b.priority - a.priority)
                 .map((a) => `assignment:${a.id}`);
 
             if (relevantAssignmentKeys.length > 0) {
                 await this.redisClient.sAdd(this.keys.userAssignments(user.id), relevantAssignmentKeys);
+            }
+            if (collector) {
+                const winners = new Map<string, string>();
+                for (const id of claimedIds) winners.set(id, user.id);
+                await this.recordPassTraces(collector, winners, newWorkflowGrants, 'direct', [user]);
             }
             return;
         }
@@ -1701,6 +2168,10 @@ export default class AssignmentMatcher implements WorkflowHost {
         } while (cursor !== '0');
 
         // Process users in parallel
+        const collector = this.tracingActive ? new TraceCollector() : undefined;
+        const winners = new Map<string, string>();
+        const workflowGrants: Array<{ assignmentId: string; userId: string; priority: number }> = [];
+
         await Promise.all(
             users.map(async (user) => {
                 const userMatchesCount = await this.redisClient.sCard(this.keys.userAssignments(user.id));
@@ -1708,8 +2179,13 @@ export default class AssignmentMatcher implements WorkflowHost {
                     return;
                 }
 
-                const relevantAssignments = await this.getUserRelatedAssignments(user);
-                const relevantAssignmentKeys = relevantAssignments
+                const { assignments, claimedIds, workflowTargeted } = await this.getUserRelatedAssignments(user, collector);
+                if (collector) {
+                    for (const id of claimedIds) winners.set(id, user.id);
+                    // Membership must be read before the sAdd below
+                    workflowGrants.push(...(await this.filterNewWorkflowGrants(user, workflowTargeted)));
+                }
+                const relevantAssignmentKeys = assignments
                     .sort((a, b) => b.priority - a.priority)
                     .map((a) => `assignment:${a.id}`);
 
@@ -1718,6 +2194,10 @@ export default class AssignmentMatcher implements WorkflowHost {
                 }
             }),
         );
+
+        if (collector) {
+            await this.recordPassTraces(collector, winners, workflowGrants, 'first-come', users);
+        }
     }
 
     async getCurrentAssignmentsForUser(userId: string): Promise<string[]> {

@@ -56,6 +56,9 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         // Completed assignments store
         completedAssignments: () => `${prefix}assignments:completed`,
 
+        // Decision trace stream (auditable routing decisions)
+        decisionTraces: () => `${prefix}decisions:traces`,
+
         // Redis Streams keys
         eventStream: () => `${prefix}events:stream`,
         eventStreamDeadLetter: () => `${prefix}events:deadletter`,

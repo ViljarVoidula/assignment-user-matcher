@@ -1,7 +1,7 @@
 /**
  * Scoring and matching utilities
  */
-import type { User } from '../matcher.class';
+import type { User, MatchTraceReason } from '../types/matcher';
 
 /**
  * Check if a pattern matches a tag (supports wildcard patterns ending with *)
@@ -135,6 +135,103 @@ export function calculateMatchScore(
     const score = userTagSet.size > 0 ? intersectionSize / userTagSet.size : 0;
     const base = Number(assignmentPriority) || 0;
     return [score || 0, base + (score || 0)];
+}
+
+/** Result of `explainMatchScore`: the `calculateMatchScore` pair plus the reasons behind it. */
+export interface MatchScoreExplanation {
+    score: number;
+    combinedPriority: number;
+    reasons: MatchTraceReason[];
+}
+
+/**
+ * Explaining twin of `calculateMatchScore`: same inputs, same score and
+ * combined priority (asserted by the parity test in
+ * tests/matcher_decision_traces.test.ts), plus the structured reasons behind
+ * the number — matched weights, vetoes, threshold failures, tag overlap.
+ * Kept separate from `calculateMatchScore` so the hot scoring path never pays
+ * for reason allocation; any change to one function must be mirrored in the
+ * other.
+ */
+export function explainMatchScore(
+    user: User,
+    assignmentTags: string,
+    assignmentPriority: string | number,
+    enableDefaultMatching: boolean,
+    skillThresholds?: Record<string, number>,
+): MatchScoreExplanation {
+    const aTags = assignmentTags ? assignmentTags.split(',') : [];
+    const base = Number(assignmentPriority) || 0;
+    const reasons: MatchTraceReason[] = [];
+
+    if (user.routingWeights && Object.keys(user.routingWeights).length > 0) {
+        if (!meetsSkillThresholds(user.routingWeights, skillThresholds)) {
+            for (const [skill, required] of Object.entries(skillThresholds ?? {})) {
+                const actual = getEffectiveWeight(user.routingWeights, skill);
+                if (actual < required) reasons.push({ kind: 'skillThreshold', skill, required, actual });
+            }
+            return { score: 0, combinedPriority: base, reasons };
+        }
+
+        // calculateMatchScore short-circuits on the first veto; collecting all
+        // of them here changes nothing about the outcome (score 0 either way)
+        // and gives the trace every rule that fired.
+        let vetoed = false;
+        for (const [pattern, weight] of Object.entries(user.routingWeights)) {
+            if (weight === 0) {
+                for (const t of aTags) {
+                    if (matchesPattern(pattern, t)) {
+                        reasons.push({ kind: 'veto', tag: t, pattern });
+                        vetoed = true;
+                    }
+                }
+            }
+        }
+        if (vetoed) return { score: 0, combinedPriority: base, reasons };
+
+        let weightSum = 0;
+        for (const t of aTags) {
+            let matchedByRouting = false;
+            for (const [pattern, weight] of Object.entries(user.routingWeights)) {
+                if (typeof weight === 'number' && weight > 0 && matchesPattern(pattern, t)) {
+                    weightSum += weight;
+                    matchedByRouting = true;
+                    reasons.push(
+                        pattern === t
+                            ? { kind: 'tagWeight', tag: t, weight }
+                            : { kind: 'tagWeight', tag: t, weight, pattern },
+                    );
+                }
+            }
+            if (enableDefaultMatching && t === 'default' && !matchedByRouting) {
+                weightSum += 1;
+                reasons.push({ kind: 'defaultTag', weight: 1 });
+            }
+        }
+        return { score: weightSum, combinedPriority: base + weightSum, reasons };
+    }
+
+    if (skillThresholds && Object.keys(skillThresholds).length > 0) {
+        for (const [skill, required] of Object.entries(skillThresholds)) {
+            reasons.push({ kind: 'skillThreshold', skill, required, actual: 0 });
+        }
+        return { score: 0, combinedPriority: base, reasons };
+    }
+
+    const userTagSet = new Set(user.tags);
+    const assignmentTagSet = new Set(aTags);
+    const matchedTags: string[] = [];
+    for (const userTag of userTagSet) {
+        for (const assignmentTag of assignmentTagSet) {
+            if (matchesPattern(userTag, assignmentTag)) {
+                matchedTags.push(userTag);
+                break;
+            }
+        }
+    }
+    const score = userTagSet.size > 0 ? matchedTags.length / userTagSet.size : 0;
+    if (score > 0) reasons.push({ kind: 'tagOverlap', matchedTags, overlapRatio: score });
+    return { score: score || 0, combinedPriority: base + (score || 0), reasons };
 }
 
 /**
