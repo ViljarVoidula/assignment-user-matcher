@@ -19,9 +19,9 @@ Compact workflow metadata returned by list endpoints
 
 #### Defined in
 
-[src/types/matcher.ts:588](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L588)
+[src/types/matcher.ts:621](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L621)
 
----
+___
 
 ### name
 
@@ -29,4 +29,4 @@ Compact workflow metadata returned by list endpoints
 
 #### Defined in
 
-[src/types/matcher.ts:589](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L589)
+[src/types/matcher.ts:622](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L622)

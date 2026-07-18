@@ -26,6 +26,18 @@ describe('Matcher base tests', async function () {
         expect(user).to.be.an('object');
         expect(user).to.be.deep.equal(userData);
     });
+    it('Retrieves a stored user and null for unknown ids', async function () {
+        const user = await matcher.getUser('1');
+        expect(user).to.not.equal(null);
+        expect(user!.id).to.equal('1');
+        expect(user!.tags).to.include.members(['tag1', 'tag2', 'tag3']);
+        expect(await matcher.getUser('nope')).to.equal(null);
+    });
+    it('Lists all users', async function () {
+        const users = await matcher.getUsers();
+        expect(users).to.have.lengthOf(1);
+        expect(users[0].id).to.equal('1');
+    });
     it('Adding assignments successfully', async function () {
         const assignmentData = {
             id: '1',
@@ -70,6 +82,15 @@ describe('Matcher base tests', async function () {
 
         expect(assignment).to.be.an('object');
         expect(assignment).to.be.deep.equal({ id: '2', priority: 10 });
+    });
+
+    it('Priority updates are visible on the stored queued assignment', async function () {
+        // '8' is the one assignment the matching test left queued
+        await matcher.setAssignmentPriority('8', 77);
+        const stored = await matcher.getAssignment('8');
+        expect(stored).to.not.equal(null);
+        expect(stored!._status).to.equal('queued');
+        expect(stored!.priority).to.equal(77);
     });
 
     it('Removing assignments successfully', async function () {

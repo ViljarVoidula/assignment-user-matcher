@@ -35,6 +35,8 @@ import type {
     Assignment,
     Stats,
     PendingAssignmentInfo,
+    QueueStats,
+    UserLoadInfo,
     MatcherOptions,
     WorkflowDefinition,
     WorkflowDefinitionInput,
@@ -74,6 +76,8 @@ export type {
     Assignment,
     Stats,
     PendingAssignmentInfo,
+    QueueStats,
+    UserLoadInfo,
     MatcherOptions,
     options,
     FairnessMode,
@@ -759,16 +763,22 @@ export default class AssignmentMatcher implements WorkflowHost {
             eligible = false;
         }
 
-        const [isRejected, backlog] = await Promise.all([
+        const [isRejected, backlog, isPaused] = await Promise.all([
             this.redisClient.sIsMember(this.keys.userRejected(user.id), assignmentId),
             this.redisClient.sCard(this.keys.userAssignments(user.id)),
+            this.redisClient.sIsMember(this.keys.pausedUsers(), user.id),
         ]);
         if (isRejected) {
             reasons.push({ kind: 'rejectedPreviously' });
             eligible = false;
         }
-        if (backlog >= this.maxUserBacklogSize) {
-            reasons.push({ kind: 'backlogFull', backlog, limit: this.maxUserBacklogSize });
+        if (isPaused) {
+            reasons.push({ kind: 'paused' });
+            eligible = false;
+        }
+        const backlogLimit = this.backlogLimitFor(user);
+        if (backlog >= backlogLimit) {
+            reasons.push({ kind: 'backlogFull', backlog, limit: backlogLimit });
             eligible = false;
         }
 
@@ -891,17 +901,31 @@ export default class AssignmentMatcher implements WorkflowHost {
         }
     }
 
-    /** Exclusion sets used to enrich traces with prefiltered (vetoed/rejected) users. */
+    /** Exclusion sets used to enrich traces with prefiltered (vetoed/rejected/paused) users. */
     private async getTraceUserContexts(users: User[]): Promise<TraceUserContext[]> {
+        const paused = new Set<string>(await this.redisClient.sMembers(this.keys.pausedUsers()));
         return Promise.all(
             users.map(async (user) => {
                 const [rejected, vetoed] = await Promise.all([
                     this.redisClient.sMembers(this.keys.userRejected(user.id)),
                     this.redisClient.sMembers(this.keys.userVetoed(user.id)),
                 ]);
-                return { user, rejected: new Set<string>(rejected), vetoed: new Set<string>(vetoed) };
+                return {
+                    user,
+                    rejected: new Set<string>(rejected),
+                    vetoed: new Set<string>(vetoed),
+                    paused: paused.has(user.id),
+                };
             }),
         );
+    }
+
+    /** One sMembers per pass: the user list minus currently paused users. */
+    private async filterPausedUsers(users: User[]): Promise<User[]> {
+        const paused = await this.redisClient.sMembers(this.keys.pausedUsers());
+        if (paused.length === 0) return users;
+        const pausedSet = new Set<string>(paused);
+        return users.filter((user) => !pausedSet.has(user.id));
     }
 
     /**
@@ -1115,6 +1139,9 @@ export default class AssignmentMatcher implements WorkflowHost {
         const multi = this.redisClient
             .multi()
             .hSet(this.assignmentsRefKey, id, JSON.stringify(assignment))
+            // NX: a requeue (reject/expiry re-adds via this method) keeps the
+            // original first-enqueue wait clock.
+            .zAdd(this.keys.assignmentsQueuedAt(), { score: Date.now(), value: id }, { NX: true })
             .hSet(assignmentPriorityKey, 'priority', priority)
             // Ensure 'default' tag is persisted consistently when enabled
             .hSet(assignmentTagsKey, 'tags', tags.join(',') + (this.enableDefaultMatching ? ',default' : ''))
@@ -1182,6 +1209,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         multi.del(assignmentPriorityKey);
         multi.del(assignmentTagsKey);
         multi.zRem(this.assignmentsKey, id.toString());
+        multi.zRem(this.keys.assignmentsQueuedAt(), id.toString());
         for (const tag of tags) {
             multi.zRem(this.keys.tagAssignments(tag), id.toString());
         }
@@ -1215,10 +1243,81 @@ export default class AssignmentMatcher implements WorkflowHost {
             .del(this.keys.userRejected(userId))
             .del(this.keys.userVetoed(userId))
             .zRem(this.keys.userActivity(), userId)
+            .sRem(this.keys.pausedUsers(), userId)
             .hDel(this.usersKey, userId);
         await multi.exec();
 
         return userId;
+    }
+
+    /**
+     * Get one stored user as last written by addUser (including the injected
+     * 'default' tag when enableDefaultMatching is on), or null.
+     */
+    async getUser(userId: string): Promise<User | null> {
+        await this.readyPromise;
+        const json = await this.redisClient.hGet(this.usersKey, userId);
+        return json ? JSON.parse(json) : null;
+    }
+
+    /** All stored users. The pool is small by design; for load metadata see getQueueStats(). */
+    async getUsers(): Promise<User[]> {
+        await this.readyPromise;
+        const users: User[] = [];
+        let cursor = '0';
+        do {
+            const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.usersKey, cursor, { COUNT: 500 });
+            users.push(...entries.map((t: { field: string; value: string }) => JSON.parse(t.value)));
+            cursor = nextCursor;
+        } while (cursor !== '0');
+        return users;
+    }
+
+    // ============================================================================
+    // Worker Availability (pause/resume)
+    // ============================================================================
+
+    /**
+     * Pause a user: they stop receiving new assignments in every matching path
+     * until resumed, but keep their pending backlog and can still accept,
+     * complete, reject, or fail work they already hold. Paused users are also
+     * exempt from idle auto-removal (pausing is deliberate absence, not
+     * idleness). Idempotent.
+     *
+     * @returns false when the user is not in the pool (nothing is recorded)
+     */
+    async pauseUser(userId: string): Promise<boolean> {
+        await this.readyPromise;
+        const exists = await this.redisClient.hExists(this.usersKey, userId);
+        if (!exists) return false;
+        await this.redisClient.sAdd(this.keys.pausedUsers(), userId);
+        return true;
+    }
+
+    /**
+     * Resume a paused user so matching considers them again on the next pass.
+     * Also records activity (resets the idle clock).
+     *
+     * @returns false when the user was not paused
+     */
+    async resumeUser(userId: string): Promise<boolean> {
+        await this.readyPromise;
+        const wasPaused = await this.redisClient.sRem(this.keys.pausedUsers(), userId);
+        if (wasPaused) await this.touchUser(userId);
+        return wasPaused > 0;
+    }
+
+    /** Whether a user is currently paused. */
+    async isUserPaused(userId: string): Promise<boolean> {
+        await this.readyPromise;
+        return Boolean(await this.redisClient.sIsMember(this.keys.pausedUsers(), userId));
+    }
+
+    /** IDs of all currently paused users. */
+    async getPausedUsers(): Promise<string[]> {
+        await this.readyPromise;
+        const members = await this.redisClient.sMembers(this.keys.pausedUsers());
+        return members.sort();
     }
 
     /**
@@ -1264,6 +1363,49 @@ export default class AssignmentMatcher implements WorkflowHost {
     async getAssignmentsByIds(ids: string[]): Promise<Assignment[]> {
         await this.readyPromise;
         return getAssignmentsByIdsBatch(this.redisClient, this.assignmentStoreKeys, ids);
+    }
+
+    /**
+     * Live operational snapshot for dashboards: queued/pending counts, the
+     * age of the longest-waiting unaccepted assignment, and every user's
+     * backlog depth, effective cap, and paused state. The wait clock starts
+     * at first enqueue and survives reject/expiry requeues; it stops on
+     * accept or removal.
+     */
+    async getQueueStats(): Promise<QueueStats> {
+        await this.readyPromise;
+
+        const [counts, oldestEntries, pausedMembers] = await Promise.all([
+            getAssignmentCountsFromStores(this.redisClient, this.assignmentStoreKeys),
+            this.redisClient.zRangeWithScores(this.keys.assignmentsQueuedAt(), 0, 0),
+            this.redisClient.sMembers(this.keys.pausedUsers()),
+        ]);
+        const paused = new Set<string>(pausedMembers);
+
+        const users: User[] = [];
+        let cursor = '0';
+        do {
+            const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.usersKey, cursor, { COUNT: 500 });
+            users.push(...entries.map((t: { field: string; value: string }) => JSON.parse(t.value)));
+            cursor = nextCursor;
+        } while (cursor !== '0');
+
+        const perUser: UserLoadInfo[] = await Promise.all(
+            users.map(async (user) => ({
+                userId: user.id,
+                backlog: await this.redisClient.sCard(this.keys.userAssignments(user.id)),
+                maxBacklogSize: this.backlogLimitFor(user),
+                paused: paused.has(user.id),
+            })),
+        );
+        perUser.sort((a, b) => a.userId.localeCompare(b.userId));
+
+        return {
+            queued: counts.queued,
+            pending: counts.pending,
+            oldestWaitingMs: oldestEntries.length > 0 ? Date.now() - Number(oldestEntries[0].score) : null,
+            perUser,
+        };
     }
 
     /**
@@ -1397,23 +1539,39 @@ export default class AssignmentMatcher implements WorkflowHost {
         const assignmentPriorityKey = this.keys.assignmentPriority(id);
         // Fetch tags to update per-tag indices
         const assignmentTagsKey = this.keys.assignmentTags(id);
-        const [existsRef, tagsCsv] = (await this.redisClient
+        const [refJson, tagsCsv] = (await this.redisClient
             .multi()
-            .hExists(this.assignmentsRefKey, id)
+            .hGet(this.assignmentsRefKey, id)
             .hGet(assignmentTagsKey, 'tags')
-            .exec()) as unknown as [boolean, string | null];
+            .exec()) as unknown as [string | null, string | null];
         const tags = (tagsCsv && tagsCsv.length > 0 ? tagsCsv.split(',') : []) as string[];
 
         const multi = this.redisClient.multi();
         multi.hSet(assignmentPriorityKey, 'priority', priority);
-        if (existsRef) {
-            // Update global zset score and per-tag zset scores only if assignment still exists
+        if (refJson) {
+            // Update global zset score and per-tag zset scores only if assignment still exists,
+            // plus the stored record itself so reads see the new priority.
+            multi.hSet(this.assignmentsRefKey, id, JSON.stringify({ ...JSON.parse(refJson), priority }));
             multi.zAdd(this.assignmentsKey, { score: Number(priority), value: id });
             for (const tag of tags) {
                 multi.zAdd(this.keys.tagAssignments(tag), { score: Number(priority), value: id });
             }
         }
         await multi.exec();
+
+        if (refJson) {
+            // The snapshot read above races the atomic claim gate: if a claim
+            // HDELed the record between our read and write, the writes above
+            // resurrected a ghost queued entry. Detect and undo.
+            const owner = await this.redisClient.hGet(this.assignmentOwnerKey, id);
+            if (owner) {
+                const cleanup = this.redisClient.multi().hDel(this.assignmentsRefKey, id).zRem(this.assignmentsKey, id);
+                for (const tag of tags) {
+                    cleanup.zRem(this.keys.tagAssignments(tag), id);
+                }
+                await cleanup.exec();
+            }
+        }
 
         return { id, priority };
     }
@@ -1463,6 +1621,17 @@ export default class AssignmentMatcher implements WorkflowHost {
      * higher scorer should still be considered for their next-best options,
      * not left with nothing because discovery stopped early.
      */
+    /**
+     * Effective backlog cap for one user: `user.maxBacklogSize` when it is a
+     * valid non-negative number, else the matcher-wide `maxUserBacklogSize`.
+     * The fairness window auto-cap derivation (team-level) deliberately keeps
+     * using the global value.
+     */
+    private backlogLimitFor(user: User): number {
+        const own = user.maxBacklogSize;
+        return typeof own === 'number' && Number.isFinite(own) && own >= 0 ? own : this.maxUserBacklogSize;
+    }
+
     private async computeCandidatesForUser(
         user: User,
         capToBacklog = true,
@@ -1482,7 +1651,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             if (workflowAssignments.length > 0) {
                 // Workflow assignments take precedence - add them first with highest priority
                 userAssignments.push(...workflowAssignments);
-                if (userAssignments.length >= this.maxUserBacklogSize) {
+                if (userAssignments.length >= this.backlogLimitFor(user)) {
                     return { userAssignments, selected: [], workflowTargetedCount: userAssignments.length };
                 }
             }
@@ -1719,7 +1888,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             eligible.sort((a, b) => b.effectivePriority - a.effectivePriority);
 
             for (const c of eligible) {
-                if (capToBacklog && userAssignments.length >= this.maxUserBacklogSize) break;
+                if (capToBacklog && userAssignments.length >= this.backlogLimitFor(user)) break;
                 userAssignments.push({ id: c.detail.id, priority: c.effectivePriority });
                 selected.push({ id: c.detail.id, tags: c.detail.tags });
                 await this.learning.recordDecision(
@@ -1732,7 +1901,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             }
         } else {
             for (const d of details) {
-                if (capToBacklog && userAssignments.length >= this.maxUserBacklogSize) break;
+                if (capToBacklog && userAssignments.length >= this.backlogLimitFor(user)) break;
 
                 // Check CIDR restrictions: if assignment has allowedCidrs, user must have matching IP
                 if (!checkCidrMatch(user.ip, d.allowedCidrs)) {
@@ -1899,6 +2068,10 @@ export default class AssignmentMatcher implements WorkflowHost {
             cursor = nextCursor;
         } while (cursor !== '0');
 
+        // Paused users sit out the pass entirely but stay in `users` so traces
+        // can show them struck out.
+        const activeUsers = await this.filterPausedUsers(users);
+
         const collector = this.tracingActive ? new TraceCollector() : undefined;
         const traceWinners = new Map<string, string>();
         const workflowGrants: Array<{ assignmentId: string; userId: string; priority: number }> = [];
@@ -1916,7 +2089,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         // Phase 1: per-user backlog + window usage, one pipelined batch - the
         // rolling cap costs one extra command per user here, not a round trip.
         const usage = await Promise.all(
-            users.map(async (user) => {
+            activeUsers.map(async (user) => {
                 const [backlog, grantsInWindow] = await Promise.all([
                     this.redisClient.sCard(this.keys.userAssignments(user.id)),
                     windowActive
@@ -1944,7 +2117,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             usage.map(async ({ user, backlog, grantsInWindow }) => {
                 const windowRemaining = windowActive ? Math.max(0, windowCap - grantsInWindow) : Infinity;
 
-                if (backlog >= this.maxUserBacklogSize) {
+                if (backlog >= this.backlogLimitFor(user)) {
                     return {
                         user,
                         backlog,
@@ -2019,20 +2192,20 @@ export default class AssignmentMatcher implements WorkflowHost {
         // may take at most min(backlog headroom, window headroom) more
         // tag-scored assignments this pass. Workflow-targeted grants above
         // are exempt from the window but still occupy backlog.
-        let maxByUser: Map<string, number> | undefined;
-        if (windowActive) {
-            maxByUser = new Map(
-                perUser.map(({ user, backlog, windowRemaining, candidates }) => [
-                    user.id,
-                    backlog +
-                        candidates.workflowTargetedCount +
-                        Math.max(
-                            0,
-                            Math.min(this.maxUserBacklogSize - backlog - candidates.workflowTargetedCount, windowRemaining),
-                        ),
-                ]),
-            );
-        }
+        // Always built (not only when the window is active) so per-user
+        // backlog caps (user.maxBacklogSize) reach arbitration too;
+        // windowRemaining is Infinity when the window is inactive.
+        const maxByUser = new Map(
+            perUser.map(({ user, backlog, windowRemaining, candidates }) => [
+                user.id,
+                backlog +
+                    candidates.workflowTargetedCount +
+                    Math.max(
+                        0,
+                        Math.min(this.backlogLimitFor(user) - backlog - candidates.workflowTargetedCount, windowRemaining),
+                    ),
+            ]),
+        );
 
         // Arbitrate winners in memory (see arbitrateFair for the ordering:
         // best score wins, optionally load-penalized / tie-banded), then claim
@@ -2129,9 +2302,10 @@ export default class AssignmentMatcher implements WorkflowHost {
         if (userId) {
             const userJson = await this.redisClient.hGet(this.usersKey, userId);
             if (!userJson) return;
+            if (await this.redisClient.sIsMember(this.keys.pausedUsers(), userId)) return;
             const user = JSON.parse(userJson);
             const userMatchesCount = await this.redisClient.sCard(this.keys.userAssignments(user.id));
-            if (userMatchesCount >= this.maxUserBacklogSize) return;
+            if (userMatchesCount >= this.backlogLimitFor(user)) return;
 
             const collector = this.tracingActive ? new TraceCollector() : undefined;
             const { assignments, claimedIds, workflowTargeted } = await this.getUserRelatedAssignments(user, collector);
@@ -2167,15 +2341,19 @@ export default class AssignmentMatcher implements WorkflowHost {
             cursor = nextCursor;
         } while (cursor !== '0');
 
+        // Paused users sit out the pass entirely but stay in `users` so traces
+        // can show them struck out.
+        const activeUsers = await this.filterPausedUsers(users);
+
         // Process users in parallel
         const collector = this.tracingActive ? new TraceCollector() : undefined;
         const winners = new Map<string, string>();
         const workflowGrants: Array<{ assignmentId: string; userId: string; priority: number }> = [];
 
         await Promise.all(
-            users.map(async (user) => {
+            activeUsers.map(async (user) => {
                 const userMatchesCount = await this.redisClient.sCard(this.keys.userAssignments(user.id));
-                if (userMatchesCount >= this.maxUserBacklogSize) {
+                if (userMatchesCount >= this.backlogLimitFor(user)) {
                     return;
                 }
 
@@ -2208,6 +2386,124 @@ export default class AssignmentMatcher implements WorkflowHost {
         return userAssignments.map((el: string) => el.split(':')[1]);
     }
 
+    /**
+     * Operator override: hand an assignment directly to a user, bypassing
+     * tag/weight selection. Works on queued assignments and on pending ones
+     * held by another user (the previous owner's backlog slot is released).
+     * Idempotent when the user already owns the assignment.
+     *
+     * Hard rules still apply unless `force`: the user must not be paused,
+     * their backlog must have headroom, they must not be vetoed on the
+     * assignment, and they must not have previously rejected it. `force`
+     * bypasses those checks (the user must always exist). The learning layer
+     * is never fed by manual assignments.
+     *
+     * When tracing is active the override is recorded as a decision trace
+     * with mode `'manual'`, so supervisor actions show up in the same audit
+     * trail as organic matches.
+     */
+    async assignToUser(
+        assignmentId: string,
+        userId: string,
+        options?: { force?: boolean },
+    ): Promise<{ previousOwnerId: string | null }> {
+        await this.readyPromise;
+        const force = options?.force === true;
+
+        const userJson = await this.redisClient.hGet(this.usersKey, userId);
+        if (!userJson) throw new Error(`User not found: ${userId}`);
+        const user: User = JSON.parse(userJson);
+
+        const [queuedJson, previousOwnerId] = await Promise.all([
+            this.redisClient.hGet(this.assignmentsRefKey, assignmentId),
+            this.redisClient.hGet(this.assignmentOwnerKey, assignmentId),
+        ]);
+        if (previousOwnerId === userId) return { previousOwnerId: userId };
+        if (!queuedJson && !previousOwnerId) {
+            throw new Error(`Assignment not found in queued or pending state: ${assignmentId}`);
+        }
+
+        if (!force) {
+            const [isPaused, backlog, isVetoed, hasRejected] = await Promise.all([
+                this.redisClient.sIsMember(this.keys.pausedUsers(), userId),
+                this.redisClient.sCard(this.keys.userAssignments(userId)),
+                this.redisClient.sIsMember(this.keys.assignmentVetoed(assignmentId), userId),
+                this.redisClient.sIsMember(this.keys.userRejected(userId), assignmentId),
+            ]);
+            if (isPaused) throw new Error(`User is paused: ${userId}`);
+            if (backlog >= this.backlogLimitFor(user)) {
+                throw new Error(`User backlog is full (${backlog}/${this.backlogLimitFor(user)}): ${userId}`);
+            }
+            if (isVetoed) throw new Error(`User is vetoed from this assignment: ${userId}`);
+            if (hasRejected) throw new Error(`User previously rejected this assignment: ${userId}`);
+        }
+
+        if (queuedJson) {
+            // Queued -> pending through the same atomic claim gate as organic
+            // matching; losing it means a concurrent pass just took the
+            // assignment.
+            const tagsCsv = (await this.redisClient.hGet(this.keys.assignmentTags(assignmentId), 'tags')) ?? '';
+            const claimed = await this.claimSelected(user, [{ id: assignmentId, tags: tagsCsv }]);
+            if (!claimed.has(assignmentId)) {
+                throw new Error(`Assignment is no longer available: ${assignmentId}`);
+            }
+            await this.redisClient.sAdd(this.keys.userAssignments(userId), `assignment:${assignmentId}`);
+        } else {
+            // Pending under another user: transfer ownership and restart the
+            // expiry clock for the new owner.
+            const transfer = this.redisClient
+                .multi()
+                .sRem(this.keys.userAssignments(previousOwnerId!), `assignment:${assignmentId}`)
+                .sAdd(this.keys.userAssignments(userId), `assignment:${assignmentId}`)
+                .hSet(this.assignmentOwnerKey, assignmentId, userId)
+                .zAdd(this.pendingAssignmentsExpiryKey, {
+                    score: Date.now() + this.matchExpirationMs,
+                    value: assignmentId,
+                });
+            await transfer.exec();
+        }
+
+        await this.touchUser(userId);
+        await this.recordManualAssignTrace(assignmentId, userId, force, previousOwnerId ?? null);
+        return { previousOwnerId: previousOwnerId ?? null };
+    }
+
+    /** Audit record for an assignToUser() override; failures never break the assignment. */
+    private async recordManualAssignTrace(
+        assignmentId: string,
+        userId: string,
+        force: boolean,
+        previousOwnerId: string | null,
+    ): Promise<void> {
+        if (!this.tracingActive) return;
+        try {
+            await this.decisionTraces.record(
+                [
+                    {
+                        id: randomUUID(),
+                        assignmentId,
+                        chosenUserId: userId,
+                        matchedAt: Date.now(),
+                        mode: 'manual',
+                        candidates: [
+                            {
+                                userId,
+                                eligible: true,
+                                chosen: true,
+                                score: 0,
+                                effectivePriority: 0,
+                                reasons: [{ kind: 'manualAssignment', force, previousOwnerId }],
+                            },
+                        ],
+                    },
+                ],
+                this.enableDecisionTraces,
+            );
+        } catch (err) {
+            console.error('Failed to record manual assignment trace:', err);
+        }
+    }
+
     async acceptAssignment(userId: string, assignmentId: string): Promise<boolean> {
         await this.readyPromise;
 
@@ -2225,6 +2521,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         multi.hDel(this.pendingAssignmentsKey, assignmentId);
         multi.zRem(this.pendingAssignmentsExpiryKey, assignmentId);
         multi.hDel(this.assignmentOwnerKey, assignmentId);
+        // The wait clock stops when a user takes the work
+        multi.zRem(this.keys.assignmentsQueuedAt(), assignmentId);
 
         // Store in accepted assignments
         if (json) {
@@ -2413,6 +2711,15 @@ export default class AssignmentMatcher implements WorkflowHost {
     async listWorkflowDefinitions(): Promise<WorkflowDefinitionSummary[]> {
         await this.readyPromise;
         return this.workflow.listWorkflowDefinitions();
+    }
+
+    /**
+     * Delete a workflow definition by ID. Running instances are unaffected
+     * (they carry their own snapshot). Returns `false` if it did not exist.
+     */
+    async deleteWorkflowDefinition(id: string): Promise<boolean> {
+        await this.readyPromise;
+        return this.workflow.deleteWorkflowDefinition(id);
     }
 
     /**
@@ -2645,8 +2952,12 @@ export default class AssignmentMatcher implements WorkflowHost {
         const cutoff = Date.now() - this.idleUserTimeoutMs;
         const idleCandidates = await this.redisClient.zRangeByScore(this.keys.userActivity(), '-inf', cutoff);
 
+        // Paused users are deliberately absent, not idle - never auto-remove them.
+        const paused = new Set<string>(await this.redisClient.sMembers(this.keys.pausedUsers()));
+
         const removed: string[] = [];
         for (const userId of idleCandidates) {
+            if (paused.has(userId)) continue;
             // Skip users no longer in the pool (clean up stale activity entry)
             const exists = await this.redisClient.hExists(this.usersKey, userId);
             if (!exists) {

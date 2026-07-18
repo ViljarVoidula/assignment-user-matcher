@@ -27,9 +27,9 @@ not appear.
 
 #### Defined in
 
-[src/types/matcher.ts:165](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L165)
+[src/types/matcher.ts:198](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L198)
 
----
+___
 
 ### candidates
 
@@ -39,9 +39,9 @@ Chosen candidate first, then eligible candidates by effective priority
 
 #### Defined in
 
-[src/types/matcher.ts:170](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L170)
+[src/types/matcher.ts:203](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L203)
 
----
+___
 
 ### chosenUserId
 
@@ -49,9 +49,9 @@ Chosen candidate first, then eligible candidates by effective priority
 
 #### Defined in
 
-[src/types/matcher.ts:166](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L166)
+[src/types/matcher.ts:199](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L199)
 
----
+___
 
 ### id
 
@@ -59,9 +59,9 @@ Chosen candidate first, then eligible candidates by effective priority
 
 #### Defined in
 
-[src/types/matcher.ts:164](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L164)
+[src/types/matcher.ts:197](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L197)
 
----
+___
 
 ### matchedAt
 
@@ -69,9 +69,9 @@ Chosen candidate first, then eligible candidates by effective priority
 
 #### Defined in
 
-[src/types/matcher.ts:167](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L167)
+[src/types/matcher.ts:200](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L200)
 
----
+___
 
 ### mode
 
@@ -79,4 +79,4 @@ Chosen candidate first, then eligible candidates by effective priority
 
 #### Defined in
 
-[src/types/matcher.ts:168](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L168)
+[src/types/matcher.ts:201](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L201)

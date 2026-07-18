@@ -25,9 +25,9 @@ Type of action
 
 #### Defined in
 
-[src/types/matcher.ts:675](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L675)
+[src/types/matcher.ts:708](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L708)
 
----
+___
 
 ### consumerId
 
@@ -37,9 +37,9 @@ Consumer ID that processed the event
 
 #### Defined in
 
-[src/types/matcher.ts:681](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L681)
+[src/types/matcher.ts:714](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L714)
 
----
+___
 
 ### details
 
@@ -49,9 +49,9 @@ Additional details
 
 #### Defined in
 
-[src/types/matcher.ts:683](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L683)
+[src/types/matcher.ts:716](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L716)
 
----
+___
 
 ### resourceId
 
@@ -61,9 +61,9 @@ Resource ID (event ID, workflow instance ID, etc.)
 
 #### Defined in
 
-[src/types/matcher.ts:677](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L677)
+[src/types/matcher.ts:710](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L710)
 
----
+___
 
 ### resourceType
 
@@ -73,9 +73,9 @@ Type of resource
 
 #### Defined in
 
-[src/types/matcher.ts:679](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L679)
+[src/types/matcher.ts:712](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L712)
 
----
+___
 
 ### timestamp
 
@@ -85,4 +85,4 @@ Timestamp of the action
 
 #### Defined in
 
-[src/types/matcher.ts:673](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L673)
+[src/types/matcher.ts:706](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L706)

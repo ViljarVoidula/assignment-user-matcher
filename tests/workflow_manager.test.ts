@@ -87,6 +87,25 @@ describe('WorkflowManager', function () {
             ],
         };
 
+        it('should register, list, and delete a workflow definition', async function () {
+            await workflowManager.registerWorkflow(definition);
+            expect(await workflowManager.listWorkflowDefinitions()).to.deep.include({
+                id: definition.id,
+                name: definition.name,
+            });
+
+            const deleted = await workflowManager.deleteWorkflowDefinition(definition.id);
+            expect(deleted).to.equal(true);
+            expect(await workflowManager.getWorkflowDefinition(definition.id)).to.be.null;
+            expect(await workflowManager.listWorkflowDefinitions()).to.not.deep.include({
+                id: definition.id,
+                name: definition.name,
+            });
+
+            // Deleting a missing definition is a no-op that reports false
+            expect(await workflowManager.deleteWorkflowDefinition('does-not-exist')).to.equal(false);
+        });
+
         it('should start a workflow and create first assignment', async function () {
             await workflowManager.registerWorkflow(definition);
             const instance = await workflowManager.startWorkflow(definition.id, 'user-1');

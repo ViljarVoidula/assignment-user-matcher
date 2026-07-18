@@ -20,9 +20,9 @@ Result of `explainMatchScore`: the `calculateMatchScore` pair plus the reasons b
 
 #### Defined in
 
-[src/scoring/match-score.ts:143](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/scoring/match-score.ts#L143)
+[src/scoring/match-score.ts:143](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/scoring/match-score.ts#L143)
 
----
+___
 
 ### reasons
 
@@ -30,9 +30,9 @@ Result of `explainMatchScore`: the `calculateMatchScore` pair plus the reasons b
 
 #### Defined in
 
-[src/scoring/match-score.ts:144](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/scoring/match-score.ts#L144)
+[src/scoring/match-score.ts:144](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/scoring/match-score.ts#L144)
 
----
+___
 
 ### score
 
@@ -40,4 +40,4 @@ Result of `explainMatchScore`: the `calculateMatchScore` pair plus the reasons b
 
 #### Defined in
 
-[src/scoring/match-score.ts:142](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/scoring/match-score.ts#L142)
+[src/scoring/match-score.ts:142](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/scoring/match-score.ts#L142)

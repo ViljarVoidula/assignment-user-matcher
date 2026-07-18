@@ -16,6 +16,11 @@ export interface User {
     longitude?: number;
     // Optional user-side travel cap in kilometers
     maxTravelDistanceKm?: number;
+    // Optional per-user backlog cap overriding the matcher-wide
+    // maxUserBacklogSize (0 = receive nothing; invalid/negative values are
+    // ignored). The fairness rolling-window auto-cap derivation stays
+    // team-level and keeps using the global value.
+    maxBacklogSize?: number;
     [key: string]: any;
 }
 
@@ -60,6 +65,30 @@ export type Stats = {
     users?: number;
     usersWithoutAssignment?: string[];
     remainingAssignments?: number;
+};
+
+/** One user's live load snapshot inside `QueueStats`. */
+export type UserLoadInfo = {
+    userId: string;
+    /** Current pending-backlog depth */
+    backlog: number;
+    /** Effective cap (per-user `maxBacklogSize` or the matcher-wide default) */
+    maxBacklogSize: number;
+    paused: boolean;
+};
+
+/**
+ * Live operational snapshot from `getQueueStats()`: state counts, the age of
+ * the longest-waiting unaccepted assignment (queued or pending — the clock
+ * starts at first enqueue and survives requeues, stopping only on accept or
+ * removal), and per-user load.
+ */
+export type QueueStats = {
+    queued: number;
+    pending: number;
+    /** Age in ms of the oldest not-yet-accepted assignment; null when none */
+    oldestWaitingMs: number | null;
+    perUser: UserLoadInfo[];
 };
 
 export type PendingAssignmentInfo = {
@@ -131,10 +160,14 @@ export type MatchTraceReason =
     | { kind: 'geoBoost'; boost: number }
     /** The user's backlog is at `maxUserBacklogSize` */
     | { kind: 'backlogFull'; backlog: number; limit: number }
+    /** The user is paused (`pauseUser()`) and receives no new assignments */
+    | { kind: 'paused' }
     /** Learning-layer re-ranking contribution (zero influence when `shadowMode`) */
     | { kind: 'learningBoost'; predicted: number; boost: number; shadowMode: boolean }
     /** Deterministic workflow-targeted handoff; tag/weight selection was bypassed */
-    | { kind: 'workflowTargeted' };
+    | { kind: 'workflowTargeted' }
+    /** Operator override via assignToUser(); matching rules were bypassed */
+    | { kind: 'manualAssignment'; force: boolean; previousOwnerId: string | null };
 
 /** One user's evaluation within a routing decision or explanation. */
 export interface MatchCandidateTrace {
@@ -151,7 +184,7 @@ export interface MatchCandidateTrace {
 }
 
 /** How the winning user of a decision was arbitrated. */
-export type MatchDecisionMode = FairnessMode | 'direct' | 'workflow';
+export type MatchDecisionMode = FairnessMode | 'direct' | 'workflow' | 'manual';
 
 /**
  * The auditable record of one routing decision, captured while the decision

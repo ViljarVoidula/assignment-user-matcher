@@ -25,9 +25,9 @@ Whether this user actually received (or currently owns) the assignment
 
 #### Defined in
 
-[src/types/matcher.ts:145](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L145)
+[src/types/matcher.ts:178](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L178)
 
----
+___
 
 ### effectivePriority
 
@@ -37,9 +37,9 @@ What arbitration compares: base priority + score + geo boost + learning boost
 
 #### Defined in
 
-[src/types/matcher.ts:149](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L149)
+[src/types/matcher.ts:182](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L182)
 
----
+___
 
 ### eligible
 
@@ -49,9 +49,9 @@ Whether the user could have received the assignment under the hard rules
 
 #### Defined in
 
-[src/types/matcher.ts:143](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L143)
+[src/types/matcher.ts:176](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L176)
 
----
+___
 
 ### reasons
 
@@ -59,9 +59,9 @@ Whether the user could have received the assignment under the hard rules
 
 #### Defined in
 
-[src/types/matcher.ts:150](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L150)
+[src/types/matcher.ts:183](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L183)
 
----
+___
 
 ### score
 
@@ -71,9 +71,9 @@ Pure match score (routing-weight sum or tag-overlap ratio); 0 when excluded
 
 #### Defined in
 
-[src/types/matcher.ts:147](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L147)
+[src/types/matcher.ts:180](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L180)
 
----
+___
 
 ### userId
 
@@ -81,4 +81,4 @@ Pure match score (routing-weight sum or tag-overlap ratio); 0 when excluded
 
 #### Defined in
 
-[src/types/matcher.ts:141](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L141)
+[src/types/matcher.ts:174](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L174)

@@ -21,6 +21,7 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         userVetoed: (userId: string) => `${prefix}user:${userId}:vetoed`,
         userWindowGrants: (userId: string) => `${prefix}user:${userId}:window-grants`,
         userActivity: () => `${prefix}users:activity`,
+        pausedUsers: () => `${prefix}users:paused`,
 
         // Assignment keys
         assignments: () => `${prefix}assignments`,
@@ -29,6 +30,11 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         assignmentPriority: (id: string) => `${prefix}assignment:${id}:priority`,
         assignmentTags: (id: string) => `${prefix}assignment:${id}:tags`,
         assignmentVetoed: (id: string) => `${prefix}assignment:${id}:vetoed`,
+
+        // Wait-clock zset: assignment id -> first-enqueue ms epoch. Entries
+        // survive claim/requeue cycles and are cleared on accept/remove, so
+        // the oldest entry is always the longest-waiting unaccepted assignment.
+        assignmentsQueuedAt: () => `${prefix}assignments:queuedAt`,
 
         // Pending/accepted state keys
         pendingAssignmentsData: () => `${prefix}assignments:pending:data`,

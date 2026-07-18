@@ -275,6 +275,7 @@ Adds or updates a user in the system.
 - `user`: An object representing the user.
     - `id: string`: Unique identifier for the user.
     - `tags: string[]`: Array of tags associated with the user.
+    - `maxBacklogSize?: number`: Optional per-user backlog cap overriding the matcher-wide `maxUserBacklogSize` in every matching path (`0` = receive nothing; negative or non-numeric values are ignored). The fairness rolling-window auto-cap derivation stays team-level and keeps using the global value.
 
 ### `addAssignment(assignment: Assignment): Promise<void>`
 
@@ -306,6 +307,26 @@ Retrieves current pending assignments, including who owns each assignment and ho
 - `pendingForMs`: Elapsed pending time in milliseconds.
 - `pendingSince`: Unix timestamp (ms) when the assignment entered pending state.
 - `expiresAt`: Unix timestamp (ms) when pending expiration is scheduled.
+
+### `pauseUser(userId: string): Promise<boolean>` / `resumeUser(userId: string): Promise<boolean>`
+
+Operator availability controls. A paused user stops receiving new assignments in every matching path but keeps their pending backlog and can still accept, complete, or reject work they already hold. Paused users are exempt from idle auto-removal (`idleUserTimeoutMs`) — pausing is deliberate absence, not idleness. `pauseUser` returns `false` when the user is not in the pool; `resumeUser` returns `false` when the user was not paused, and records activity (resets the idle clock) when it succeeds. Inspect state with `isUserPaused(userId)` and `getPausedUsers()`.
+
+When decision traces are enabled, paused users appear struck out in traces with a `paused` reason, and `explainMatch()` reports them as ineligible.
+
+### `assignToUser(assignmentId: string, userId: string, options?: { force?: boolean }): Promise<{ previousOwnerId: string | null }>`
+
+Operator override: hand an assignment directly to a user, bypassing tag/weight selection. Works on queued assignments and on pending assignments held by another user (the previous owner's backlog slot is released and the expiry clock restarts). Idempotent when the user already owns the assignment.
+
+Hard rules still apply unless `force: true`: the user must not be paused, must have backlog headroom, must not be vetoed on the assignment, and must not have previously rejected it. The learning layer is never fed by manual assignments. When tracing is active the override is recorded as a decision trace with mode `'manual'`, so supervisor actions land in the same audit trail as organic matches.
+
+### `getQueueStats(): Promise<QueueStats>`
+
+Live operational snapshot for dashboards:
+
+- `queued` / `pending`: assignment counts by state.
+- `oldestWaitingMs`: age of the longest-waiting unaccepted assignment, or `null`. The wait clock starts at first enqueue and survives reject/expiry requeues; it stops when a user accepts the assignment or it is removed.
+- `perUser`: every user's `backlog` depth, effective `maxBacklogSize` cap, and `paused` state.
 
 ### `removeUser(userId: string): Promise<void>`
 

@@ -24,9 +24,9 @@ UCB exploration coefficient; higher favors less-sampled tags (default: 0.5)
 
 #### Defined in
 
-[src/types/matcher.ts:797](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L797)
+[src/types/matcher.ts:830](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L830)
 
----
+___
 
 ### maxWeight
 
@@ -36,9 +36,9 @@ Maximum synthesized weight on the conventional 0-100 scale (default: 100)
 
 #### Defined in
 
-[src/types/matcher.ts:795](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L795)
+[src/types/matcher.ts:828](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L828)
 
----
+___
 
 ### minSamples
 
@@ -48,9 +48,9 @@ Minimum observations before a tag's stats are trusted (default: 5)
 
 #### Defined in
 
-[src/types/matcher.ts:791](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L791)
+[src/types/matcher.ts:824](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L824)
 
----
+___
 
 ### priorWeight
 
@@ -60,9 +60,9 @@ Optimistic weight assigned to under-sampled or unobserved known tags (default: m
 
 #### Defined in
 
-[src/types/matcher.ts:799](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L799)
+[src/types/matcher.ts:832](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L832)
 
----
+___
 
 ### vetoThreshold
 
@@ -72,4 +72,4 @@ Mean-reward UCB score at or below which a tag is hard-vetoed with weight 0 (defa
 
 #### Defined in
 
-[src/types/matcher.ts:793](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L793)
+[src/types/matcher.ts:826](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L826)

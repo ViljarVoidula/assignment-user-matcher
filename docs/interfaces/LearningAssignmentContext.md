@@ -23,9 +23,9 @@ Minimal assignment context passed to feature extractors
 
 #### Defined in
 
-[src/types/matcher.ts:737](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L737)
+[src/types/matcher.ts:770](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L770)
 
----
+___
 
 ### tags
 
@@ -33,4 +33,4 @@ Minimal assignment context passed to feature extractors
 
 #### Defined in
 
-[src/types/matcher.ts:738](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L738)
+[src/types/matcher.ts:771](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L771)

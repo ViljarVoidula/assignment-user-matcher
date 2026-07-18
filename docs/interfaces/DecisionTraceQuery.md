@@ -22,9 +22,9 @@ Only traces for this assignment (an assignment re-queued and re-matched has seve
 
 #### Defined in
 
-[src/types/matcher.ts:195](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L195)
+[src/types/matcher.ts:228](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L228)
 
----
+___
 
 ### limit
 
@@ -34,9 +34,9 @@ Maximum traces returned (default 50), newest first
 
 #### Defined in
 
-[src/types/matcher.ts:199](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L199)
+[src/types/matcher.ts:232](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L232)
 
----
+___
 
 ### userId
 
@@ -46,4 +46,4 @@ Only traces where this user was chosen
 
 #### Defined in
 
-[src/types/matcher.ts:197](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L197)
+[src/types/matcher.ts:230](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L230)

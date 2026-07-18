@@ -50,6 +50,8 @@ export interface TraceUserContext {
     rejected: Set<string>;
     /** Assignment ids this user is hard-vetoed from (assignment.vetoedUsers) */
     vetoed: Set<string>;
+    /** Whether the user was paused during the pass (excluded from all matching) */
+    paused?: boolean;
 }
 
 /** Chosen candidate first, then eligible before ineligible, then by effective priority. */
@@ -68,6 +70,7 @@ export function sortCandidates(candidates: MatchCandidateTrace[]): MatchCandidat
  */
 function excludedCandidate(ctx: TraceUserContext, assignmentId: string, tags: string[]): MatchCandidateTrace | null {
     const reasons: MatchTraceReason[] = [];
+    if (ctx.paused) reasons.push({ kind: 'paused' });
     if (ctx.vetoed.has(assignmentId)) reasons.push({ kind: 'assignmentVeto' });
     if (ctx.rejected.has(assignmentId)) reasons.push({ kind: 'rejectedPreviously' });
     const weights = ctx.user.routingWeights;

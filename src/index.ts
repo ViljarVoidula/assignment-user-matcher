@@ -5,6 +5,8 @@ export type {
     MatcherOptions,
     options,
     Stats,
+    QueueStats,
+    UserLoadInfo,
     User,
     GeoMatchResult,
     GeoMatchingFunction,

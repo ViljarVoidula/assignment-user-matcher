@@ -130,6 +130,17 @@ export class WorkflowManager {
         return Object.entries(definitions).map(([id, name]) => ({ id, name }));
     }
 
+    /**
+     * Delete a workflow definition and its listing entry. Running instances keep
+     * their own `definitionSnapshot`, so in-flight workflows are unaffected.
+     * Returns `false` if no definition with that id existed.
+     */
+    async deleteWorkflowDefinition(id: string): Promise<boolean> {
+        const removed = await this.redisClient.del(this.keys.workflowDefinition(id));
+        await this.redisClient.hDel(this.keys.workflowDefinitions(), id);
+        return removed > 0;
+    }
+
     async startWorkflow(
         workflowDefinitionId: string,
         userId: string,

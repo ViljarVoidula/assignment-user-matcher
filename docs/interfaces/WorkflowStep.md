@@ -32,33 +32,33 @@ Assignment template - merged with workflow context when creating the assignment
 
 #### Defined in
 
-[src/types/matcher.ts:529](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L529)
+[src/types/matcher.ts:562](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L562)
 
----
+___
 
 ### defaultNextStepId
 
-• `Optional` **defaultNextStepId**: `null` \| `string`
+• `Optional` **defaultNextStepId**: ``null`` \| `string`
 
 Default next step if no routing condition matches (null = end workflow)
 
 #### Defined in
 
-[src/types/matcher.ts:537](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L537)
+[src/types/matcher.ts:570](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L570)
 
----
+___
 
 ### failurePolicy
 
-• `Optional` **failurePolicy**: `"abort"` \| `"continue"` \| `"retry"`
+• `Optional` **failurePolicy**: ``"abort"`` \| ``"continue"`` \| ``"retry"``
 
 Failure policy for parallel steps: 'abort' | 'continue' | 'retry'
 
 #### Defined in
 
-[src/types/matcher.ts:543](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L543)
+[src/types/matcher.ts:576](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L576)
 
----
+___
 
 ### id
 
@@ -68,9 +68,9 @@ Unique identifier for this step within the workflow
 
 #### Defined in
 
-[src/types/matcher.ts:523](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L523)
+[src/types/matcher.ts:556](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L556)
 
----
+___
 
 ### machineTask
 
@@ -80,9 +80,9 @@ Machine task metadata used for code/task worker execution
 
 #### Defined in
 
-[src/types/matcher.ts:533](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L533)
+[src/types/matcher.ts:566](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L566)
 
----
+___
 
 ### maxRetries
 
@@ -92,9 +92,9 @@ Maximum retries for this step (default: 0)
 
 #### Defined in
 
-[src/types/matcher.ts:545](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L545)
+[src/types/matcher.ts:578](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L578)
 
----
+___
 
 ### name
 
@@ -104,9 +104,9 @@ Human-readable name
 
 #### Defined in
 
-[src/types/matcher.ts:525](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L525)
+[src/types/matcher.ts:558](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L558)
 
----
+___
 
 ### parallelStepIds
 
@@ -116,9 +116,9 @@ For parallel execution: IDs of steps to execute simultaneously
 
 #### Defined in
 
-[src/types/matcher.ts:539](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L539)
+[src/types/matcher.ts:572](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L572)
 
----
+___
 
 ### routing
 
@@ -128,9 +128,9 @@ Routing rules for branching (evaluated in order, first match wins)
 
 #### Defined in
 
-[src/types/matcher.ts:535](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L535)
+[src/types/matcher.ts:568](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L568)
 
----
+___
 
 ### targetUser
 
@@ -140,9 +140,9 @@ Target user selector: 'initiator' | 'previous' | specific userId | tag-based sel
 
 #### Defined in
 
-[src/types/matcher.ts:531](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L531)
+[src/types/matcher.ts:564](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L564)
 
----
+___
 
 ### taskType
 
@@ -152,9 +152,9 @@ Step execution mode (default: 'assignment')
 
 #### Defined in
 
-[src/types/matcher.ts:527](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L527)
+[src/types/matcher.ts:560](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L560)
 
----
+___
 
 ### timeoutMs
 
@@ -164,9 +164,9 @@ Timeout override for this step in milliseconds
 
 #### Defined in
 
-[src/types/matcher.ts:547](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L547)
+[src/types/matcher.ts:580](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L580)
 
----
+___
 
 ### waitForAll
 
@@ -176,4 +176,4 @@ For parallel joins: wait for all parallel steps before continuing
 
 #### Defined in
 
-[src/types/matcher.ts:541](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a509b01d4cde774650bf913f0453283620e5b4ee/src/types/matcher.ts#L541)
+[src/types/matcher.ts:574](https://github.com/ViljarVoidula/assignment-user-matcher/blob/cf40c2e3e178a0c6bda2defaea5cc0043c476739/src/types/matcher.ts#L574)
