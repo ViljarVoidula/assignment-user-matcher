@@ -21,7 +21,7 @@ Machine handler identifier (resolver-specific)
 
 #### Defined in
 
-[src/types/matcher.ts:528](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/types/matcher.ts#L528)
+[src/types/matcher.ts:528](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L528)
 
 ___
 
@@ -33,4 +33,4 @@ Optional static input merged with workflow context
 
 #### Defined in
 
-[src/types/matcher.ts:530](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/types/matcher.ts#L530)
+[src/types/matcher.ts:530](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L530)

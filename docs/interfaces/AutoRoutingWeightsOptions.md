@@ -24,7 +24,7 @@ UCB exploration coefficient; higher favors less-sampled tags (default: 0.5)
 
 #### Defined in
 
-[src/types/matcher.ts:830](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/types/matcher.ts#L830)
+[src/types/matcher.ts:830](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L830)
 
 ___
 
@@ -36,7 +36,7 @@ Maximum synthesized weight on the conventional 0-100 scale (default: 100)
 
 #### Defined in
 
-[src/types/matcher.ts:828](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/types/matcher.ts#L828)
+[src/types/matcher.ts:828](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L828)
 
 ___
 
@@ -48,7 +48,7 @@ Minimum observations before a tag's stats are trusted (default: 5)
 
 #### Defined in
 
-[src/types/matcher.ts:824](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/types/matcher.ts#L824)
+[src/types/matcher.ts:824](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L824)
 
 ___
 
@@ -60,7 +60,7 @@ Optimistic weight assigned to under-sampled or unobserved known tags (default: m
 
 #### Defined in
 
-[src/types/matcher.ts:832](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/types/matcher.ts#L832)
+[src/types/matcher.ts:832](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L832)
 
 ___
 
@@ -72,4 +72,4 @@ Mean-reward UCB score at or below which a tag is hard-vetoed with weight 0 (defa
 
 #### Defined in
 
-[src/types/matcher.ts:826](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/types/matcher.ts#L826)
+[src/types/matcher.ts:826](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L826)

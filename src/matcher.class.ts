@@ -1307,6 +1307,20 @@ export default class AssignmentMatcher implements WorkflowHost {
         return wasPaused > 0;
     }
 
+    /**
+     * Requeue every pending (matched but not yet accepted) assignment the user
+     * holds so other users can pick them up — the operator's "this person is
+     * gone, redistribute their work" move, typically paired with `pauseUser`
+     * (which alone deliberately preserves the backlog). Accepted assignments
+     * (work in progress) are never touched. Requeued assignments keep their
+     * original wait clock, and a still-paused user won't win them back until
+     * resumed. Returns the released assignment ids ([] when nothing was held).
+     */
+    async releaseUserAssignments(userId: string): Promise<string[]> {
+        await this.readyPromise;
+        return this.releaseUserPendingAssignments(userId);
+    }
+
     /** Whether a user is currently paused. */
     async isUserPaused(userId: string): Promise<boolean> {
         await this.readyPromise;
@@ -2980,9 +2994,10 @@ export default class AssignmentMatcher implements WorkflowHost {
     /**
      * Requeue all pending assignments currently held by a user.
      */
-    private async releaseUserPendingAssignments(userId: string): Promise<void> {
+    private async releaseUserPendingAssignments(userId: string): Promise<string[]> {
         const members = await this.redisClient.sMembers(this.keys.userAssignments(userId));
         const now = Date.now();
+        const released: string[] = [];
 
         for (const member of members) {
             const id = member.split(':')[1];
@@ -3012,7 +3027,9 @@ export default class AssignmentMatcher implements WorkflowHost {
             if (json) {
                 await this.addAssignment(JSON.parse(json));
             }
+            released.push(id);
         }
+        return released;
     }
 
     private idleUserInterval: NodeJS.Timeout | null = null;

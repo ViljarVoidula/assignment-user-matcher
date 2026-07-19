@@ -38,7 +38,7 @@ Internal method to add a step from the step builder.
 
 #### Defined in
 
-[src/workflow-builder.ts:262](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/workflow-builder.ts#L262)
+[src/workflow-builder.ts:262](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L262)
 
 ___
 
@@ -60,7 +60,7 @@ Add a pre-built step to the workflow.
 
 #### Defined in
 
-[src/workflow-builder.ts:254](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/workflow-builder.ts#L254)
+[src/workflow-builder.ts:254](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L254)
 
 ___
 
@@ -80,7 +80,7 @@ Error if the workflow is invalid
 
 #### Defined in
 
-[src/workflow-builder.ts:278](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/workflow-builder.ts#L278)
+[src/workflow-builder.ts:278](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L278)
 
 ___
 
@@ -102,7 +102,7 @@ Set the default timeout for all steps (in milliseconds).
 
 #### Defined in
 
-[src/workflow-builder.ts:238](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/workflow-builder.ts#L238)
+[src/workflow-builder.ts:238](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L238)
 
 ___
 
@@ -124,7 +124,7 @@ Set the initial (entry point) step ID.
 
 #### Defined in
 
-[src/workflow-builder.ts:269](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/workflow-builder.ts#L269)
+[src/workflow-builder.ts:269](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L269)
 
 ___
 
@@ -146,7 +146,7 @@ Set workflow metadata.
 
 #### Defined in
 
-[src/workflow-builder.ts:230](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/workflow-builder.ts#L230)
+[src/workflow-builder.ts:230](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L230)
 
 ___
 
@@ -168,7 +168,7 @@ Start building a new step.
 
 #### Defined in
 
-[src/workflow-builder.ts:247](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/workflow-builder.ts#L247)
+[src/workflow-builder.ts:247](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L247)
 
 ___
 
@@ -190,7 +190,7 @@ Set the workflow version.
 
 #### Defined in
 
-[src/workflow-builder.ts:222](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/workflow-builder.ts#L222)
+[src/workflow-builder.ts:222](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L222)
 
 ___
 
@@ -213,4 +213,4 @@ Create a new workflow builder.
 
 #### Defined in
 
-[src/workflow-builder.ts:215](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/workflow-builder.ts#L215)
+[src/workflow-builder.ts:215](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L215)

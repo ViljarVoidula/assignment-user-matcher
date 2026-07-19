@@ -23,7 +23,7 @@ totalReward / rewards (0 when no rewards)
 
 #### Defined in
 
-[src/types/matcher.ts:844](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/types/matcher.ts#L844)
+[src/types/matcher.ts:844](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L844)
 
 ___
 
@@ -35,7 +35,7 @@ Number of recorded match decisions
 
 #### Defined in
 
-[src/types/matcher.ts:838](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/types/matcher.ts#L838)
+[src/types/matcher.ts:838](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L838)
 
 ___
 
@@ -47,7 +47,7 @@ Number of reward updates applied
 
 #### Defined in
 
-[src/types/matcher.ts:840](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/types/matcher.ts#L840)
+[src/types/matcher.ts:840](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L840)
 
 ___
 
@@ -59,4 +59,4 @@ Sum of all applied rewards
 
 #### Defined in
 
-[src/types/matcher.ts:842](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/types/matcher.ts#L842)
+[src/types/matcher.ts:842](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L842)

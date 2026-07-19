@@ -312,6 +312,10 @@ Operator availability controls. A paused user stops receiving new assignments in
 
 When decision traces are enabled, paused users appear struck out in traces with a `paused` reason, and `explainMatch()` reports them as ineligible.
 
+### `releaseUserAssignments(userId: string): Promise<string[]>`
+
+The redistribution counterpart to `pauseUser`: requeue every pending (matched but not yet accepted) assignment the user holds so other users can pick them up — for when a worker is gone rather than briefly away. Accepted assignments (work in progress) are never touched. Requeued assignments keep their original wait clock (`getQueueStats().oldestWaitingMs` does not reset), workflow subscribers receive an `EXPIRED` event per released assignment, and a still-paused user cannot win their released work back until resumed. Returns the released assignment ids (`[]` when the user holds nothing or is unknown). The idle auto-removal path (`processIdleUsers`) uses the same requeue mechanics internally.
+
 ### `assignToUser(assignmentId: string, userId: string, options?: { force?: boolean }): Promise<{ previousOwnerId: string | null }>`
 
 Operator override: hand an assignment directly to a user, bypassing tag/weight selection. Works on queued assignments and on pending assignments held by another user (the previous owner's backlog slot is released and the expiry clock restarts). Idempotent when the user already owns the assignment.

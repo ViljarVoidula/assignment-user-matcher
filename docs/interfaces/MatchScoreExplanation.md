@@ -20,7 +20,7 @@ Result of `explainMatchScore`: the `calculateMatchScore` pair plus the reasons b
 
 #### Defined in
 
-[src/scoring/match-score.ts:143](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/scoring/match-score.ts#L143)
+[src/scoring/match-score.ts:143](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/scoring/match-score.ts#L143)
 
 ___
 
@@ -30,7 +30,7 @@ ___
 
 #### Defined in
 
-[src/scoring/match-score.ts:144](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/scoring/match-score.ts#L144)
+[src/scoring/match-score.ts:144](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/scoring/match-score.ts#L144)
 
 ___
 
@@ -40,4 +40,4 @@ ___
 
 #### Defined in
 
-[src/scoring/match-score.ts:142](https://github.com/ViljarVoidula/assignment-user-matcher/blob/67ac85902466fd6b69c70fd53ac0f72691650580/src/scoring/match-score.ts#L142)
+[src/scoring/match-score.ts:142](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/scoring/match-score.ts#L142)
