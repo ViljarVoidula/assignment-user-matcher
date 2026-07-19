@@ -19,6 +19,8 @@ export type {
     MatchDecisionTrace,
     MatchDecisionMode,
     MatchExplanation,
+    MatchPreview,
+    MatchPreviewInput,
     DecisionTraceQuery,
 } from './matcher.class';
 

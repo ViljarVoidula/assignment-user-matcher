@@ -66,6 +66,8 @@ import type {
     MatchDecisionTrace,
     MatchDecisionMode,
     MatchExplanation,
+    MatchPreview,
+    MatchPreviewInput,
     DecisionTraceQuery,
 } from './types/matcher';
 
@@ -92,6 +94,8 @@ export type {
     MatchDecisionTrace,
     MatchDecisionMode,
     MatchExplanation,
+    MatchPreview,
+    MatchPreviewInput,
     DecisionTraceQuery,
 } from './types/matcher';
 // Export workflow types
@@ -755,19 +759,51 @@ export default class AssignmentMatcher implements WorkflowHost {
         ownerId: string | null,
         modelWeights?: Record<string, string>,
     ): Promise<MatchCandidateTrace> {
+        const [isRejected, backlog, isPaused] = await Promise.all([
+            this.redisClient.sIsMember(this.keys.userRejected(user.id), assignmentId),
+            this.redisClient.sCard(this.keys.userAssignments(user.id)),
+            this.redisClient.sIsMember(this.keys.pausedUsers(), user.id),
+        ]);
+        return this.evaluateCandidateForAssignment(user, assignment, tagsCsv, basePriority, modelWeights, {
+            assignmentId,
+            ownerId,
+            isRejected: Boolean(isRejected),
+            backlog,
+            isPaused: Boolean(isPaused),
+        });
+    }
+
+    /**
+     * Shared eligibility/scoring evaluation used by explainMatch() and
+     * previewMatch(). Read-only: never claims, writes, or records decisions.
+     */
+    private async evaluateCandidateForAssignment(
+        user: User,
+        assignment: Assignment,
+        tagsCsv: string,
+        basePriority: number,
+        modelWeights: Record<string, string> | undefined,
+        opts: {
+            assignmentId?: string | null;
+            ownerId?: string | null;
+            isRejected?: boolean;
+            backlog?: number;
+            isPaused?: boolean;
+        },
+    ): Promise<MatchCandidateTrace> {
         const reasons: MatchTraceReason[] = [];
         let eligible = true;
+        const assignmentId = opts.assignmentId ?? '';
+        const ownerId = opts.ownerId ?? null;
+        const isRejected = opts.isRejected ?? false;
+        const isPaused = opts.isPaused ?? false;
+        const backlog = opts.backlog ?? 0;
 
         if (assignment.vetoedUsers?.includes(user.id)) {
             reasons.push({ kind: 'assignmentVeto' });
             eligible = false;
         }
 
-        const [isRejected, backlog, isPaused] = await Promise.all([
-            this.redisClient.sIsMember(this.keys.userRejected(user.id), assignmentId),
-            this.redisClient.sCard(this.keys.userAssignments(user.id)),
-            this.redisClient.sIsMember(this.keys.pausedUsers(), user.id),
-        ]);
         if (isRejected) {
             reasons.push({ kind: 'rejectedPreviously' });
             eligible = false;
@@ -839,7 +875,7 @@ export default class AssignmentMatcher implements WorkflowHost {
                 user,
                 tagsCsv,
                 basePriority,
-                assignmentId,
+                assignmentId || undefined,
                 assignment.skillThresholds,
             );
             reasons.push({ kind: 'customScore', score });
@@ -864,6 +900,62 @@ export default class AssignmentMatcher implements WorkflowHost {
             effectivePriority: combinedPriority + geoBoost + learningBoost,
             reasons,
         };
+    }
+
+    /**
+     * Preview which users would be candidates for a hypothetical assignment
+     * without creating it or claiming anything. Uses the same scoring, hard
+     * rules, and learning re-ranking as real matching, so the ranked result
+     * matches what `explainMatch()` would report if the assignment were added.
+     */
+    async previewMatch(input: MatchPreviewInput, opts?: { userIds?: string[] }): Promise<MatchPreview> {
+        await this.readyPromise;
+        const evaluatedAt = Date.now();
+
+        const assignment: Assignment = {
+            id: '',
+            tags: input.tags,
+            priority: input.priority ?? 0,
+            skillThresholds: input.skillThresholds,
+            allowedCidrs: input.allowedCidrs,
+            vetoedUsers: input.vetoedUsers,
+            latitude: input.latitude,
+            longitude: input.longitude,
+            maxDistanceKm: input.maxDistanceKm,
+            requireGeo: input.requireGeo,
+        };
+
+        const tagsCsv = [...input.tags, ...(this.enableDefaultMatching ? ['default'] : [])].join(',');
+        const basePriority = Number(assignment.priority) || 0;
+
+        let userList: User[];
+        if (opts?.userIds && opts.userIds.length > 0) {
+            const jsons = await this.redisClient.hmGet(this.usersKey, opts.userIds);
+            userList = jsons
+                .filter((json: string | null): json is string => Boolean(json))
+                .map((json) => JSON.parse(json));
+        } else {
+            const all = await this.redisClient.hGetAll(this.usersKey);
+            userList = Object.values(all).map((json) => JSON.parse(json as string));
+        }
+
+        const paused = new Set<string>(await this.redisClient.sMembers(this.keys.pausedUsers()));
+        const modelWeights = this.enableLearning ? await this.learning.getModel() : undefined;
+
+        const candidates = await Promise.all(
+            userList.map(async (user) => {
+                const backlog = await this.redisClient.sCard(this.keys.userAssignments(user.id));
+                return this.evaluateCandidateForAssignment(user, assignment, tagsCsv, basePriority, modelWeights, {
+                    ownerId: null,
+                    isRejected: false,
+                    backlog,
+                    isPaused: paused.has(user.id),
+                });
+            }),
+        );
+        sortCandidates(candidates);
+
+        return { tags: input.tags, priority: basePriority, evaluatedAt, candidates };
     }
 
     /** Build and record this pass's decision traces; failures never break matching. */

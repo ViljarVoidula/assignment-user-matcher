@@ -612,6 +612,25 @@ assignments the current owner is flagged `chosen`). Because it evaluates _now_
 rather than at decision time, use it for support tooling and dry-runs
 ("who would get this?"), and decision traces for the compliance-grade record.
 
+### Hypothetical preview (`previewMatch`)
+
+`previewMatch()` answers "who would receive this assignment if I created it?"
+without persisting or claiming anything. It uses the same scoring and hard
+rules as real matching, so the ranking mirrors what `explainMatch()` would
+report after the assignment is added.
+
+```typescript
+const preview = await matcher.previewMatch(
+    { tags: ['english', 'billing'], priority: 100, skillThresholds: { english: 50 } },
+    // optional: restrict to specific users
+    { userIds: ['alice', 'bob'] },
+);
+// { tags, priority, evaluatedAt, candidates: MatchCandidateTrace[] }
+```
+
+Use it for autosuggestion UIs: render the ranked best-fit workers with score
+breakdowns and blocked reasons before the operator commits the task.
+
 ## Adaptive Matching with Reinforcement Learning
 
 The matcher includes an opt-in, Redis-backed contextual bandit that learns from

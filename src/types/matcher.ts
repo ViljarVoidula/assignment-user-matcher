@@ -222,6 +222,27 @@ export interface MatchExplanation {
     candidates: MatchCandidateTrace[];
 }
 
+/** Input for `AssignmentMatcher.previewMatch()`: describe a hypothetical assignment. */
+export interface MatchPreviewInput {
+    tags: string[];
+    priority?: number;
+    skillThresholds?: Record<string, number>;
+    allowedCidrs?: string[];
+    vetoedUsers?: string[];
+    latitude?: number;
+    longitude?: number;
+    maxDistanceKm?: number;
+    requireGeo?: boolean;
+}
+
+/** Output of `AssignmentMatcher.previewMatch()`: ranked candidates for a hypothetical assignment. */
+export interface MatchPreview {
+    tags: string[];
+    priority: number;
+    evaluatedAt: number;
+    candidates: MatchCandidateTrace[];
+}
+
 /** Filters for `getDecisionTraces()`. */
 export interface DecisionTraceQuery {
     /** Only traces for this assignment (an assignment re-queued and re-matched has several) */
