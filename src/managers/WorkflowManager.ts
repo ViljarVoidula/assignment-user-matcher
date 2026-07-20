@@ -12,6 +12,9 @@ import {
     WorkflowInstanceWithSnapshot,
     ParallelBranchState,
     WorkflowEngineMetrics,
+    WorkflowInstanceQuery,
+    WorkflowInstancePage,
+    WorkflowTransition,
 } from '../types/matcher';
 import { KeyBuilders } from '../utils/keys';
 import { ReliabilityManager } from './ReliabilityManager';
@@ -29,6 +32,10 @@ export interface WorkflowHost {
         step: WorkflowStep;
         definition: WorkflowDefinition;
     }): Promise<Record<string, any> | void>;
+    /** Checked at run start when a step targets 'initiator' (the default target). Skipped if unimplemented. */
+    userExists?(userId: string): Promise<boolean>;
+    /** Used by cancelWorkflow to clean up a run's outstanding queued/pending assignment. Skipped if unimplemented. */
+    removeAssignment?(assignmentId: string): Promise<any>;
 }
 
 /** Signature for machine task handlers registered via registerMachineHandler(). */
@@ -71,8 +78,28 @@ export class WorkflowManager {
             pollBlockMs?: number;
             /** Per-replica cap on processed events per second; unlimited when unset */
             maxEventsPerSecond?: number;
+            /** Fired after every durably-applied transition; best-effort, errors swallowed */
+            onWorkflowEvent?: (transition: WorkflowTransition) => void;
         },
     ) {}
+
+    /**
+     * Fire the onWorkflowEvent hook, if configured. Best-effort: mirrors
+     * onMatchDecision's contract, errors thrown by the callback never affect
+     * workflow processing.
+     */
+    private emitTransition(
+        kind: WorkflowTransition['kind'],
+        instance: WorkflowInstance,
+        extra?: { stepId?: string; assignmentId?: string; payload?: Record<string, any> },
+    ): void {
+        if (!this.options.onWorkflowEvent) return;
+        try {
+            this.options.onWorkflowEvent({ kind, instance, ...extra });
+        } catch {
+            // Swallowed by design — a broken consumer must never affect workflow processing.
+        }
+    }
 
     async init(): Promise<void> {
         if (this.options.enableWorkflows) {
@@ -164,6 +191,21 @@ export class WorkflowManager {
                 throw new Error(`Workflow definition not found: ${workflowDefinitionId}`);
             }
 
+            // Conservative guard: any assignment step that targets 'initiator'
+            // (the default target when unset) needs a real user to assign to, or
+            // the run silently stalls at that step instead of failing fast at
+            // start. Machine/external steps don't route to a user, so their
+            // (absent) targetUser must not count as targeting the initiator.
+            const targetsInitiator = definition.steps.some(
+                (s) => (s.taskType ?? 'assignment') === 'assignment' && (s.targetUser ?? 'initiator') === 'initiator',
+            );
+            if (targetsInitiator && this.host.userExists) {
+                const exists = await this.host.userExists(userId);
+                if (!exists) {
+                    throw new Error(`Initiator user not found: ${userId}`);
+                }
+            }
+
             const now = Date.now();
             const instanceId = randomUUID();
 
@@ -190,11 +232,18 @@ export class WorkflowManager {
                         : undefined,
             };
 
+            // A plain Date.now() score would tie (and, at the exclusive cursor
+            // boundary, silently drop) runs started within the same millisecond —
+            // realistic under a burst of automated triggers. INCR guarantees a
+            // strictly distinct, creation-order-preserving score instead.
+            const sequence = await this.redisClient.incr(this.keys.workflowInstanceSequence());
+
             const multi = this.redisClient.multi();
             multi.hSet(this.keys.workflowInstance(instanceId), 'data', JSON.stringify(instance));
             multi.sAdd(this.keys.workflowInstancesByUser(userId), instanceId);
             multi.hSet(this.keys.workflowInstances(), instanceId, workflowDefinitionId);
             multi.zAdd(this.keys.workflowInstancesActive(), { score: now, value: instanceId });
+            multi.zAdd(this.keys.workflowInstancesByTime(), { score: sequence, value: instanceId });
             await multi.exec();
 
             await this.reliability.emitAuditEvent(
@@ -219,6 +268,8 @@ export class WorkflowManager {
                     timestamp: now,
                 });
             }
+
+            this.emitTransition('run.started', instance, { stepId: definition.initialStepId });
 
             await this.executeWorkflowStep(instance, definition.initialStepId, definition);
 
@@ -248,6 +299,50 @@ export class WorkflowManager {
         };
     }
 
+    /**
+     * List workflow instances (runs) newest-created first, optionally filtered
+     * by status and/or workflow definition. Paginated via an opaque cursor
+     * (the createdAt score of the last item returned) — pass it back as
+     * `cursor` for the next page.
+     */
+    async listWorkflowInstances(query: WorkflowInstanceQuery = {}): Promise<WorkflowInstancePage> {
+        const limit = Math.max(query.limit ?? 50, 1);
+        const byTimeKey = this.keys.workflowInstancesByTime();
+
+        const instances: WorkflowInstance[] = [];
+        let upperBound: string = query.cursor ? `(${query.cursor}` : '+inf';
+        let lastScore: number | undefined;
+        const scanBatchSize = Math.max(limit * 2, 20);
+
+        // Scan back in time in batches, filtering status/workflowDefinitionId in
+        // memory, until we have `limit` matches or the index is exhausted.
+        // eslint-disable-next-line no-constant-condition
+        while (instances.length < limit) {
+            const ids = await this.redisClient.zRangeWithScores(byTimeKey, upperBound, '-inf', {
+                REV: true,
+                BY: 'SCORE',
+                LIMIT: { offset: 0, count: scanBatchSize },
+            });
+            if (!ids.length) break;
+
+            for (const { value: id, score } of ids) {
+                const instance = await this.getWorkflowInstance(id);
+                lastScore = score;
+                if (!instance) continue;
+                if (query.status && instance.status !== query.status) continue;
+                if (query.workflowDefinitionId && instance.workflowDefinitionId !== query.workflowDefinitionId) continue;
+                instances.push(instance);
+                if (instances.length >= limit) break;
+            }
+
+            if (ids.length < scanBatchSize) break; // index exhausted
+            upperBound = `(${lastScore}`;
+        }
+
+        const nextCursor = instances.length >= limit && lastScore !== undefined ? String(lastScore) : undefined;
+        return { instances, nextCursor };
+    }
+
     async getActiveWorkflowsForUser(userId: string): Promise<WorkflowInstance[]> {
         const instanceIds = await this.redisClient.sMembers(this.keys.workflowInstancesByUser(userId));
         if (instanceIds.length === 0) return [];
@@ -270,6 +365,12 @@ export class WorkflowManager {
         return instances;
     }
 
+    /**
+     * Cancel a running workflow instance. Cleans up its outstanding
+     * assignment(s) — the current step's assignment, or any still-pending
+     * parallel branch assignments — so a cancelled run doesn't leave orphaned
+     * work queued/pending forever, and clears their step timeouts.
+     */
     async cancelWorkflow(instanceId: string): Promise<boolean> {
         const instance = await this.getWorkflowInstance(instanceId);
         if (!instance) {
@@ -279,7 +380,33 @@ export class WorkflowManager {
         const expectedVersion = instance.version;
         instance.status = 'cancelled';
 
+        const outstandingAssignmentIds: string[] = [];
+        const outstandingStepIds: string[] = [];
+        if (instance.currentAssignmentId) {
+            outstandingAssignmentIds.push(instance.currentAssignmentId);
+            if (instance.currentStepId) outstandingStepIds.push(instance.currentStepId);
+        }
+        for (const branch of instance.parallelBranches ?? []) {
+            if (branch.status === 'pending') {
+                outstandingAssignmentIds.push(branch.assignmentId);
+                outstandingStepIds.push(branch.stepId);
+            }
+        }
+
         await this.saveInstance(instance, expectedVersion);
+
+        for (const stepId of outstandingStepIds) {
+            await this.redisClient.zRem(this.keys.workflowStepExpiryIndex(), `${instanceId}|${stepId}`);
+            await this.redisClient.del(this.keys.workflowStepExpiry(instanceId, stepId));
+        }
+        for (const assignmentId of outstandingAssignmentIds) {
+            if (this.host.removeAssignment) {
+                await this.host.removeAssignment(assignmentId);
+            }
+            await this.redisClient.del(this.keys.workflowAssignmentLink(assignmentId));
+        }
+
+        this.emitTransition('run.cancelled', instance);
         return true;
     }
 
@@ -297,6 +424,7 @@ export class WorkflowManager {
         if (step.parallelStepIds && step.parallelStepIds.length > 0) {
             const branches: ParallelBranchState[] = [];
             const machineParallelSteps: Array<{ stepId: string; assignmentId: string }> = [];
+            const externalParallelSteps: Array<{ stepId: string; assignmentId: string }> = [];
 
             for (const parallelStepId of step.parallelStepIds) {
                 const parallelStep = definition.steps.find((s) => s.id === parallelStepId);
@@ -310,6 +438,18 @@ export class WorkflowManager {
 
                     const syntheticAssignmentId = this.deterministicAssignmentId(instance, parallelStepId);
                     machineParallelSteps.push({ stepId: parallelStepId, assignmentId: syntheticAssignmentId });
+                    branches.push({
+                        stepId: parallelStepId,
+                        assignmentId: syntheticAssignmentId,
+                        status: 'pending',
+                    });
+                } else if (taskType === 'external') {
+                    if (!parallelStep.external?.name) {
+                        throw new Error(`External step "${parallelStep.id}" is missing external.name`);
+                    }
+
+                    const syntheticAssignmentId = this.deterministicAssignmentId(instance, parallelStepId);
+                    externalParallelSteps.push({ stepId: parallelStepId, assignmentId: syntheticAssignmentId });
                     branches.push({
                         stepId: parallelStepId,
                         assignmentId: syntheticAssignmentId,
@@ -341,6 +481,16 @@ export class WorkflowManager {
                 await this.executeMachineStep(instance, parallelStep, definition, machineStep.assignmentId);
             }
 
+            for (const externalStep of externalParallelSteps) {
+                const parallelStep = definition.steps.find((s) => s.id === externalStep.stepId);
+                if (!parallelStep) continue;
+                this.emitTransition('step.ready', instance, {
+                    stepId: externalStep.stepId,
+                    assignmentId: externalStep.assignmentId,
+                    payload: { name: parallelStep.external!.name, input: parallelStep.external!.input },
+                });
+            }
+
             return;
         }
 
@@ -360,6 +510,29 @@ export class WorkflowManager {
 
             await this.saveInstance(instance, expectedVersion);
             await this.executeMachineStep(instance, step, definition);
+            return;
+        }
+
+        if (taskType === 'external') {
+            if (!step.external?.name) {
+                throw new Error(`External step "${step.id}" is missing external.name`);
+            }
+
+            instance.currentAssignmentId = undefined;
+            instance.currentStepId = stepId;
+
+            const timeoutMs = step.timeoutMs ?? definition.defaultTimeoutMs;
+            if (!timeoutMs) {
+                throw new Error(`External step "${step.id}" requires a timeoutMs (or the workflow's defaultTimeoutMs)`);
+            }
+            await this.setStepTimeout(instance.id, stepId, timeoutMs);
+
+            await this.saveInstance(instance, expectedVersion);
+            this.emitTransition('step.ready', instance, {
+                stepId,
+                assignmentId: this.deterministicAssignmentId(instance, stepId),
+                payload: { name: step.external.name, input: step.external.input },
+            });
             return;
         }
 
@@ -496,6 +669,59 @@ export class WorkflowManager {
         return expiredCount;
     }
 
+    /**
+     * Complete (or fail) an external step from outside this process — the
+     * counterpart to the `step.ready` transition. Validates the step is
+     * actually the run's current step (or a pending parallel branch) and is
+     * really an external step, clears its timeout, then publishes the same
+     * COMPLETED/FAILED event onto the stream that in-process completions use,
+     * so the orchestrator advances the run through the ordinary transition
+     * pipeline (idempotency, retries, and DLQ all still apply).
+     */
+    async completeWorkflowStep(
+        instanceId: string,
+        stepId: string,
+        outcome: { success: boolean; data?: Record<string, any>; error?: string },
+    ): Promise<boolean> {
+        const instance = await this.getWorkflowInstance(instanceId);
+        if (!instance) {
+            throw new Error(`Workflow instance not found: ${instanceId}`);
+        }
+        if (instance.status !== 'active') {
+            throw new Error(`Workflow instance ${instanceId} is not active`);
+        }
+
+        const branch = instance.parallelBranches?.find((b) => b.stepId === stepId);
+        const isCurrentStep = instance.currentStepId === stepId;
+        const isPendingBranch = branch?.status === 'pending';
+        if (!isCurrentStep && !isPendingBranch) {
+            throw new Error(`Step "${stepId}" is not currently active for instance ${instanceId}`);
+        }
+
+        const definition = instance.definitionSnapshot ?? (await this.getWorkflowDefinition(instance.workflowDefinitionId));
+        const step = definition?.steps.find((s) => s.id === stepId);
+        if ((step?.taskType ?? 'assignment') !== 'external') {
+            throw new Error(`Step "${stepId}" is not an external step`);
+        }
+
+        await this.redisClient.zRem(this.keys.workflowStepExpiryIndex(), `${instanceId}|${stepId}`);
+        await this.redisClient.del(this.keys.workflowStepExpiry(instanceId, stepId));
+
+        const assignmentId = branch?.assignmentId ?? this.deterministicAssignmentId(instance, stepId);
+        await this.publishWorkflowEvent({
+            eventId: randomUUID(),
+            type: outcome.success ? 'COMPLETED' : 'FAILED',
+            userId: instance.initiatorUserId,
+            assignmentId,
+            workflowInstanceId: instanceId,
+            stepId,
+            timestamp: Date.now(),
+            payload: outcome.success ? outcome.data : { error: outcome.error },
+        });
+
+        return true;
+    }
+
     private async createWorkflowAssignment(
         instance: WorkflowInstance,
         step: WorkflowStep,
@@ -572,6 +798,85 @@ export class WorkflowManager {
         });
 
         return messageId;
+    }
+
+    /**
+     * Non-blocking drain of up to `maxEvents` due workflow events, using the
+     * main Redis client (no duplicated subscriber connection, no BLOCK wait).
+     * Shares all processing internals with the orchestrator loop — idempotency,
+     * circuit breaker, retry scheduling, and DLQ all apply — but is meant to be
+     * called periodically by a host sweeping many workspaces/tenants rather
+     * than running one dedicated blocking loop per matcher instance. Returns
+     * the number of events successfully processed (retried/DLQ'd events still
+     * count as handled — only a hard read error returns early).
+     */
+    async processWorkflowEvents(maxEvents?: number): Promise<number> {
+        if (!this.options.enableWorkflows) return 0;
+
+        await this.initStreamConsumerGroup();
+        const streamKey = this.keys.eventStream();
+        const count = maxEvents ?? this.options.eventBatchSize ?? 10;
+        let processed = 0;
+
+        try {
+            const response = (await this.redisClient.xReadGroup(
+                this.options.streamConsumerGroup,
+                this.options.streamConsumerName,
+                [{ key: streamKey, id: '>' }],
+                { COUNT: count },
+            )) as any;
+
+            if (!response) return 0;
+
+            for (const stream of response) {
+                for (const message of stream.messages) {
+                    const event = this.parseStreamMessage(message);
+
+                    if (await this.reliability.isEventProcessed(event.eventId)) {
+                        await this.redisClient.xAck(streamKey, this.options.streamConsumerGroup, message.id);
+                        continue;
+                    }
+
+                    await this.applyEventThrottle();
+
+                    try {
+                        await this.processWorkflowEvent(event);
+                        await this.reliability.markEventProcessed(event.eventId);
+                        await this.redisClient.xAck(streamKey, this.options.streamConsumerGroup, message.id);
+                        this.reliability.recordCircuitBreakerSuccess();
+                        processed++;
+                    } catch (err) {
+                        console.error(`Error processing event ${event.eventId}:`, err);
+                        await this.reliability.recordCircuitBreakerFailure();
+
+                        const retryKey = this.keys.eventRetryCount(event.eventId);
+                        const retryCount = Number(await this.redisClient.get(retryKey)) || 0;
+
+                        if (retryCount >= this.reliability.options.workflowMaxRetries!) {
+                            await this.reliability.moveToDeadLetter(
+                                event,
+                                'Processing failed after max retries',
+                                err instanceof Error ? err : new Error(String(err)),
+                            );
+                            await this.redisClient.xAck(streamKey, this.options.streamConsumerGroup, message.id);
+                        } else {
+                            const nextRetryCount = Number(await this.redisClient.incr(retryKey));
+                            await this.redisClient.expire(retryKey, 86400);
+                            await this.scheduleEventRetry(event, nextRetryCount);
+                            await this.redisClient.xAck(streamKey, this.options.streamConsumerGroup, message.id);
+                        }
+                    }
+                }
+            }
+        } catch (err: any) {
+            if (this.isNoGroupError(err)) {
+                await this.initStreamConsumerGroup();
+                return processed;
+            }
+            console.error('processWorkflowEvents read error:', err);
+        }
+
+        return processed;
     }
 
     async startOrchestrator(): Promise<void> {
@@ -892,6 +1197,12 @@ export class WorkflowManager {
             instance.context = { ...instance.context, [`step_${stepId}`]: event.payload };
         }
 
+        this.emitTransition('step.completed', instance, {
+            stepId,
+            assignmentId: event.assignmentId,
+            payload: event.payload,
+        });
+
         const expectedVersion = instance.version;
         if (instance.parallelBranches) {
             const branch = instance.parallelBranches.find((b) => b.stepId === stepId);
@@ -930,6 +1241,7 @@ export class WorkflowManager {
             instance.currentStepId = null;
             instance.currentAssignmentId = undefined;
             await this.saveInstance(instance, expectedVersion);
+            this.emitTransition('run.completed', instance);
         }
     }
 
@@ -952,12 +1264,18 @@ export class WorkflowManager {
             const branch = instance.parallelBranches.find((b) => b.stepId === stepId);
             if (branch) {
                 branch.status = 'failed';
+                this.emitTransition('step.failed', instance, {
+                    stepId,
+                    assignmentId: event.assignmentId,
+                    payload: { ...event.payload, willRetry: false },
+                });
 
                 const policy = step.failurePolicy ?? 'abort';
                 if (policy === 'abort') {
                     // Fail entire workflow
                     instance.status = 'failed';
                     await this.saveInstance(instance, expectedVersion);
+                    this.emitTransition('run.failed', instance, { stepId, payload: event.payload });
                     return;
                 } else if (policy === 'continue') {
                     // Check if remaining branches can complete
@@ -979,13 +1297,20 @@ export class WorkflowManager {
         }
 
         // Retry logic
-        if (instance.retryCount < maxRetries) {
+        const willRetry = instance.retryCount < maxRetries;
+        this.emitTransition('step.failed', instance, {
+            stepId,
+            assignmentId: event.assignmentId,
+            payload: { ...event.payload, willRetry },
+        });
+        if (willRetry) {
             instance.retryCount += 1;
             await this.executeWorkflowStep(instance, stepId, definition);
         } else {
             // Workflow failed
             instance.status = 'failed';
             await this.saveInstance(instance, expectedVersion);
+            this.emitTransition('run.failed', instance, { stepId, payload: event.payload });
         }
     }
 
@@ -994,6 +1319,7 @@ export class WorkflowManager {
         definition: WorkflowDefinition,
         event: WorkflowEvent,
     ): Promise<void> {
+        this.emitTransition('step.expired', instance, { stepId: event.stepId, assignmentId: event.assignmentId });
         await this.handleStepFailure(instance, definition, event);
     }
 
@@ -1255,7 +1581,14 @@ export class WorkflowManager {
 
             for (const entry of entries) {
                 const instance = await this.getWorkflowInstance(entry.field);
-                if (instance && instance.status === 'active') {
+                if (!instance) continue;
+
+                await this.redisClient.zAdd(this.keys.workflowInstancesByTime(), {
+                    score: instance.createdAt,
+                    value: instance.id,
+                });
+
+                if (instance.status === 'active') {
                     await this.redisClient.zAdd(this.keys.workflowInstancesActive(), {
                         score: instance.updatedAt,
                         value: instance.id,
@@ -1299,6 +1632,7 @@ export class WorkflowManager {
                 multi.hDel(this.keys.workflowInstances(), instanceId);
                 multi.sRem(this.keys.workflowInstancesByUser(instance.initiatorUserId), instanceId);
                 multi.zRem(this.keys.workflowInstancesActive(), instanceId);
+                multi.zRem(this.keys.workflowInstancesByTime(), instanceId);
                 await multi.exec();
                 pruned++;
             }

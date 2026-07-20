@@ -22,8 +22,28 @@ function validateStepBasics(step: WorkflowStep): void {
         return;
     }
 
+    if (taskType === 'external') {
+        ensureNonEmpty(step.external?.name, `Step "${step.id}" has taskType "external" but no external.name`);
+        return;
+    }
+
     if (!step.assignmentTemplate) {
         throw new Error(`Assignment step "${step.id}" is missing assignmentTemplate`);
+    }
+}
+
+/**
+ * External steps must be able to time out — an uncalled-back external step
+ * would otherwise hang a run forever. Checked at the definition level (not in
+ * validateStepBasics) because a step's effective timeout also depends on the
+ * workflow's defaultTimeoutMs.
+ */
+function validateExternalStepTimeout(definition: WorkflowDefinition): void {
+    for (const step of definition.steps) {
+        if ((step.taskType ?? 'assignment') !== 'external') continue;
+        if (!step.timeoutMs && !definition.defaultTimeoutMs) {
+            throw new Error(`External step "${step.id}" requires a timeoutMs (or the workflow's defaultTimeoutMs)`);
+        }
     }
 }
 
@@ -34,6 +54,8 @@ export function validateWorkflowDefinition(definition: WorkflowDefinition): Work
     if (!definition.steps.length) {
         throw new Error('Workflow must have at least one step');
     }
+
+    validateExternalStepTimeout(definition);
 
     const stepIds = new Set<string>();
     for (const step of definition.steps) {

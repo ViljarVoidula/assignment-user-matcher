@@ -76,8 +76,8 @@ describe('Matcher Lifecycle Tests', async function () {
         let userAssignments = await matcher.getCurrentAssignmentsForUser('u1');
         expect(userAssignments).to.include('a1');
 
-        // Wait for expiration
-        await new Promise((resolve) => setTimeout(resolve, 1100));
+        // Force the pending match's expiry into the past instead of sleeping past it.
+        await redisClient.zAdd(matcher.pendingAssignmentsExpiryKey, { score: Date.now() - 1, value: 'a1' });
 
         const processedCount = await matcher.processExpiredMatches();
         expect(processedCount).to.equal(1);
@@ -125,11 +125,17 @@ describe('Matcher Lifecycle Tests', async function () {
         let userAssignments = await matcher.getCurrentAssignmentsForUser('u1');
         expect(userAssignments).to.include('a1');
 
-        // Start interval with short duration
-        matcher.startAutoReleaseInterval(100);
+        // Force the match already-expired, then let the interval sweep pick it up.
+        await redisClient.zAdd(matcher.pendingAssignmentsExpiryKey, { score: Date.now() - 1, value: 'a1' });
+        matcher.startAutoReleaseInterval(25);
 
-        // Wait for expiration (1000ms) + interval check
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        // Poll until the interval's processExpiredMatches has run (bounded, fast).
+        const deadline = Date.now() + 1000;
+        while (Date.now() < deadline) {
+            userAssignments = await matcher.getCurrentAssignmentsForUser('u1');
+            if (!userAssignments.includes('a1')) break;
+            await new Promise((resolve) => setTimeout(resolve, 15));
+        }
 
         userAssignments = await matcher.getCurrentAssignmentsForUser('u1');
         expect(userAssignments).to.not.include('a1');

@@ -100,6 +100,17 @@ export class WorkflowStepBuilder {
     }
 
     /**
+     * Configure this step as an external (callback) task, completed by a
+     * caller outside this process via completeWorkflowStep()/failWorkflowStep().
+     * Requires a timeout — set here or via the workflow's defaultTimeout().
+     */
+    external(name: string, input?: Record<string, any>): this {
+        this.step.taskType = 'external';
+        this.step.external = { name, input };
+        return this;
+    }
+
+    /**
      * Set the target user for this step.
      * @param target - 'initiator' | 'previous' | userId | { tag: string }
      */
@@ -177,6 +188,10 @@ export class WorkflowStepBuilder {
     done(): WorkflowBuilder {
         if ((this.step.taskType ?? 'assignment') === 'machine' && !this.step.machineTask?.handler) {
             throw new Error(`Machine step "${this.step.id}" requires machineTask(handler)`);
+        }
+
+        if ((this.step.taskType ?? 'assignment') === 'external' && !this.step.external?.name) {
+            throw new Error(`External step "${this.step.id}" requires external(name)`);
         }
 
         this.parentBuilder._addStep(this.step);

@@ -149,7 +149,8 @@ describe('Matcher Coverage Improvements', function () {
         });
 
         it('should start and stop orchestrator', async function () {
-            const matcher = createMatcher({ enableWorkflows: true });
+            // Short pollBlockMs so stopOrchestrator doesn't wait out a 5s BLOCK read.
+            const matcher = createMatcher({ enableWorkflows: true, workflowPollBlockMs: 50 });
             await matcher.waitUntilReady();
             await matcher.startOrchestrator();
             await matcher.stopOrchestrator();
@@ -312,6 +313,28 @@ describe('Matcher Coverage Improvements', function () {
             expect(pending).to.be.an('array');
             const corrupt = pending.find((p: any) => p.assignment?.id === 'corrupt-id');
             expect(corrupt).to.be.undefined;
+        });
+
+        it('reports null age fields for a pending entry with no expiry score and sorts it last', async function () {
+            const matcher = createMatcher();
+            await matcher.waitUntilReady();
+
+            // A real matched (pending, with expiry) assignment...
+            await matcher.addUser({ id: 'user1', tags: ['tag1'] });
+            await matcher.addAssignment({ id: 'timed', tags: ['tag1'], priority: 100 });
+            await matcher.matchUsersAssignments();
+
+            // ...plus an injected pending entry that has no expiry zscore.
+            await redisClient.hSet(matcher.pendingAssignmentsKey, 'ageless', JSON.stringify({ id: 'ageless', tags: ['tag1'] }));
+
+            const pending = await matcher.getPendingAssignmentsWithAge();
+            const ageless = pending.find((p: any) => p.assignment.id === 'ageless')!;
+            expect(ageless.expiresAt).to.equal(null);
+            expect(ageless.pendingSince).to.equal(null);
+            expect(ageless.pendingForMs).to.equal(null);
+
+            // The entry with a real age sorts ahead of the ageless one.
+            expect(pending[pending.length - 1].assignment.id).to.equal('ageless');
         });
 
         it('should clean up stale activity entries in processIdleUsers when user no longer exists', async function () {

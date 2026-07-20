@@ -179,6 +179,31 @@ describe('LearningManager - Integration Tests', function () {
         expect(updated).to.be.false;
     });
 
+    describe('per-tag reward stats (trackTagStats)', function () {
+        it('skips zero-valued features and blank tags, and tolerates a reward field missing from a tag stat', async function () {
+            const tagManager = new LearningManager(redisClient, keys, {
+                learningRate: 0.5,
+                explorationRate: 0,
+                trackTagStats: true,
+            });
+
+            // '' must be skipped (line 287); bias:0 must be skipped in the SGD update (line 224).
+            await tagManager.recordDecision('tagged-user', 'assignment-tags', { bias: 0, 'tag:a': 1 }, 0, ['', 'a']);
+            await tagManager.applyOutcome('assignment-tags', 'complete');
+
+            const stats = await tagManager.getUserTagStats('tagged-user');
+            expect(stats.map((s) => s.tag)).to.deep.equal(['a']);
+            expect(stats[0].count).to.equal(1);
+            expect(stats[0].meanReward).to.equal(stats[0].rewardSum);
+
+            // Simulate a reward field missing from otherwise-valid count data.
+            await redisClient.hDel(keys.learningUserTagRewards('tagged-user'), 'a');
+            const afterDrop = await tagManager.getUserTagStats('tagged-user');
+            expect(afterDrop[0].rewardSum).to.equal(0);
+            expect(afterDrop[0].count).to.equal(1);
+        });
+    });
+
     it('should support manual reward manipulation', async function () {
         const features = { bias: 1, 'tag:vip': 1 };
         await manager.recordDecision('user1', 'assignment1', features, 0);

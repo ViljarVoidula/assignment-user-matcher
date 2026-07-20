@@ -119,19 +119,14 @@ describe('WorkflowManager', function () {
         });
 
         it('should handle step expiry', async function () {
-            this.timeout(5000);
             await workflowManager.registerWorkflow(definition);
             const instance = await workflowManager.startWorkflow(definition.id, 'user-2');
-            const step1Id = 'step-1';
 
-            // Wait for timeout
-            await new Promise((resolve) => setTimeout(resolve, 600));
+            // Force the armed timeout due now instead of sleeping past it.
+            await redisClient.zAdd(keys.workflowStepExpiryIndex(), { score: Date.now() - 1, value: `${instance.id}|step-1` });
 
             const expiredCount = await workflowManager.processExpiredWorkflowSteps();
             expect(expiredCount).to.equal(1);
-
-            // The orchestrator should pick up the EXPIRED event if it was running
-            // But here we are testing the manager methods directly
         });
 
         it('should not publish STARTED when workflows disabled', async function () {
@@ -2045,6 +2040,7 @@ describe('WorkflowManager', function () {
                 streamConsumerGroup: 'orch-group',
                 streamConsumerName: 'orch-consumer',
                 reclaimIntervalMs: 20,
+                pollBlockMs: 50,
             });
             await mgr.init();
 
@@ -2115,6 +2111,7 @@ describe('WorkflowManager', function () {
                 streamConsumerGroup: 'orcherr-group',
                 streamConsumerName: 'orcherr-consumer',
                 reclaimIntervalMs: 1000000,
+                pollBlockMs: 50,
             });
             await mgr.init();
 
@@ -2201,6 +2198,7 @@ describe('WorkflowManager', function () {
                 streamConsumerGroup: 'orchdlq-group',
                 streamConsumerName: 'orchdlq-consumer',
                 reclaimIntervalMs: 1000000,
+                pollBlockMs: 50,
             });
             await mgr.init();
 

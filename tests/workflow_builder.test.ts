@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { WorkflowBuilder, approvalWorkflow, linearWorkflow, workflow } from '../src/workflow-builder';
+import { validateWorkflowDefinition } from '../src/workflow-validation';
 
 describe('WorkflowBuilder', function () {
     it('should default taskType to assignment', function () {
@@ -242,5 +243,50 @@ describe('WorkflowBuilder', function () {
             tags: ['reject'],
             title: 'Rejected custom',
         });
+    });
+
+    it('should throw when finishing a machine step whose machineTask has an empty handler', () => {
+        expect(() => WorkflowBuilder.create('wf', 'WF').step('x').machineTask('').done()).to.throw(
+            /requires machineTask\(handler\)/,
+        );
+    });
+
+    it('should throw when finishing an external step without a name', () => {
+        expect(() =>
+            WorkflowBuilder.create('wf', 'WF').step('x').taskType('external').done(),
+        ).to.throw(/requires external\(name\)/);
+    });
+
+    it('should build external task steps', () => {
+        const definition = WorkflowBuilder.create('wf', 'WF')
+            .defaultTimeout(1000)
+            .step('x')
+            .external('do-thing', { foo: 'bar' })
+            .done()
+            .initialStep('x')
+            .build();
+
+        expect(definition.steps[0].taskType).to.equal('external');
+        expect(definition.steps[0].external).to.deep.equal({ name: 'do-thing', input: { foo: 'bar' } });
+    });
+});
+
+describe('validateWorkflowDefinition direct calls', () => {
+    it('should reject an assignment step missing its assignmentTemplate', () => {
+        expect(() =>
+            validateWorkflowDefinition({
+                id: 'wf',
+                name: 'WF',
+                version: 1,
+                initialStepId: 's1',
+                steps: [{ id: 's1', name: 'S1' }],
+            }),
+        ).to.throw(/missing assignmentTemplate/);
+    });
+
+    it('should reject a definition with no steps when called directly (bypassing normalizeWorkflowDefinition)', () => {
+        expect(() =>
+            validateWorkflowDefinition({ id: 'wf', name: 'WF', version: 1, initialStepId: 's1', steps: [] }),
+        ).to.throw(/at least one step/);
     });
 });

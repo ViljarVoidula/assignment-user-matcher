@@ -120,12 +120,17 @@ describe('Workflow Scalability & Reliability', function () {
             expect(count).to.equal(1);
         });
 
-        it('should fire an expiry exactly once and be idempotent across calls', async function () {
-            this.timeout(5000);
-            await workflowManager.registerWorkflow(twoStepDef);
-            await workflowManager.startWorkflow(twoStepDef.id, 'user-1');
+        // Force a step's armed timeout to be due now instead of sleeping past it —
+        // the scheduling (setStepTimeout) is verified by the index-population test
+        // above; these assert the draining behavior, which only needs a due entry.
+        async function forceStepDue(instanceId: string, stepId: string) {
+            await redisClient.zAdd(keys.workflowStepExpiryIndex(), { score: Date.now() - 1, value: `${instanceId}|${stepId}` });
+        }
 
-            await new Promise((r) => setTimeout(r, 300));
+        it('should fire an expiry exactly once and be idempotent across calls', async function () {
+            await workflowManager.registerWorkflow(twoStepDef);
+            const instance = await workflowManager.startWorkflow(twoStepDef.id, 'user-1');
+            await forceStepDue(instance.id, 's1');
 
             const first = await workflowManager.processExpiredWorkflowSteps();
             const second = await workflowManager.processExpiredWorkflowSteps();
@@ -134,14 +139,13 @@ describe('Workflow Scalability & Reliability', function () {
         });
 
         it('should fire an expiry only on one replica when multiple process concurrently', async function () {
-            this.timeout(5000);
             await workflowManager.registerWorkflow(twoStepDef);
-            await workflowManager.startWorkflow(twoStepDef.id, 'user-1');
+            const instance = await workflowManager.startWorkflow(twoStepDef.id, 'user-1');
 
             const other = makeManager(mockHost, { streamConsumerName: 'scale-consumer-2' });
             await other.init();
 
-            await new Promise((r) => setTimeout(r, 300));
+            await forceStepDue(instance.id, 's1');
 
             const [a, b] = await Promise.all([
                 workflowManager.processExpiredWorkflowSteps(),
@@ -151,11 +155,10 @@ describe('Workflow Scalability & Reliability', function () {
         });
 
         it('should not fire expiry for a step that already completed', async function () {
-            this.timeout(5000);
             await workflowManager.registerWorkflow(twoStepDef);
             const instance = await workflowManager.startWorkflow(twoStepDef.id, 'user-1');
 
-            // Complete step 1 before its timeout elapses
+            // Complete step 1 before its timeout elapses (advances currentStepId to s2)
             await (workflowManager as any).processWorkflowEvent({
                 eventId: 'evt-c1',
                 type: 'COMPLETED',
@@ -166,7 +169,8 @@ describe('Workflow Scalability & Reliability', function () {
                 timestamp: Date.now(),
             });
 
-            await new Promise((r) => setTimeout(r, 300));
+            // Even if s1's stale timeout comes due, it must not fire — s1 is no longer current.
+            await forceStepDue(instance.id, 's1');
             const expired = await workflowManager.processExpiredWorkflowSteps();
             expect(expired).to.equal(0);
         });

@@ -220,6 +220,17 @@ describe('ReliabilityManager', function () {
                 sandbox.restore();
             }
         });
+
+        it('should neither set an error nor bump lastConnectedAt when marked unhealthy with no error message', async function () {
+            reliabilityManager.updateRedisHealth(true);
+            const metricsBefore = await reliabilityManager.getMetrics();
+
+            reliabilityManager.updateRedisHealth(false);
+            const metrics = await reliabilityManager.getMetrics();
+            expect(metrics.redisHealthy).to.be.false;
+            expect(metrics.lastError).to.be.undefined;
+            expect(metrics.lastConnectedAt).to.equal(metricsBefore.lastConnectedAt);
+        });
     });
 
     describe('Circuit Breaker - Extended', function () {
@@ -411,6 +422,26 @@ describe('ReliabilityManager', function () {
             expect(state.failureCount).to.equal(3);
         });
 
+        it('should default missing failureCount/lastFailureTime to 0 when loading persisted state', async function () {
+            await redisClient.hSet(keys.circuitBreakerState(), { state: 'open' });
+
+            const mgr = new ReliabilityManager(redisClient, keys, {
+                workflowMaxRetries: 3,
+                workflowIdempotencyTtlMs: 5000,
+                workflowCircuitBreakerThreshold: 2,
+                workflowCircuitBreakerResetMs: 500,
+                workflowAuditEnabled: false,
+                streamConsumerName: 'test-load-partial',
+                circuitBreakerPersistState: true,
+            });
+            await mgr.init();
+
+            const state = mgr.getCircuitBreakerState();
+            expect(state.state).to.equal('open');
+            expect(state.failureCount).to.equal(0);
+            expect(state.lastFailureTime).to.equal(0);
+        });
+
         it('should default to closed when Redis has no persisted state', async function () {
             const mgr = new ReliabilityManager(redisClient, keys, {
                 workflowMaxRetries: 3,
@@ -485,6 +516,28 @@ describe('ReliabilityManager', function () {
             const saved = await redisClient.hGetAll(keys.circuitBreakerState());
             expect(saved.state).to.equal('closed');
         });
+
+        it('resets the shared failure counter when a shared breaker closes from half-open success', async function () {
+            const mgr = new ReliabilityManager(redisClient, keys, {
+                workflowMaxRetries: 3,
+                workflowIdempotencyTtlMs: 5000,
+                workflowCircuitBreakerThreshold: 1,
+                workflowCircuitBreakerResetMs: 30,
+                workflowAuditEnabled: false,
+                streamConsumerName: 'test-shared-close',
+                circuitBreakerShared: true,
+            });
+            await mgr.init();
+            await mgr.recordCircuitBreakerFailure(); // opens, bumps the shared counter
+            expect(await redisClient.get(keys.circuitBreakerFailures())).to.equal('1');
+
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            mgr.shouldProcessCircuitBreaker(); // transitions to half-open
+            mgr.recordCircuitBreakerSuccess(); // closes, resets the shared counter
+            await new Promise((resolve) => setImmediate(resolve));
+
+            expect(await redisClient.get(keys.circuitBreakerFailures())).to.be.null;
+        });
     });
 
     describe('Backoff', function () {
@@ -499,6 +552,14 @@ describe('ReliabilityManager', function () {
             await ReliabilityManager.backoff(100, 10, 100);
             // With +25% jitter at most, max is 125ms — well under 1s
             expect(Date.now() - before).to.be.lessThan(800);
+        });
+
+        it('should use its default initialDelay/maxDelay when only attempt is given', async function () {
+            this.timeout(1000);
+            const before = Date.now();
+            await ReliabilityManager.backoff(0);
+            // attempt 0 with the 100ms default initialDelay: ~75-125ms with jitter
+            expect(Date.now() - before).to.be.lessThan(500);
         });
     });
 });

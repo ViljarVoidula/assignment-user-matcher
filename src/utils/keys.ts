@@ -58,6 +58,16 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         workflowInstance: (id: string) => `${prefix}workflow:instance:${id}`,
         workflowInstancesByUser: (userId: string) => `${prefix}user:${userId}:workflow:instances`,
         workflowAssignmentLink: (assignmentId: string) => `${prefix}assignment:${assignmentId}:workflow`,
+        // All-instance creation-order index, independent of status — backs
+        // listWorkflowInstances() pagination. Scored by workflowInstanceSequence()
+        // (not raw createdAt) so two runs started in the same millisecond still
+        // get strictly distinct, order-preserving scores — required for the
+        // cursor's exclusive "less than" range to never skip a same-millisecond
+        // entry. workflowInstancesActive() only tracks currently-active instances
+        // and isn't sorted for pagination.
+        workflowInstancesByTime: () => `${prefix}workflows:instances:byTime`,
+        // Monotonic counter backing workflowInstancesByTime's scores.
+        workflowInstanceSequence: () => `${prefix}workflows:instances:seq`,
 
         // Completed assignments store
         completedAssignments: () => `${prefix}assignments:completed`,

@@ -47,6 +47,9 @@ import type {
     DeadLetterEntry,
     AuditEntry,
     WorkflowInstanceWithSnapshot,
+    WorkflowInstanceQuery,
+    WorkflowInstancePage,
+    WorkflowTransition,
     LearningFeatureExtractor,
     LearningFeatures,
     LearningAssignmentContext,
@@ -107,6 +110,7 @@ export type {
     WorkflowStep,
     WorkflowTargetUser,
     WorkflowMachineTask,
+    WorkflowExternalTask,
     WorkflowTaskType,
     WorkflowEvent,
     WorkflowEventType,
@@ -116,6 +120,9 @@ export type {
     AuditEntry,
     CircuitBreakerState,
     WorkflowInstanceWithSnapshot,
+    WorkflowInstanceQuery,
+    WorkflowInstancePage,
+    WorkflowTransition,
     LearningOutcome,
     LearningRewards,
     LearningFeatures,
@@ -299,6 +306,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             eventBatchSize: options?.workflowEventBatchSize,
             pollBlockMs: options?.workflowPollBlockMs,
             maxEventsPerSecond: options?.workflowMaxEventsPerSecond,
+            onWorkflowEvent: options?.onWorkflowEvent,
         });
 
         this.readyPromise = this.initRedis();
@@ -1350,6 +1358,16 @@ export default class AssignmentMatcher implements WorkflowHost {
         await this.readyPromise;
         const json = await this.redisClient.hGet(this.usersKey, userId);
         return json ? JSON.parse(json) : null;
+    }
+
+    /**
+     * Whether a user is registered in the pool. Used by the workflow engine
+     * (via the WorkflowHost interface) to validate an initiator before
+     * starting a run that targets 'initiator'.
+     */
+    async userExists(userId: string): Promise<boolean> {
+        await this.readyPromise;
+        return Boolean(await this.redisClient.hExists(this.usersKey, userId));
     }
 
     /** All stored users. The pool is small by design; for load metadata see getQueueStats(). */
@@ -2883,11 +2901,36 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     /**
+     * List workflow instances (runs), newest-created first, optionally
+     * filtered by status and/or workflow definition. Paginated via an opaque
+     * cursor from the previous page's `nextCursor`.
+     */
+    async listWorkflowInstances(query?: WorkflowInstanceQuery): Promise<WorkflowInstancePage> {
+        await this.readyPromise;
+        return this.workflow.listWorkflowInstances(query);
+    }
+
+    /**
      * Cancel a workflow instance.
      */
     async cancelWorkflow(instanceId: string): Promise<boolean> {
         await this.readyPromise;
         return this.workflow.cancelWorkflow(instanceId);
+    }
+
+    /**
+     * Complete (or fail, via `outcome.success: false`) an external step from
+     * outside this process — the counterpart to the `step.ready` transition
+     * delivered via `onWorkflowEvent`. Throws if the step isn't the run's
+     * current step (or a pending parallel branch) or isn't an external step.
+     */
+    async completeWorkflowStep(
+        instanceId: string,
+        stepId: string,
+        outcome: { success: boolean; data?: Record<string, any>; error?: string },
+    ): Promise<boolean> {
+        await this.readyPromise;
+        return this.workflow.completeWorkflowStep(instanceId, stepId, outcome);
     }
 
     /**
@@ -2897,6 +2940,16 @@ export default class AssignmentMatcher implements WorkflowHost {
     async processExpiredWorkflowSteps(): Promise<number> {
         await this.readyPromise;
         return this.workflow.processExpiredWorkflowSteps();
+    }
+
+    /**
+     * Non-blocking drain of up to `maxEvents` due workflow events. Intended
+     * for hosts that sweep many matcher instances periodically rather than
+     * running `startOrchestrator()`'s dedicated blocking loop per instance.
+     */
+    async processWorkflowEvents(maxEvents?: number): Promise<number> {
+        await this.readyPromise;
+        return this.workflow.processWorkflowEvents(maxEvents);
     }
 
     /**

@@ -408,6 +408,15 @@ export type MatcherOptions = {
     geoMatchingFunction?: GeoMatchingFunction;
     /** Enable workflow orchestration features */
     enableWorkflows?: boolean;
+    /**
+     * Real-time hook invoked with every durably-applied workflow transition
+     * (run started, step ready/completed/failed/expired, run completed/failed/
+     * cancelled) — see `WorkflowTransition`. Mirrors `onMatchDecision`'s
+     * contract: best-effort, errors are swallowed, never affects processing.
+     * This is how a host fans transitions out to webhooks/notifications
+     * without reading the Redis stream directly.
+     */
+    onWorkflowEvent?: (transition: WorkflowTransition) => void;
     /** Consumer group name for Redis Streams (defaults to 'orchestrator') */
     streamConsumerGroup?: string;
     /** Consumer name within the group (defaults to random UUID) */
@@ -538,7 +547,7 @@ export type WorkflowEngineMetrics = {
 export type WorkflowEventType = 'STARTED' | 'COMPLETED' | 'REJECTED' | 'EXPIRED' | 'FAILED';
 
 /** Step execution mode */
-export type WorkflowTaskType = 'assignment' | 'machine';
+export type WorkflowTaskType = 'assignment' | 'machine' | 'external';
 
 /** Target user selector for workflow assignment steps */
 export type WorkflowTargetUser = 'initiator' | 'previous' | string | { tag: string };
@@ -548,6 +557,23 @@ export interface WorkflowMachineTask {
     /** Machine handler identifier (resolver-specific) */
     handler: string;
     /** Optional static input merged with workflow context */
+    input?: Record<string, any>;
+}
+
+/**
+ * External (callback) task metadata: the step is completed by a caller outside
+ * the process — a downstream service, an integrator's server, or an AI agent —
+ * via `completeWorkflowStep()`/`failWorkflowStep()` rather than an in-process
+ * handler. Unlike machine steps, no code needs to be registered with this
+ * matcher instance, which is what makes external steps usable from a
+ * multi-tenant host (e.g. the platform) that cannot run customer code.
+ * External steps require a timeout (`timeoutMs` or the workflow's
+ * `defaultTimeoutMs`) so an uncalled-back step cannot hang a run forever.
+ */
+export interface WorkflowExternalTask {
+    /** Caller-facing name identifying what this step asks an external party to do */
+    name: string;
+    /** Optional static input merged with workflow context, surfaced to the caller */
     input?: Record<string, any>;
 }
 
@@ -585,6 +611,8 @@ export interface WorkflowStep {
     targetUser?: WorkflowTargetUser;
     /** Machine task metadata used for code/task worker execution */
     machineTask?: WorkflowMachineTask;
+    /** External (callback) task metadata used when taskType is 'external' */
+    external?: WorkflowExternalTask;
     /** Routing rules for branching (evaluated in order, first match wins) */
     routing?: WorkflowRouting[];
     /** Default next step if no routing condition matches (null = end workflow) */
@@ -642,6 +670,49 @@ export interface WorkflowDefinitionSummary {
     id: string;
     name: string;
 }
+
+/** Filters for `listWorkflowInstances()`. */
+export interface WorkflowInstanceQuery {
+    /** Only instances of this workflow definition */
+    workflowDefinitionId?: string;
+    /** Only instances in this status */
+    status?: WorkflowInstanceStatus;
+    /** Maximum instances returned (default 50), newest-created first */
+    limit?: number;
+    /** Opaque pagination cursor from a previous page's `nextCursor` */
+    cursor?: string;
+}
+
+/** Paginated result of `listWorkflowInstances()`. */
+export interface WorkflowInstancePage {
+    instances: WorkflowInstance[];
+    /** Present when more instances remain; pass back as `cursor` for the next page */
+    nextCursor?: string;
+}
+
+/**
+ * A durably-applied workflow transition, delivered to `MatcherOptions.onWorkflowEvent`
+ * right after it took effect. `instance` is the post-transition snapshot. This is the
+ * single fan-out point a host (e.g. the platform) uses to drive webhooks/notifications
+ * without parsing the underlying Redis stream itself — mirrors `onMatchDecision`'s
+ * contract: fired best-effort, errors thrown by the callback are swallowed and never
+ * affect workflow processing.
+ */
+export type WorkflowTransition = {
+    kind:
+        | 'run.started'
+        | 'step.ready'
+        | 'step.completed'
+        | 'step.failed'
+        | 'step.expired'
+        | 'run.completed'
+        | 'run.failed'
+        | 'run.cancelled';
+    instance: WorkflowInstance;
+    stepId?: string;
+    assignmentId?: string;
+    payload?: Record<string, any>;
+};
 
 /** Status of a workflow instance */
 export type WorkflowInstanceStatus = 'active' | 'completed' | 'failed' | 'cancelled';
@@ -879,6 +950,8 @@ export interface WorkflowStepBuilder {
     assignment(template: Partial<Assignment>): WorkflowStepBuilder;
     /** Configure machine task metadata */
     machineTask(handler: string, input?: Record<string, any>): WorkflowStepBuilder;
+    /** Configure this as an external (callback) step, completed via completeWorkflowStep()/failWorkflowStep() */
+    external(name: string, input?: Record<string, any>): WorkflowStepBuilder;
     /** Set the target user */
     targetUser(target: 'initiator' | 'previous' | string | { tag: string }): WorkflowStepBuilder;
     /** Add a routing condition */

@@ -53,6 +53,37 @@ describe('Runtime fairness reconfiguration (setFairnessConfig)', function () {
         expect(cfg.fairnessWindowMs).to.equal(12345);
     });
 
+    it('clears knobs to their defaults when keys are present but explicitly undefined', function () {
+        const m = new Matcher(redisClient, {
+            redisPrefix: 'fair_rt_clear:',
+            fairness: 'balanced',
+            fairnessLoadPenalty: 9,
+            fairnessTieBand: 2,
+            fairnessMaxPerWindow: 5,
+            fairnessWindowMs: 111,
+        });
+
+        // Every key present but undefined: exercises each `?? default` fallback
+        // and the falsy-fairness path (no enableFairTiebreaker derivation).
+        m.setFairnessConfig({
+            fairness: undefined,
+            fairnessLoadPenalty: undefined,
+            fairnessTieBand: undefined,
+            fairnessMaxPerWindow: undefined,
+            fairnessWindowMs: undefined,
+        });
+
+        const cfg = m.getFairnessConfig();
+        // fairnessMode was cleared, but enableFairTiebreaker stays true (clearing
+        // the mode alone doesn't derive it), so getFairness() reports 'best-match'.
+        expect(cfg.fairness).to.equal('best-match');
+        expect(cfg.enableFairTiebreaker).to.equal(true);
+        expect(cfg.fairnessLoadPenalty).to.equal(0);
+        expect(cfg.fairnessTieBand).to.equal(0);
+        expect(cfg.fairnessMaxPerWindow).to.be.undefined;
+        expect(cfg.fairnessWindowMs).to.equal(3600000);
+    });
+
     it('a partial config leaves unmentioned knobs untouched', function () {
         const m = new Matcher(redisClient, {
             redisPrefix: 'fair_rt_c:',

@@ -92,6 +92,18 @@ describe('Matcher Decision Traces & Explainability', function () {
             expect(alice.chosen).to.equal(true);
         });
 
+        it('reports status "completed" and the completer as owner for a finished assignment', async function () {
+            await matcher.addUser({ id: 'alice', tags: [], routingWeights: { english: 100 } });
+            await matcher.addAssignment({ id: 'a1', tags: ['english'], priority: 100 });
+            await matcher.matchUsersAssignments();
+            await matcher.acceptAssignment('alice', 'a1');
+            await matcher.completeAssignment('alice', 'a1', { success: true });
+
+            const explanation = await matcher.explainMatch('a1');
+            expect(explanation.status).to.equal('completed');
+            expect(explanation.ownerId).to.equal('alice');
+        });
+
         it('reports skill threshold failures with required vs actual', async function () {
             await matcher.addUser({ id: 'junior', tags: [], routingWeights: { english: 20 } });
             await matcher.addAssignment({
@@ -195,6 +207,45 @@ describe('Matcher Decision Traces & Explainability', function () {
             expect(geoReasons).to.have.length(1);
             expect((geoReasons[0] as any).withinRange).to.equal(false);
             expect((geoReasons[0] as any).distanceKm).to.be.greaterThan(100);
+        });
+
+        it('reports an in-range geo candidate with a proximity boost', async function () {
+            const geoMatcher = new Matcher(redisClient, {
+                redisPrefix: 'explain_geo_boost_test:',
+                enableGeoMatching: true,
+                geoScoreWeight: 50,
+            });
+            await geoMatcher.waitUntilReady();
+            // Agent and assignment both in Tallinn, generous radius → in range.
+            await geoMatcher.addUser({ id: 'near', tags: ['support'], latitude: 59.437, longitude: 24.7536 });
+            await geoMatcher.addAssignment({
+                id: 'a1',
+                tags: ['support'],
+                priority: 100,
+                latitude: 59.44,
+                longitude: 24.75,
+                maxDistanceKm: 100,
+            });
+
+            const explanation = await geoMatcher.explainMatch('a1');
+            const near = explanation.candidates.find((c) => c.userId === 'near')!;
+            expect(near.eligible).to.equal(true);
+            const geoReasons = reasonsOfKind(near.reasons, 'geoDistance');
+            expect(geoReasons).to.have.length(1);
+            expect((geoReasons[0] as any).withinRange).to.equal(true);
+            expect(reasonsOfKind(near.reasons, 'geoBoost')).to.have.length(1);
+        });
+
+        it('reflects a runtime priority bump for a still-queued assignment', async function () {
+            await matcher.addUser({ id: 'alice', tags: [], routingWeights: { english: 100 } });
+            await matcher.addAssignment({ id: 'a1', tags: ['english'], priority: 100 });
+            await matcher.setAssignmentPriority('a1', 250);
+
+            const explanation = await matcher.explainMatch('a1');
+            expect(explanation.status).to.equal('queued');
+            const alice = explanation.candidates.find((c) => c.userId === 'alice')!;
+            // effectivePriority = retuned base (250) + score, so the bump is reflected.
+            expect(alice.effectivePriority).to.be.greaterThan(250);
         });
 
         it('explains unweighted tag-overlap candidates', async function () {

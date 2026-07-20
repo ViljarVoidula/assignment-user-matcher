@@ -63,6 +63,47 @@ describe('Idle User Auto-Rejection Tests', async function () {
         expect(assignments2).to.include('task1');
     });
 
+    it('publishes an EXPIRED workflow event when releasing an idle user\'s pending assignments', async function () {
+        const matcher = new AssignmentMatcher(redisClient, {
+            redisPrefix: 'test:idle:wf:',
+            relevantBatchSize: 50,
+            maxUserBacklogSize: 5,
+            enableDefaultMatching: true,
+            enableWorkflows: true,
+            idleUserTimeoutMs: 50,
+        });
+
+        await matcher.addUser({ id: 'user1', tags: ['tag1'] });
+        await matcher.addAssignment({ id: 'task1', tags: ['tag1'], priority: 100 });
+        await matcher.matchUsersAssignments();
+
+        await sleep(80);
+        const removed = await matcher.processIdleUsers();
+        expect(removed).to.deep.equal(['user1']);
+
+        // The release path published an EXPIRED workflow event onto the stream.
+        const streamLen = await redisClient.xLen('test:idle:wf:events:stream');
+        expect(streamLen).to.be.greaterThan(0);
+
+        // And the assignment was requeued for someone else.
+        await matcher.addUser({ id: 'user2', tags: ['tag1'] });
+        await matcher.matchUsersAssignments('user2');
+        expect(await matcher.getCurrentAssignmentsForUser('user2')).to.include('task1');
+    });
+
+    it('cleans up a stale activity entry for a user no longer in the pool without removing anyone', async function () {
+        const matcher = createMatcher(50);
+        await matcher.addUser({ id: 'ghost', tags: ['tag1'] });
+        await matcher.removeUser('ghost');
+        // Re-seed a stale activity entry in the past for the now-absent user.
+        await redisClient.zAdd('test:idle:users:activity', { score: Date.now() - 10000, value: 'ghost' });
+
+        const removed = await matcher.processIdleUsers();
+        expect(removed).to.deep.equal([]);
+        // The stale activity entry was cleaned up.
+        expect(await redisClient.zScore('test:idle:users:activity', 'ghost')).to.be.null;
+    });
+
     it('should not remove a user that keeps signalling activity', async function () {
         const matcher = createMatcher(100);
 
