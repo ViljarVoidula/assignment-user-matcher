@@ -253,6 +253,14 @@ export interface DecisionTraceQuery {
     limit?: number;
 }
 
+export type AssignmentLifecycleEvent =
+    | { kind: 'pending'; taskId: string; workerId: string; matchedAt: number; expiresAt: number }
+    | { kind: 'expired'; taskId: string; workerId: string | null; expiredAt: number }
+    | { kind: 'released'; taskId: string; workerId: string; reason: 'idle' | 'operator'; releasedAt: number }
+    | { kind: 'accepted'; taskId: string; workerId: string; acceptedAt: number }
+    | { kind: 'rejected'; taskId: string; workerId: string; rejectedAt: number }
+    | { kind: 'completed'; taskId: string; workerId: string; completedAt: number };
+
 export type MatcherOptions = {
     relevantBatchSize?: number;
     redisPrefix?: string;
@@ -417,6 +425,14 @@ export type MatcherOptions = {
      * without reading the Redis stream directly.
      */
     onWorkflowEvent?: (transition: WorkflowTransition) => void;
+    /**
+     * Real-time hook invoked at assignment lifecycle boundaries for regular
+     * (non-workflow-targeted) assignments: a task becomes pending, expires,
+     * is released, accepted, rejected, or completed. Best-effort, errors are
+     * swallowed, never affects the lifecycle transition. This is how a host
+     * schedules pre-expiry reminders and fans out lifecycle notifications.
+     */
+    onAssignmentLifecycle?: (event: AssignmentLifecycleEvent) => void;
     /** Consumer group name for Redis Streams (defaults to 'orchestrator') */
     streamConsumerGroup?: string;
     /** Consumer name within the group (defaults to random UUID) */

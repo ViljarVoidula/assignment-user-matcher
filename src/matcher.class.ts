@@ -72,6 +72,7 @@ import type {
     MatchPreview,
     MatchPreviewInput,
     DecisionTraceQuery,
+    AssignmentLifecycleEvent,
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
@@ -100,8 +101,9 @@ export type {
     MatchPreview,
     MatchPreviewInput,
     DecisionTraceQuery,
+    AssignmentLifecycleEvent,
 } from './types/matcher';
-// Export workflow types
+
 export type {
     WorkflowDefinition,
     WorkflowDefinitionInput,
@@ -211,6 +213,9 @@ export default class AssignmentMatcher implements WorkflowHost {
     private decisionTraceMaxCandidates: number;
     private decisionTraces: DecisionTraceManager;
 
+    // Lifecycle hook (fire-and-forget notifications)
+    private onAssignmentLifecycle?: (event: AssignmentLifecycleEvent) => void;
+
     constructor(
         public redisClient: RedisClientType,
         options?: MatcherOptions,
@@ -309,7 +314,22 @@ export default class AssignmentMatcher implements WorkflowHost {
             onWorkflowEvent: options?.onWorkflowEvent,
         });
 
+        this.onAssignmentLifecycle = options?.onAssignmentLifecycle;
+
         this.readyPromise = this.initRedis();
+    }
+
+    /**
+     * Fire the optional assignment lifecycle hook. Errors are swallowed so a
+     * slow/failing observer can never break a lifecycle transition.
+     */
+    private emitAssignmentLifecycle(event: AssignmentLifecycleEvent): void {
+        if (!this.onAssignmentLifecycle) return;
+        try {
+            this.onAssignmentLifecycle(event);
+        } catch (err) {
+            // Best-effort hook: do not propagate.
+        }
     }
 
     /** Keys for the three assignment stores (used by pagination queries) */
@@ -2150,6 +2170,17 @@ export default class AssignmentMatcher implements WorkflowHost {
                 }
             }
             await rm.exec();
+
+            for (const s of selected) {
+                if (!claimedIds.has(s.id)) continue;
+                this.emitAssignmentLifecycle({
+                    kind: 'pending',
+                    taskId: s.id,
+                    workerId: user.id,
+                    matchedAt: now,
+                    expiresAt: now + this.matchExpirationMs,
+                });
+            }
         }
 
         return claimedIds;
@@ -2585,6 +2616,15 @@ export default class AssignmentMatcher implements WorkflowHost {
                     value: assignmentId,
                 });
             await transfer.exec();
+
+            const reassignedAt = Date.now();
+            this.emitAssignmentLifecycle({
+                kind: 'pending',
+                taskId: assignmentId,
+                workerId: userId,
+                matchedAt: reassignedAt,
+                expiresAt: reassignedAt + this.matchExpirationMs,
+            });
         }
 
         await this.touchUser(userId);
@@ -2658,6 +2698,13 @@ export default class AssignmentMatcher implements WorkflowHost {
             await this.learning.applyOutcome(assignmentId, 'accept');
         }
 
+        this.emitAssignmentLifecycle({
+            kind: 'accepted',
+            taskId: assignmentId,
+            workerId: userId,
+            acceptedAt: Date.now(),
+        });
+
         await this.touchUser(userId);
 
         return true;
@@ -2688,6 +2735,13 @@ export default class AssignmentMatcher implements WorkflowHost {
         if (this.enableLearning) {
             await this.learning.applyOutcome(assignmentId, 'reject');
         }
+
+        this.emitAssignmentLifecycle({
+            kind: 'rejected',
+            taskId: assignmentId,
+            workerId: userId,
+            rejectedAt: Date.now(),
+        });
 
         await this.touchUser(userId);
 
@@ -2749,6 +2803,13 @@ export default class AssignmentMatcher implements WorkflowHost {
                 payload: result?.data,
             });
         }
+
+        this.emitAssignmentLifecycle({
+            kind: 'completed',
+            taskId: assignmentId,
+            workerId: userId,
+            completedAt: now,
+        });
 
         return true;
     }
@@ -3041,6 +3102,13 @@ export default class AssignmentMatcher implements WorkflowHost {
             multi.hDel(this.assignmentOwnerKey, id);
             await multi.exec();
 
+            this.emitAssignmentLifecycle({
+                kind: 'expired',
+                taskId: id,
+                workerId: owner ?? null,
+                expiredAt: now,
+            });
+
             if (this.enableLearning) {
                 await this.learning.applyOutcome(id, 'expire');
             }
@@ -3128,7 +3196,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             const pendingCount = await this.redisClient.sCard(this.keys.userAssignments(userId));
             if (pendingCount === 0) continue;
 
-            await this.releaseUserPendingAssignments(userId);
+            await this.releaseUserPendingAssignments(userId, 'idle');
             await this.removeUser(userId);
             removed.push(userId);
         }
@@ -3139,7 +3207,10 @@ export default class AssignmentMatcher implements WorkflowHost {
     /**
      * Requeue all pending assignments currently held by a user.
      */
-    private async releaseUserPendingAssignments(userId: string): Promise<string[]> {
+    private async releaseUserPendingAssignments(
+        userId: string,
+        reason: 'idle' | 'operator' = 'operator',
+    ): Promise<string[]> {
         const members = await this.redisClient.sMembers(this.keys.userAssignments(userId));
         const now = Date.now();
         const released: string[] = [];
@@ -3154,6 +3225,14 @@ export default class AssignmentMatcher implements WorkflowHost {
             multi.zRem(this.pendingAssignmentsExpiryKey, id);
             multi.hDel(this.assignmentOwnerKey, id);
             await multi.exec();
+
+            this.emitAssignmentLifecycle({
+                kind: 'released',
+                taskId: id,
+                workerId: userId,
+                reason,
+                releasedAt: now,
+            });
 
             if (this.enableLearning) {
                 await this.learning.applyOutcome(id, 'expire');

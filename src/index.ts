@@ -22,6 +22,7 @@ export type {
     MatchPreview,
     MatchPreviewInput,
     DecisionTraceQuery,
+    AssignmentLifecycleEvent,
 } from './matcher.class';
 
 // Workflow type exports
