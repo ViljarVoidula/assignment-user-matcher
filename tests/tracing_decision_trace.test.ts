@@ -1,7 +1,7 @@
 import { expect } from 'chai';
-import { TraceCollector, buildDecisionTraces } from '../src/tracing/decision-trace';
+import { TraceCollector, buildDecisionTraces, sortCandidates } from '../src/tracing/decision-trace';
 import type { TraceUserContext } from '../src/tracing/decision-trace';
-import type { User } from '../src/types/matcher';
+import type { MatchCandidateTrace, User } from '../src/types/matcher';
 
 function ctx(user: User, overrides: Partial<TraceUserContext> = {}): TraceUserContext {
     return { user, rejected: new Set(), vetoed: new Set(), ...overrides };
@@ -74,5 +74,41 @@ describe('buildDecisionTraces', function () {
             { userId: 'ghost-winner', eligible: true, chosen: true, score: 0, effectivePriority: 0, reasons: [] },
         ]);
         expect(traces[0].assignmentId).to.equal('a1');
+    });
+});
+
+/**
+ * Candidate ordering is what a reviewer reads top-down in the audit UI: the
+ * user who got the assignment first, then who else could have, then the rest.
+ * Sorting must not depend on the order the collector happened to record in.
+ */
+describe('sortCandidates', function () {
+    const candidate = (overrides: Partial<MatchCandidateTrace>): MatchCandidateTrace => ({
+        userId: 'u',
+        eligible: false,
+        chosen: false,
+        score: 0,
+        effectivePriority: 0,
+        reasons: [],
+        ...overrides,
+    });
+
+    it('puts the chosen user first, then eligible ones, even when recorded last', function () {
+        const sorted = sortCandidates([
+            candidate({ userId: 'struck-out' }),
+            candidate({ userId: 'eligible', eligible: true, effectivePriority: 5 }),
+            candidate({ userId: 'winner', eligible: true, chosen: true, effectivePriority: 1 }),
+        ]);
+
+        expect(sorted.map((c) => c.userId)).to.deep.equal(['winner', 'eligible', 'struck-out']);
+    });
+
+    it('orders same-tier candidates by effective priority descending', function () {
+        const sorted = sortCandidates([
+            candidate({ userId: 'low', eligible: true, effectivePriority: 2 }),
+            candidate({ userId: 'high', eligible: true, effectivePriority: 9 }),
+        ]);
+
+        expect(sorted.map((c) => c.userId)).to.deep.equal(['high', 'low']);
     });
 });

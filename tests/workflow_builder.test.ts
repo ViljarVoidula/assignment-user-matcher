@@ -271,6 +271,35 @@ describe('WorkflowBuilder', function () {
     });
 });
 
+describe('StepBuilder.done() task-type validation', () => {
+    it('should reject a machine step declared without a handler', () => {
+        expect(() => WorkflowBuilder.create('wf-machine', 'Machine').step('run').taskType('machine').done()).to.throw(
+            /Machine step "run" requires machineTask\(handler\)/,
+        );
+    });
+
+    it('should reject an external step declared without a name', () => {
+        expect(() => WorkflowBuilder.create('wf-external', 'External').step('call').taskType('external').done()).to.throw(
+            /External step "call" requires external\(name\)/,
+        );
+    });
+
+    it('should accept machine and external steps configured through their helpers', () => {
+        const definition = WorkflowBuilder.create('wf-ok', 'OK')
+            .step('run')
+            .machineTask('handler-name')
+            .done()
+            .step('call')
+            .external('service-name')
+            .timeout(5_000)
+            .done()
+            .initialStep('run')
+            .build();
+
+        expect(definition.steps.map((s) => s.taskType)).to.deep.equal(['machine', 'external']);
+    });
+});
+
 describe('validateWorkflowDefinition direct calls', () => {
     it('should reject an assignment step missing its assignmentTemplate', () => {
         expect(() =>

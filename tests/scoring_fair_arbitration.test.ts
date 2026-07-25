@@ -60,4 +60,23 @@ describe('arbitrateFair', function () {
 
         expect(winners.map((w) => w.id)).to.deep.equal(['a1', 'a2']);
     });
+
+    it('breaks a tie between two users contesting the same assignment by user id', function () {
+        // Same assignment, same score, both users idle: rank, load, priority and
+        // assignment id are all equal, so only the user id can decide. Exactly one
+        // of them may win — the loser's pair is settled, not deferred.
+        const { winners, deferred } = arbitrateFair(
+            [
+                { userId: 'user-b', id: 'a1', priority: 10 },
+                { userId: 'user-a', id: 'a1', priority: 10 },
+            ],
+            new Map(),
+            new Set(),
+            { maxUserBacklogSize: 5, loadPenalty: 1 },
+        );
+
+        expect(winners).to.have.length(1);
+        expect(winners[0].userId).to.equal('user-a');
+        expect(deferred).to.have.length(0);
+    });
 });

@@ -1,6 +1,11 @@
 import { expect } from 'chai';
 import { createClient } from 'redis';
-import { getAssignmentsByIdsBatch, getAssignmentsPaginatedFromStores } from '../src/queries/pagination';
+import {
+    getAssignmentById,
+    getAssignmentCountsFromStores,
+    getAssignmentsByIdsBatch,
+    getAssignmentsPaginatedFromStores,
+} from '../src/queries/pagination';
 
 /**
  * Pagination across the three assignment stores (queued/pending/accepted) is
@@ -33,6 +38,57 @@ describe('pagination internals', function () {
 
             const [result] = await getAssignmentsByIdsBatch(redisClient, keys, ['a1']);
             expect(result._status).to.equal('accepted');
+        });
+    });
+
+    describe('getAssignmentById', function () {
+        // A parked assignment is out of the matching universe but still exists —
+        // reading it as "not found" would make an exhausted escalation ladder
+        // look like data loss.
+        it('tags an assignment found only in the parked store', async function () {
+            const parkedKey = 'test-pg:parked';
+            await redisClient.hSet(parkedKey, 'a1', JSON.stringify({ id: 'a1', tags: ['t'] }));
+
+            try {
+                const result = await getAssignmentById(redisClient, { ...keys, parked: parkedKey }, 'a1');
+                expect(result!._status).to.equal('parked');
+            } finally {
+                await redisClient.del(parkedKey);
+            }
+        });
+
+        it('returns null for an unknown id without a parked key configured', async function () {
+            expect(await getAssignmentById(redisClient, keys, 'missing')).to.equal(null);
+        });
+
+        it('returns null for an id absent from every store, parked included', async function () {
+            const parkedKey = 'test-pg:parked';
+            const result = await getAssignmentById(redisClient, { ...keys, parked: parkedKey }, 'missing');
+            expect(result).to.equal(null);
+        });
+    });
+
+    describe('getAssignmentCountsFromStores', function () {
+        it('reports zero parked without a parked key configured', async function () {
+            await redisClient.hSet(keys.queued, 'a1', JSON.stringify({ id: 'a1' }));
+            await redisClient.hSet(keys.pending, 'a2', JSON.stringify({ id: 'a2' }));
+
+            const counts = await getAssignmentCountsFromStores(redisClient, keys);
+
+            expect(counts).to.include({ queued: 1, pending: 1, accepted: 0, parked: 0, total: 2 });
+        });
+
+        it('counts the parked store when one is configured, without folding it into the total', async function () {
+            const parkedKey = 'test-pg:parked';
+            await redisClient.hSet(keys.queued, 'a1', JSON.stringify({ id: 'a1' }));
+            await redisClient.hSet(parkedKey, 'a2', JSON.stringify({ id: 'a2' }));
+
+            try {
+                const counts = await getAssignmentCountsFromStores(redisClient, { ...keys, parked: parkedKey });
+                expect(counts).to.include({ queued: 1, parked: 1, total: 1 });
+            } finally {
+                await redisClient.del(parkedKey);
+            }
         });
     });
 
