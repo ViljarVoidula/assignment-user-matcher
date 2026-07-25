@@ -11,8 +11,6 @@ on:
 jobs:
     test:
         runs-on: ubuntu-latest
-        env:
-            FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: true
         services:
             redis:
                 image: redis:latest
@@ -31,8 +29,9 @@ jobs:
             - name: Set up Node.js
               uses: actions/setup-node@v4
               with:
-                  node-version: 22
+                  node-version: 24
                   cache: 'pnpm'
+                  cache-dependency-path: pnpm-lock.yaml
 
             - name: Install dependencies using pnpm
               run: pnpm install --frozen-lockfile
@@ -49,8 +48,6 @@ jobs:
     publish_npm:
         name: Publish to NPM
         runs-on: ubuntu-latest
-        env:
-            FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: true
         needs: test
         if: success() && startsWith(github.ref, 'refs/tags/')
         permissions:
@@ -69,8 +66,9 @@ jobs:
             - name: Set up Node.js
               uses: actions/setup-node@v4
               with:
-                  node-version: 22
+                  node-version: 24
                   cache: 'pnpm'
+                  cache-dependency-path: pnpm-lock.yaml
                   registry-url: 'https://registry.npmjs.org'
 
             - name: Update npm (required for provenance)
