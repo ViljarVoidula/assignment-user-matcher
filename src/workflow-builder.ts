@@ -183,6 +183,27 @@ export class WorkflowStepBuilder {
     }
 
     /**
+     * Advance to `stepId` when this step times out, instead of failing the run.
+     *
+     * The classic escalation ladder — page the primary, and if nobody responds
+     * within the timeout, move on to the secondary rather than giving up:
+     *
+     * ```typescript
+     * .step('page-primary')
+     *     .targetUser({ tag: 'oncall-primary' })
+     *     .timeout(60_000)
+     *     .escalateTo('page-secondary')
+     *     .done()
+     * ```
+     *
+     * Requires a timeout on this step or a workflow `defaultTimeout()`.
+     */
+    escalateTo(stepId: string): this {
+        this.step.onTimeoutStepId = stepId;
+        return this;
+    }
+
+    /**
      * Finish configuring this step and return to the parent builder.
      */
     done(): WorkflowBuilder {
@@ -256,6 +277,15 @@ export class WorkflowBuilder {
     }
 
     /**
+     * Cap how many times one run may escalate through `escalateTo()` before
+     * falling back to the ordinary failure path (default 10).
+     */
+    maxEscalationDepth(depth: number): this {
+        this.definition.maxEscalationDepth = depth;
+        return this;
+    }
+
+    /**
      * Start building a new step.
      * @param id - Unique identifier for the step within this workflow
      */
@@ -298,6 +328,7 @@ export class WorkflowBuilder {
             initialStepId: this.definition.initialStepId,
             steps: this.steps,
             defaultTimeoutMs: this.definition.defaultTimeoutMs,
+            maxEscalationDepth: this.definition.maxEscalationDepth,
             metadata: this.definition.metadata,
         });
     }

@@ -1,0 +1,58 @@
+name: Docs build
+
+on:
+    push:
+        branches:
+            - 'main'
+            - '**'
+    pull_request:
+        branches:
+            - 'main'
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        env:
+            FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: true
+            VITE_PLATFORM_API_URL: https://api.fivexer.com
+        defaults:
+            run:
+                working-directory: example/web
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Install pnpm action
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 9
+                  run_install: false
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: 'pnpm'
+                  cache-dependency-path: example/web/pnpm-lock.yaml
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Type-check docs app
+              run: pnpm exec tsc -b
+
+            - name: Generate API reference from SDK contract
+              run: pnpm run generate-api-reference
+
+            - name: Build static site
+              run: pnpm exec vite build
+
+            - name: Generate sitemap
+              run: node scripts/generate-sitemap.mjs
+
+            - name: Verify sitemap
+              run: |
+                  test -f dist/sitemap.xml
+                  routes=$(grep -c '<url>' dist/sitemap.xml)
+                  echo "sitemap routes: $routes"
+                  test "$routes" -ge 15

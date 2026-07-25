@@ -29,7 +29,7 @@ not appear.
 
 [src/types/matcher.ts:198](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L198)
 
-___
+---
 
 ### candidates
 
@@ -41,7 +41,7 @@ Chosen candidate first, then eligible candidates by effective priority
 
 [src/types/matcher.ts:203](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L203)
 
-___
+---
 
 ### chosenUserId
 
@@ -51,7 +51,7 @@ ___
 
 [src/types/matcher.ts:199](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L199)
 
-___
+---
 
 ### id
 
@@ -61,7 +61,7 @@ ___
 
 [src/types/matcher.ts:197](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L197)
 
-___
+---
 
 ### matchedAt
 
@@ -71,7 +71,7 @@ ___
 
 [src/types/matcher.ts:200](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L200)
 
-___
+---
 
 ### mode
 

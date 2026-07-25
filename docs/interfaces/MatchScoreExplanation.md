@@ -22,7 +22,7 @@ Result of `explainMatchScore`: the `calculateMatchScore` pair plus the reasons b
 
 [src/scoring/match-score.ts:143](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/scoring/match-score.ts#L143)
 
-___
+---
 
 ### reasons
 
@@ -32,7 +32,7 @@ ___
 
 [src/scoring/match-score.ts:144](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/scoring/match-score.ts#L144)
 
-___
+---
 
 ### score
 

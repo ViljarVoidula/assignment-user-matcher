@@ -325,7 +325,11 @@ describe('Matcher Coverage Improvements', function () {
             await matcher.matchUsersAssignments();
 
             // ...plus an injected pending entry that has no expiry zscore.
-            await redisClient.hSet(matcher.pendingAssignmentsKey, 'ageless', JSON.stringify({ id: 'ageless', tags: ['tag1'] }));
+            await redisClient.hSet(
+                matcher.pendingAssignmentsKey,
+                'ageless',
+                JSON.stringify({ id: 'ageless', tags: ['tag1'] }),
+            );
 
             const pending = await matcher.getPendingAssignmentsWithAge();
             const ageless = pending.find((p: any) => p.assignment.id === 'ageless')!;

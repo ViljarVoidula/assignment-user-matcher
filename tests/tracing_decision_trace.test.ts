@@ -43,7 +43,11 @@ describe('buildDecisionTraces', function () {
             collector,
             winners: new Map([['a1', 'winner']]),
             mode: 'direct',
-            users: [ctx(winnerUser), ctx(vetoedUser, { vetoed: new Set(['a1']) }), ctx(rejectedUser, { rejected: new Set(['a1']) })],
+            users: [
+                ctx(winnerUser),
+                ctx(vetoedUser, { vetoed: new Set(['a1']) }),
+                ctx(rejectedUser, { rejected: new Set(['a1']) }),
+            ],
             maxCandidates: 25,
             matchedAt: Date.now(),
         });

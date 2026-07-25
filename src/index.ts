@@ -23,6 +23,10 @@ export type {
     MatchPreviewInput,
     DecisionTraceQuery,
     AssignmentLifecycleEvent,
+    EscalationPolicy,
+    EscalationSweepResult,
+    MaintenanceOptions,
+    MaintenanceReport,
 } from './matcher.class';
 
 // Workflow type exports

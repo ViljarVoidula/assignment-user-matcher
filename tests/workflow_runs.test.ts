@@ -79,7 +79,15 @@ describe('Workflow Runs (platform-facing surface)', function () {
         name: 'Linear',
         version: 1,
         initialStepId: 's1',
-        steps: [{ id: 's1', name: 'S1', assignmentTemplate: { tags: ['t1'] }, targetUser: 'initiator', defaultNextStepId: null }],
+        steps: [
+            {
+                id: 's1',
+                name: 'S1',
+                assignmentTemplate: { tags: ['t1'] },
+                targetUser: 'initiator',
+                defaultNextStepId: null,
+            },
+        ],
     };
 
     const externalDef: WorkflowDefinition = {
@@ -100,8 +108,20 @@ describe('Workflow Runs (platform-facing surface)', function () {
                 ],
                 defaultNextStepId: 'approved',
             },
-            { id: 'approved', name: 'Approved', assignmentTemplate: { tags: ['a'] }, targetUser: 'initiator', defaultNextStepId: null },
-            { id: 'rejected', name: 'Rejected', assignmentTemplate: { tags: ['r'] }, targetUser: 'initiator', defaultNextStepId: null },
+            {
+                id: 'approved',
+                name: 'Approved',
+                assignmentTemplate: { tags: ['a'] },
+                targetUser: 'initiator',
+                defaultNextStepId: null,
+            },
+            {
+                id: 'rejected',
+                name: 'Rejected',
+                assignmentTemplate: { tags: ['r'] },
+                targetUser: 'initiator',
+                defaultNextStepId: null,
+            },
         ],
     };
 
@@ -154,7 +174,9 @@ describe('Workflow Runs (platform-facing surface)', function () {
     describe('onWorkflowEvent transitions', function () {
         it('fires run.started then step.completed and run.completed for a single-step run', async function () {
             const transitions: WorkflowTransition[] = [];
-            const mgr = makeManager(makeAssignmentTrackingHost(), { onWorkflowEvent: (t: WorkflowTransition) => transitions.push(t) });
+            const mgr = makeManager(makeAssignmentTrackingHost(), {
+                onWorkflowEvent: (t: WorkflowTransition) => transitions.push(t),
+            });
             await mgr.registerWorkflow(linearDef);
 
             const instance = await mgr.startWorkflow(linearDef.id, 'u1');
@@ -176,7 +198,9 @@ describe('Workflow Runs (platform-facing surface)', function () {
 
         it('fires step.ready with the external step name/input when an external step is reached', async function () {
             const transitions: WorkflowTransition[] = [];
-            const mgr = makeManager(makeAssignmentTrackingHost(), { onWorkflowEvent: (t: WorkflowTransition) => transitions.push(t) });
+            const mgr = makeManager(makeAssignmentTrackingHost(), {
+                onWorkflowEvent: (t: WorkflowTransition) => transitions.push(t),
+            });
             await mgr.registerWorkflow(externalDef);
 
             await mgr.startWorkflow(externalDef.id, 'u1');
@@ -206,7 +230,9 @@ describe('Workflow Runs (platform-facing surface)', function () {
                 id: 'runs-retry',
                 steps: [{ ...linearDef.steps[0], maxRetries: 1 }],
             };
-            const mgr = makeManager(makeAssignmentTrackingHost(), { onWorkflowEvent: (t: WorkflowTransition) => transitions.push(t) });
+            const mgr = makeManager(makeAssignmentTrackingHost(), {
+                onWorkflowEvent: (t: WorkflowTransition) => transitions.push(t),
+            });
             await mgr.registerWorkflow(retryDef);
             const instance = await mgr.startWorkflow(retryDef.id, 'u1');
 
@@ -238,8 +264,14 @@ describe('Workflow Runs (platform-facing surface)', function () {
 
         it('fires step.expired when a step timeout is processed', async function () {
             const transitions: WorkflowTransition[] = [];
-            const mgr = makeManager(makeAssignmentTrackingHost(), { onWorkflowEvent: (t: WorkflowTransition) => transitions.push(t) });
-            await mgr.registerWorkflow({ ...linearDef, id: 'runs-timeout', steps: [{ ...linearDef.steps[0], timeoutMs: 30000 }] });
+            const mgr = makeManager(makeAssignmentTrackingHost(), {
+                onWorkflowEvent: (t: WorkflowTransition) => transitions.push(t),
+            });
+            await mgr.registerWorkflow({
+                ...linearDef,
+                id: 'runs-timeout',
+                steps: [{ ...linearDef.steps[0], timeoutMs: 30000 }],
+            });
             const instance = await mgr.startWorkflow('runs-timeout', 'u1');
 
             // Force the already-armed timeout to be due now instead of waiting 30s in real time.
@@ -266,7 +298,15 @@ describe('Workflow Runs (platform-facing surface)', function () {
                 name: 'No Timeout',
                 version: 1,
                 initialStepId: 'ext1',
-                steps: [{ id: 'ext1', name: 'Ext', taskType: 'external', external: { name: 'do-thing' }, defaultNextStepId: null }],
+                steps: [
+                    {
+                        id: 'ext1',
+                        name: 'Ext',
+                        taskType: 'external',
+                        external: { name: 'do-thing' },
+                        defaultNextStepId: null,
+                    },
+                ],
             };
 
             let error: Error | undefined;
@@ -312,7 +352,11 @@ describe('Workflow Runs (platform-facing surface)', function () {
 
         it('fails the step when completeWorkflowStep is called with success: false', async function () {
             const mgr = makeManager(makeAssignmentTrackingHost());
-            await mgr.registerWorkflow({ ...externalDef, id: 'runs-ext-fail', steps: [{ ...externalDef.steps[0], maxRetries: 0 }, ...externalDef.steps.slice(1)] });
+            await mgr.registerWorkflow({
+                ...externalDef,
+                id: 'runs-ext-fail',
+                steps: [{ ...externalDef.steps[0], maxRetries: 0 }, ...externalDef.steps.slice(1)],
+            });
             const instance = await mgr.startWorkflow('runs-ext-fail', 'u1');
 
             await mgr.completeWorkflowStep(instance.id, 'ext1', { success: false, error: 'nope' });
@@ -333,7 +377,7 @@ describe('Workflow Runs (platform-facing surface)', function () {
             expect(member).to.be.null;
         });
 
-        it('throws when completing a step that is not the run\'s current step', async function () {
+        it("throws when completing a step that is not the run's current step", async function () {
             const mgr = makeManager(makeAssignmentTrackingHost());
             await mgr.registerWorkflow(externalDef);
             const instance = await mgr.startWorkflow(externalDef.id, 'u1');
@@ -406,8 +450,20 @@ describe('Workflow Runs (platform-facing surface)', function () {
                         timeoutMs: 30000,
                         defaultNextStepId: 'join',
                     },
-                    { id: 'branchB', name: 'Branch B', assignmentTemplate: { tags: ['b'] }, targetUser: 'initiator', defaultNextStepId: 'join' },
-                    { id: 'join', name: 'Join', assignmentTemplate: { tags: ['j'] }, targetUser: 'initiator', defaultNextStepId: null },
+                    {
+                        id: 'branchB',
+                        name: 'Branch B',
+                        assignmentTemplate: { tags: ['b'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: 'join',
+                    },
+                    {
+                        id: 'join',
+                        name: 'Join',
+                        assignmentTemplate: { tags: ['j'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: null,
+                    },
                 ],
             };
             const mgr = makeManager(makeAssignmentTrackingHost());
@@ -528,9 +584,27 @@ describe('Workflow Runs (platform-facing surface)', function () {
                         targetUser: 'initiator',
                         parallelStepIds: ['a', 'b'],
                     },
-                    { id: 'a', name: 'A', assignmentTemplate: { tags: ['a'] }, targetUser: 'initiator', defaultNextStepId: 'join' },
-                    { id: 'b', name: 'B', assignmentTemplate: { tags: ['b'] }, targetUser: 'initiator', defaultNextStepId: 'join' },
-                    { id: 'join', name: 'Join', assignmentTemplate: { tags: ['j'] }, targetUser: 'initiator', defaultNextStepId: null },
+                    {
+                        id: 'a',
+                        name: 'A',
+                        assignmentTemplate: { tags: ['a'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: 'join',
+                    },
+                    {
+                        id: 'b',
+                        name: 'B',
+                        assignmentTemplate: { tags: ['b'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: 'join',
+                    },
+                    {
+                        id: 'join',
+                        name: 'Join',
+                        assignmentTemplate: { tags: ['j'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: null,
+                    },
                 ],
             };
             await mgr.registerWorkflow(def);
@@ -575,7 +649,9 @@ describe('Workflow Runs (platform-facing surface)', function () {
 
         it('emits run.cancelled', async function () {
             const transitions: WorkflowTransition[] = [];
-            const mgr = makeManager(makeAssignmentTrackingHost(), { onWorkflowEvent: (t: WorkflowTransition) => transitions.push(t) });
+            const mgr = makeManager(makeAssignmentTrackingHost(), {
+                onWorkflowEvent: (t: WorkflowTransition) => transitions.push(t),
+            });
             await mgr.registerWorkflow(linearDef);
             const instance = await mgr.startWorkflow(linearDef.id, 'u1');
 
@@ -633,7 +709,9 @@ describe('Workflow Runs (platform-facing surface)', function () {
                 version: 1,
                 initialStepId: 'ext1',
                 defaultTimeoutMs: 1000,
-                steps: [{ id: 'ext1', name: 'Ext', taskType: 'external', external: { name: 'x' }, defaultNextStepId: null }],
+                steps: [
+                    { id: 'ext1', name: 'Ext', taskType: 'external', external: { name: 'x' }, defaultNextStepId: null },
+                ],
             };
             await mgr.registerWorkflow(allExternal);
 
@@ -732,7 +810,15 @@ describe('Workflow Runs (platform-facing surface)', function () {
             const def: WorkflowDefinition = {
                 ...linearDef,
                 id: 'runs-previous-empty-history',
-                steps: [{ id: 's1', name: 'S1', assignmentTemplate: { tags: ['t1'] }, targetUser: 'previous', defaultNextStepId: null }],
+                steps: [
+                    {
+                        id: 's1',
+                        name: 'S1',
+                        assignmentTemplate: { tags: ['t1'] },
+                        targetUser: 'previous',
+                        defaultNextStepId: null,
+                    },
+                ],
             };
             await mgr.registerWorkflow(def);
 
@@ -777,7 +863,9 @@ describe('Workflow Runs (platform-facing surface)', function () {
                 name: 'Raw',
                 version: 1,
                 initialStepId: 'ext1',
-                steps: [{ id: 'ext1', name: 'Ext', taskType: 'external', external: { name: 'x' }, defaultNextStepId: null }],
+                steps: [
+                    { id: 'ext1', name: 'Ext', taskType: 'external', external: { name: 'x' }, defaultNextStepId: null },
+                ],
             });
 
             let error: Error | undefined;
@@ -846,8 +934,20 @@ describe('Workflow Runs (platform-facing surface)', function () {
                 version: 1,
                 initialStepId: 's1',
                 steps: [
-                    { id: 's1', name: 'S1', assignmentTemplate: { tags: ['s1'] }, targetUser: 'initiator', defaultNextStepId: 's2' },
-                    { id: 's2', name: 'S2', assignmentTemplate: { tags: ['boom'] }, targetUser: 'initiator', defaultNextStepId: null },
+                    {
+                        id: 's1',
+                        name: 'S1',
+                        assignmentTemplate: { tags: ['s1'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: 's2',
+                    },
+                    {
+                        id: 's2',
+                        name: 'S2',
+                        assignmentTemplate: { tags: ['boom'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: null,
+                    },
                 ],
             };
             await mgr.registerWorkflow(def);
@@ -945,7 +1045,13 @@ describe('Workflow Runs (platform-facing surface)', function () {
                 version: 1,
                 initialStepId: 'm1',
                 steps: [
-                    { id: 'm1', name: 'M1', taskType: 'machine', machineTask: { handler: 'unregistered' }, defaultNextStepId: null },
+                    {
+                        id: 'm1',
+                        name: 'M1',
+                        taskType: 'machine',
+                        machineTask: { handler: 'unregistered' },
+                        defaultNextStepId: null,
+                    },
                 ],
             };
             await mgr.registerWorkflow(def);
@@ -1025,7 +1131,13 @@ describe('Workflow Runs (platform-facing surface)', function () {
                         maxRetries: 0,
                         defaultNextStepId: null,
                     },
-                    { id: 'b', name: 'B', assignmentTemplate: { tags: ['b'] }, targetUser: 'initiator', defaultNextStepId: null },
+                    {
+                        id: 'b',
+                        name: 'B',
+                        assignmentTemplate: { tags: ['b'] },
+                        targetUser: 'initiator',
+                        defaultNextStepId: null,
+                    },
                 ],
             };
             await mgr.registerWorkflow(def);

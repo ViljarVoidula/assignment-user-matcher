@@ -29,7 +29,7 @@
 
 [src/types/matcher.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L6)
 
-___
+---
 
 ### ip
 
@@ -39,7 +39,7 @@ ___
 
 [src/types/matcher.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L13)
 
-___
+---
 
 ### latitude
 
@@ -49,7 +49,7 @@ ___
 
 [src/types/matcher.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L15)
 
-___
+---
 
 ### longitude
 
@@ -59,7 +59,7 @@ ___
 
 [src/types/matcher.ts:16](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L16)
 
-___
+---
 
 ### maxBacklogSize
 
@@ -69,7 +69,7 @@ ___
 
 [src/types/matcher.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L23)
 
-___
+---
 
 ### maxTravelDistanceKm
 
@@ -79,7 +79,7 @@ ___
 
 [src/types/matcher.ts:18](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L18)
 
-___
+---
 
 ### routingWeights
 
@@ -89,7 +89,7 @@ ___
 
 [src/types/matcher.ts:10](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L10)
 
-___
+---
 
 ### tags
 

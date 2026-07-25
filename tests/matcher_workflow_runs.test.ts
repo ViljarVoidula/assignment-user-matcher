@@ -115,8 +115,20 @@ describe('Workflow runs through the facade', function () {
             initialStepId: 'ext',
             defaultTimeoutMs: 30000,
             steps: [
-                { id: 'ext', name: 'Callback', taskType: 'external', external: { name: 'do-it' }, defaultNextStepId: 'finish' },
-                { id: 'finish', name: 'Finish', assignmentTemplate: { tags: ['x'] }, targetUser: 'initiator', defaultNextStepId: null },
+                {
+                    id: 'ext',
+                    name: 'Callback',
+                    taskType: 'external',
+                    external: { name: 'do-it' },
+                    defaultNextStepId: 'finish',
+                },
+                {
+                    id: 'finish',
+                    name: 'Finish',
+                    assignmentTemplate: { tags: ['x'] },
+                    targetUser: 'initiator',
+                    defaultNextStepId: null,
+                },
             ],
         };
         await matcher.registerWorkflow(externalDef);

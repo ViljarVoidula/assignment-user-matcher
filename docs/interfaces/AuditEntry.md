@@ -27,7 +27,7 @@ Type of action
 
 [src/types/matcher.ts:708](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L708)
 
-___
+---
 
 ### consumerId
 
@@ -39,7 +39,7 @@ Consumer ID that processed the event
 
 [src/types/matcher.ts:714](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L714)
 
-___
+---
 
 ### details
 
@@ -51,7 +51,7 @@ Additional details
 
 [src/types/matcher.ts:716](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L716)
 
-___
+---
 
 ### resourceId
 
@@ -63,7 +63,7 @@ Resource ID (event ID, workflow instance ID, etc.)
 
 [src/types/matcher.ts:710](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L710)
 
-___
+---
 
 ### resourceType
 
@@ -75,7 +75,7 @@ Type of resource
 
 [src/types/matcher.ts:712](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L712)
 
-___
+---
 
 ### timestamp
 

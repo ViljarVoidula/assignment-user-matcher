@@ -8,7 +8,7 @@ A running instance of a workflow
 
 - **`WorkflowInstance`**
 
-  ↳ [`WorkflowInstanceWithSnapshot`](WorkflowInstanceWithSnapshot.md)
+    ↳ [`WorkflowInstanceWithSnapshot`](WorkflowInstanceWithSnapshot.md)
 
 ## Table of contents
 
@@ -41,7 +41,7 @@ Persistent context passed between steps
 
 [src/types/matcher.ts:653](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L653)
 
-___
+---
 
 ### createdAt
 
@@ -53,7 +53,7 @@ Timestamps
 
 [src/types/matcher.ts:667](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L667)
 
-___
+---
 
 ### currentAssignmentId
 
@@ -65,11 +65,11 @@ Current assignment ID being processed
 
 [src/types/matcher.ts:649](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L649)
 
-___
+---
 
 ### currentStepId
 
-• **currentStepId**: ``null`` \| `string`
+• **currentStepId**: `null` \| `string`
 
 Current step ID (null if completed or in parallel execution)
 
@@ -77,7 +77,7 @@ Current step ID (null if completed or in parallel execution)
 
 [src/types/matcher.ts:647](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L647)
 
-___
+---
 
 ### definitionSnapshot
 
@@ -89,11 +89,11 @@ Snapshot of the workflow definition at instance creation time (for versioning)
 
 [src/types/matcher.ts:670](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L670)
 
-___
+---
 
 ### history
 
-• **history**: \{ `assignmentId`: `string` ; `completedAt`: `number` ; `result?`: `Record`\<`string`, `any`\> ; `stepId`: `string` ; `userId`: `string`  }[]
+• **history**: \{ `assignmentId`: `string` ; `completedAt`: `number` ; `result?`: `Record`\<`string`, `any`\> ; `stepId`: `string` ; `userId`: `string` }[]
 
 History of completed steps with their results
 
@@ -101,7 +101,7 @@ History of completed steps with their results
 
 [src/types/matcher.ts:655](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L655)
 
-___
+---
 
 ### id
 
@@ -113,7 +113,7 @@ Unique identifier for this instance
 
 [src/types/matcher.ts:639](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L639)
 
-___
+---
 
 ### initiatorUserId
 
@@ -125,7 +125,7 @@ The user who initiated this workflow
 
 [src/types/matcher.ts:643](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L643)
 
-___
+---
 
 ### parallelBranches
 
@@ -137,7 +137,7 @@ For parallel execution: track all active branches
 
 [src/types/matcher.ts:651](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L651)
 
-___
+---
 
 ### retryCount
 
@@ -149,7 +149,7 @@ Retry count for current step
 
 [src/types/matcher.ts:663](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L663)
 
-___
+---
 
 ### status
 
@@ -161,7 +161,7 @@ Current status
 
 [src/types/matcher.ts:645](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L645)
 
-___
+---
 
 ### updatedAt
 
@@ -171,7 +171,7 @@ ___
 
 [src/types/matcher.ts:668](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L668)
 
-___
+---
 
 ### version
 
@@ -183,7 +183,7 @@ Version for optimistic locking
 
 [src/types/matcher.ts:665](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L665)
 
-___
+---
 
 ### workflowDefinitionId
 

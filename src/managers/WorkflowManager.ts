@@ -1320,7 +1320,70 @@ export class WorkflowManager {
         event: WorkflowEvent,
     ): Promise<void> {
         this.emitTransition('step.expired', instance, { stepId: event.stepId, assignmentId: event.assignmentId });
+
+        if (await this.tryEscalateExpiredStep(instance, definition, event)) return;
+
         await this.handleStepFailure(instance, definition, event);
+    }
+
+    /**
+     * Advance a timed-out step to its `onTimeoutStepId` instead of failing the
+     * run — the escalation ladder (page primary, then secondary, then the
+     * manager). Returns false when the step declares no escalation target, or
+     * when the run has climbed past `maxEscalationDepth`, in which case the
+     * caller falls through to the ordinary failure path.
+     */
+    private async tryEscalateExpiredStep(
+        instance: WorkflowInstance,
+        definition: WorkflowDefinition,
+        event: WorkflowEvent,
+    ): Promise<boolean> {
+        const stepId = event.stepId;
+        if (!stepId) return false;
+
+        const step = definition.steps.find((s) => s.id === stepId);
+        const target = step?.onTimeoutStepId;
+        if (!step || !target) return false;
+
+        // A parallel branch has no single "next step" to escalate to; validation
+        // rejects the combination, but a hand-written definition could slip past
+        // an older registration, so bail out rather than corrupt the branch state.
+        if (instance.parallelBranches?.some((b) => b.stepId === stepId)) return false;
+
+        const depth = Number(instance.context._escalationDepth ?? 0) + 1;
+        const maxDepth = definition.maxEscalationDepth ?? 10;
+        if (depth > maxDepth) return false;
+
+        // Pull the superseded assignment so a late responder on the previous
+        // tier cannot act on work the ladder has already moved on from.
+        const assignmentId = event.assignmentId || instance.currentAssignmentId;
+        if (assignmentId && this.host.removeAssignment) {
+            await this.host.removeAssignment(assignmentId).catch(() => {
+                /* already gone (accepted, cancelled, swept) — nothing to supersede */
+            });
+            await this.redisClient.del(this.keys.workflowAssignmentLink(assignmentId));
+        }
+
+        instance.history.push({
+            stepId,
+            assignmentId: assignmentId ?? '',
+            userId: '',
+            completedAt: Date.now(),
+            result: { escalated: true, to: target },
+        });
+        instance.context._escalatedFrom = stepId;
+        instance.context._escalationDepth = depth;
+
+        this.emitTransition('step.escalated', instance, {
+            stepId,
+            assignmentId,
+            payload: { from: stepId, to: target, depth },
+        });
+
+        // Deliberately does not touch instance.retryCount: an escalation is a
+        // different person getting the work, not another attempt at the same one.
+        await this.executeWorkflowStep(instance, target, definition);
+        return true;
     }
 
     private evaluateCondition(

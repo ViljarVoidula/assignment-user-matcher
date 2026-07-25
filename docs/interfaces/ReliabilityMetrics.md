@@ -29,7 +29,7 @@ Whether circuit breaker is currently allowing requests
 
 [src/types/matcher.ts:746](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L746)
 
-___
+---
 
 ### circuitBreakerState
 
@@ -41,7 +41,7 @@ Current circuit breaker state
 
 [src/types/matcher.ts:732](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L732)
 
-___
+---
 
 ### deadLetterQueueSize
 
@@ -53,7 +53,7 @@ Current Dead Letter Queue size
 
 [src/types/matcher.ts:734](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L734)
 
-___
+---
 
 ### lastConnectedAt
 
@@ -65,7 +65,7 @@ Timestamp of last successful connection
 
 [src/types/matcher.ts:742](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L742)
 
-___
+---
 
 ### lastError
 
@@ -77,7 +77,7 @@ Last error message if any
 
 [src/types/matcher.ts:740](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L740)
 
-___
+---
 
 ### lastHealthCheckAt
 
@@ -89,7 +89,7 @@ Timestamp of last health check
 
 [src/types/matcher.ts:744](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L744)
 
-___
+---
 
 ### reconnectCount
 
@@ -101,7 +101,7 @@ Number of reconnection attempts since start
 
 [src/types/matcher.ts:738](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L738)
 
-___
+---
 
 ### redisHealthy
 

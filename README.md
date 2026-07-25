@@ -212,6 +212,35 @@ console.log(instance.id, instance.currentStepId);
 
 You can still call `registerWorkflow()` and `startWorkflow()` separately if you want explicit lifecycle control.
 
+#### Escalation ladders (`escalateTo`)
+
+A step whose timeout expires normally fails the run (after any `maxRetries`). `escalateTo(stepId)` turns that timeout into a forward hop instead — the classic page-the-primary-then-the-secondary ladder:
+
+```typescript
+const escalation = workflow('oncall', 'On-call escalation')
+    .step('page-primary')
+    .assignment({ tags: ['sev:1', 'oncall-primary'] })
+    .targetUser({ tag: 'oncall-primary' })
+    .timeout(60_000)
+    .escalateTo('page-secondary')
+    .route('result.acked === true', 'mitigate')
+    .done()
+    .step('page-secondary')
+    .assignment({ tags: ['sev:1', 'oncall-secondary'] })
+    .targetUser({ tag: 'oncall-secondary' })
+    .timeout(300_000)
+    .escalateTo('page-manager')
+    .done();
+// … 'page-manager' has no escalateTo: the ladder ends and the run fails,
+// which is the honest "escalated to the top and nobody answered" state.
+```
+
+When a step escalates, its outstanding assignment is removed so a late responder cannot act on a superseded tier, `context._escalatedFrom` and `context._escalationDepth` are set, and a `step.escalated` transition is emitted (in addition to `step.expired`). Escalating does **not** consume `maxRetries` — a different person getting the work is not another attempt at the same one. `maxEscalationDepth(n)` (default 10) stops a mis-wired cycle from climbing forever.
+
+Registration rejects an escalation target that doesn't exist, a step escalating to itself, escalation without a resolvable timeout, and escalation from inside a parallel group.
+
+Targeting matters: `targetUser({ tag: '…' })` routes the step's assignment through ordinary tag matching (so fairness, backlog caps, and the rolling-window grant cap all apply), while `targetUser('<userId>')` makes it workflow-targeted and therefore exempt from the fairness window cap. For tiered escalation you almost always want the tag form.
+
 Plain object workflow definitions are also accepted. The library now fills in sensible defaults:
 
 - `version` defaults to `1`
@@ -321,6 +350,50 @@ The redistribution counterpart to `pauseUser`: requeue every pending (matched bu
 Operator override: hand an assignment directly to a user, bypassing tag/weight selection. Works on queued assignments and on pending assignments held by another user (the previous owner's backlog slot is released and the expiry clock restarts). Idempotent when the user already owns the assignment.
 
 Hard rules still apply unless `force: true`: the user must not be paused, must have backlog headroom, must not be vetoed on the assignment, and must not have previously rejected it. The learning layer is never fed by manual assignments. When tracing is active the override is recorded as a decision trace with mode `'manual'`, so supervisor actions land in the same audit trail as organic matches.
+
+### Response deadlines & escalation (`Assignment.escalation`)
+
+By default an assignment nobody responds to is requeued after the matcher-wide `matchExpirationMs` — and the same user may win it straight back. Attach an `EscalationPolicy` to make that behaviour explicit: a per-assignment deadline, an optional block on the non-responder, a priority climb, and an optional tier ladder that moves the work to a different pool on each hop. **No workflow is required.**
+
+```ts
+await matcher.addAssignment({
+    id: 'incident-1',
+    tags: ['sev:1', 'oncall-primary'],
+    priority: 1000,
+    escalation: {
+        respondWithinMs: 60_000,
+        onNoResponse: 'block', // don't offer it back to whoever ignored it
+        priorityBoost: 500, // ignored work climbs the queue
+        tiers: [['oncall-primary'], ['oncall-secondary'], ['oncall-manager']],
+        onExhausted: 'park', // nobody answered, all the way up
+    },
+});
+
+matcher.startMaintenance(); // deadlines don't fire unless something sweeps them
+```
+
+| Field             | Meaning                                                                                                                                        | Default                            |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `respondWithinMs` | Per-assignment response deadline, overriding `matchExpirationMs`                                                                               | required                           |
+| `onNoResponse`    | `'block'` treats a non-response as a soft rejection (same rejected set an explicit reject writes to); `'allow'` keeps the historical behaviour | `'allow'`                          |
+| `priorityBoost`   | Priority delta applied on each hop                                                                                                             | `0`                                |
+| `tiers`           | Tag ladder. Tier tags are swapped per hop; tags not named by any tier survive untouched                                                        | none                               |
+| `maxEscalations`  | Hop ceiling                                                                                                                                    | `tiers.length - 1`, else unlimited |
+| `onExhausted`     | `'queue'` keeps recirculating; `'park'` holds it out of matching                                                                               | `'queue'`                          |
+
+The wait clock always survives an escalation: requeues go through `addAssignment`, whose `NX` keeps the original first-enqueue time, so `getQueueStats().oldestWaitingMs` measures the work item rather than the current tier.
+
+Subscribe via `onAssignmentLifecycle` for `escalated` (`{ fromWorkerId, level, blockedPreviousOwner }`) and `escalationExhausted` (`{ level, parked }`) events; `expired` is still emitted first, so existing consumers are unaffected. Parked assignments are reachable with `getParkedAssignments()`, returned to the queue with `unparkAssignment(id, { resetEscalation? })`, and report `_status: 'parked'` from `getAssignment()` — they never read as "not found". `getEscalationLevel(id)` reports how far an assignment has climbed.
+
+### `startMaintenance(options?)` / `stopMaintenance()` / `runMaintenanceOnce(options?)`
+
+Deadlines are not self-firing — something has to sweep them. `startMaintenance()` runs every enabled sweep on one tick:
+
+- `responseDeadlines` (default on) — expiry, escalation, parking.
+- `workflowStepTimeouts` (default on when `enableWorkflows`) — the step-timeout index. **Note:** `startOrchestrator()` consumes the event stream but does not sweep step timeouts; without maintenance, `timeoutMs` on a workflow step never fires.
+- `idleUsers` (default on when `idleUserTimeoutMs` is set).
+
+`runMaintenanceOnce()` does one pass and returns a `MaintenanceReport` (`expiredMatches`, `escalations`, `parked`, `expiredSteps`, `releasedIdleUsers`, `tookMs`) — use it from a host that already owns a tick (a multi-tenant worker, a serverless schedule) instead of holding a timer per matcher. `startAutoReleaseInterval()` remains as a deprecated alias that sweeps response deadlines only.
 
 ### `getQueueStats(): Promise<QueueStats>`
 

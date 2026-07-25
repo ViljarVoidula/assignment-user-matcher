@@ -26,7 +26,7 @@ UCB exploration coefficient; higher favors less-sampled tags (default: 0.5)
 
 [src/types/matcher.ts:830](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L830)
 
-___
+---
 
 ### maxWeight
 
@@ -38,7 +38,7 @@ Maximum synthesized weight on the conventional 0-100 scale (default: 100)
 
 [src/types/matcher.ts:828](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L828)
 
-___
+---
 
 ### minSamples
 
@@ -50,7 +50,7 @@ Minimum observations before a tag's stats are trusted (default: 5)
 
 [src/types/matcher.ts:824](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L824)
 
-___
+---
 
 ### priorWeight
 
@@ -62,7 +62,7 @@ Optimistic weight assigned to under-sampled or unobserved known tags (default: m
 
 [src/types/matcher.ts:832](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L832)
 
-___
+---
 
 ### vetoThreshold
 

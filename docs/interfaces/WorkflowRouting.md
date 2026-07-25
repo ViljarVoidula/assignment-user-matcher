@@ -23,7 +23,7 @@ Condition expression evaluated against assignment result (e.g., 'result.score > 
 
 [src/types/matcher.ts:548](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L548)
 
-___
+---
 
 ### targetStepId
 

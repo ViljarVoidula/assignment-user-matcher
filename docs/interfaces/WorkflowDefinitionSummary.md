@@ -21,7 +21,7 @@ Compact workflow metadata returned by list endpoints
 
 [src/types/matcher.ts:621](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L621)
 
-___
+---
 
 ### name
 

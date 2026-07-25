@@ -24,7 +24,7 @@ Number of consecutive failures
 
 [src/types/matcher.ts:724](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L724)
 
-___
+---
 
 ### lastFailureTime
 
@@ -36,11 +36,11 @@ Timestamp of last failure
 
 [src/types/matcher.ts:726](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L726)
 
-___
+---
 
 ### state
 
-• **state**: ``"closed"`` \| ``"open"`` \| ``"half-open"``
+• **state**: `"closed"` \| `"open"` \| `"half-open"`
 
 Current state of the circuit breaker
 

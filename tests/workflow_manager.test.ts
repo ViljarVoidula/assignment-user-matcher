@@ -123,7 +123,10 @@ describe('WorkflowManager', function () {
             const instance = await workflowManager.startWorkflow(definition.id, 'user-2');
 
             // Force the armed timeout due now instead of sleeping past it.
-            await redisClient.zAdd(keys.workflowStepExpiryIndex(), { score: Date.now() - 1, value: `${instance.id}|step-1` });
+            await redisClient.zAdd(keys.workflowStepExpiryIndex(), {
+                score: Date.now() - 1,
+                value: `${instance.id}|step-1`,
+            });
 
             const expiredCount = await workflowManager.processExpiredWorkflowSteps();
             expect(expiredCount).to.equal(1);

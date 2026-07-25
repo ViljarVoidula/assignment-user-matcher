@@ -27,7 +27,7 @@ actually happened, use decision traces instead.
 
 [src/types/matcher.ts:213](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L213)
 
-___
+---
 
 ### candidates
 
@@ -37,7 +37,7 @@ ___
 
 [src/types/matcher.ts:222](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L222)
 
-___
+---
 
 ### evaluatedAt
 
@@ -47,11 +47,11 @@ ___
 
 [src/types/matcher.ts:221](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L221)
 
-___
+---
 
 ### ownerId
 
-• **ownerId**: ``null`` \| `string`
+• **ownerId**: `null` \| `string`
 
 Current owner for pending assignments and completer for completed ones.
 `null` while queued and for accepted assignments (ownership metadata is
@@ -61,11 +61,11 @@ released on acceptance — consult decision traces for the full history).
 
 [src/types/matcher.ts:220](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L220)
 
-___
+---
 
 ### status
 
-• **status**: ``"queued"`` \| ``"pending"`` \| ``"accepted"`` \| ``"completed"`` \| ``"not_found"``
+• **status**: `"queued"` \| `"pending"` \| `"accepted"` \| `"completed"` \| `"not_found"`
 
 #### Defined in
 

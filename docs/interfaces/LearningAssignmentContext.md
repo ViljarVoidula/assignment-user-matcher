@@ -25,7 +25,7 @@ Minimal assignment context passed to feature extractors
 
 [src/types/matcher.ts:770](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L770)
 
-___
+---
 
 ### tags
 

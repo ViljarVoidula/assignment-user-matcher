@@ -65,7 +65,11 @@ describe('Matcher.previewMatch()', function () {
         const explanation = await matcher.explainMatch('a1');
 
         const previewOrder = preview.candidates.map((c) => ({ userId: c.userId, eligible: c.eligible, score: c.score }));
-        const explainOrder = explanation.candidates.map((c) => ({ userId: c.userId, eligible: c.eligible, score: c.score }));
+        const explainOrder = explanation.candidates.map((c) => ({
+            userId: c.userId,
+            eligible: c.eligible,
+            score: c.score,
+        }));
         expect(previewOrder).to.deep.equal(explainOrder);
     });
 

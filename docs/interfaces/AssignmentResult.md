@@ -24,7 +24,7 @@ Arbitrary result data for routing decisions
 
 [src/types/matcher.ts:678](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L678)
 
-___
+---
 
 ### error
 
@@ -36,7 +36,7 @@ Error message if failed
 
 [src/types/matcher.ts:680](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L680)
 
-___
+---
 
 ### success
 

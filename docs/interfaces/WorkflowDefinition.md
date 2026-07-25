@@ -28,7 +28,7 @@ Default timeout for steps in milliseconds
 
 [src/types/matcher.ts:596](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L596)
 
-___
+---
 
 ### id
 
@@ -40,7 +40,7 @@ Unique identifier for this workflow definition
 
 [src/types/matcher.ts:586](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L586)
 
-___
+---
 
 ### initialStepId
 
@@ -52,7 +52,7 @@ The entry point step ID
 
 [src/types/matcher.ts:592](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L592)
 
-___
+---
 
 ### metadata
 
@@ -64,7 +64,7 @@ Metadata for the workflow
 
 [src/types/matcher.ts:598](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L598)
 
-___
+---
 
 ### name
 
@@ -76,7 +76,7 @@ Human-readable name
 
 [src/types/matcher.ts:588](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L588)
 
-___
+---
 
 ### steps
 
@@ -88,7 +88,7 @@ All steps in this workflow
 
 [src/types/matcher.ts:594](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L594)
 
-___
+---
 
 ### version
 

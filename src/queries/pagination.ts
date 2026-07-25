@@ -23,6 +23,9 @@ export interface AssignmentCounts {
     queued: number;
     pending: number;
     accepted: number;
+    /** Assignments held out of matching by an exhausted escalation ladder */
+    parked: number;
+    /** queued + pending + accepted — parked items are counted separately */
     total: number;
 }
 
@@ -30,6 +33,8 @@ export interface AssignmentKeys {
     queued: string;
     pending: string;
     accepted: string;
+    /** Optional parked store; omitted by callers that predate escalation policies */
+    parked?: string;
 }
 
 /**
@@ -56,16 +61,18 @@ export async function getAssignmentCountsFromStores(
     redisClient: RedisClientType,
     keys: AssignmentKeys,
 ): Promise<AssignmentCounts> {
-    const [queued, pending, accepted] = await Promise.all([
+    const [queued, pending, accepted, parked] = await Promise.all([
         redisClient.hLen(keys.queued),
         redisClient.hLen(keys.pending),
         redisClient.hLen(keys.accepted),
+        keys.parked ? redisClient.hLen(keys.parked) : Promise.resolve(0),
     ]);
 
     return {
         queued,
         pending,
         accepted,
+        parked,
         total: queued + pending + accepted,
     };
 }
@@ -98,6 +105,17 @@ export async function getAssignmentById(
         const assignment = JSON.parse(accepted);
         assignment._status = 'accepted';
         return assignment;
+    }
+
+    // Parked items are out of the matching universe but must never read as
+    // "not found" — that would make an exhausted escalation look like data loss.
+    if (keys.parked) {
+        const parked = await redisClient.hGet(keys.parked, id);
+        if (parked) {
+            const assignment = JSON.parse(parked);
+            assignment._status = 'parked';
+            return assignment;
+        }
     }
 
     return null;

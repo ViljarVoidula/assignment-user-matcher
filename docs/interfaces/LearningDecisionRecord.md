@@ -25,7 +25,7 @@ Stored decision context awaiting an outcome
 
 [src/types/matcher.ts:781](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L781)
 
-___
+---
 
 ### features
 
@@ -35,7 +35,7 @@ ___
 
 [src/types/matcher.ts:782](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L782)
 
-___
+---
 
 ### predictedReward
 
@@ -45,7 +45,7 @@ ___
 
 [src/types/matcher.ts:783](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L783)
 
-___
+---
 
 ### tags
 
@@ -57,7 +57,7 @@ Assignment tags captured at decision time (used for auto routing weights)
 
 [src/types/matcher.ts:785](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L785)
 
-___
+---
 
 ### timestamp
 
@@ -67,7 +67,7 @@ ___
 
 [src/types/matcher.ts:786](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L786)
 
-___
+---
 
 ### userId
 

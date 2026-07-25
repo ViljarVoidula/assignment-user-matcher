@@ -31,7 +31,7 @@ back to their auto-derived behavior.
 
 [src/types/matcher.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L119)
 
-___
+---
 
 ### fairness
 
@@ -41,7 +41,7 @@ ___
 
 [src/types/matcher.ts:118](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L118)
 
-___
+---
 
 ### fairnessLoadPenalty
 
@@ -51,7 +51,7 @@ ___
 
 [src/types/matcher.ts:120](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L120)
 
-___
+---
 
 ### fairnessMaxPerWindow
 
@@ -61,7 +61,7 @@ ___
 
 [src/types/matcher.ts:122](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L122)
 
-___
+---
 
 ### fairnessTieBand
 
@@ -71,7 +71,7 @@ ___
 
 [src/types/matcher.ts:121](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L121)
 
-___
+---
 
 ### fairnessWindowMs
 

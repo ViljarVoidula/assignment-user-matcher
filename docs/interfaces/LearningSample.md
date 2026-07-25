@@ -21,7 +21,7 @@ Raw training sample for offline/batch model updates
 
 [src/types/matcher.ts:806](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L806)
 
-___
+---
 
 ### reward
 

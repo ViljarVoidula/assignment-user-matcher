@@ -41,6 +41,9 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         pendingAssignmentsExpiry: () => `${prefix}assignments:pending:expiry`,
         assignmentOwner: () => `${prefix}assignments:pending:owner`,
         acceptedAssignments: () => `${prefix}assignments:accepted`,
+        // Assignments whose escalation ladder was exhausted under
+        // `onExhausted: 'park'` — held out of matching until unparked.
+        parkedAssignments: () => `${prefix}assignments:parked`,
 
         // Tag keys
         allTags: () => `${prefix}all:tags`,

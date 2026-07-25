@@ -25,7 +25,7 @@ Archived episode retained after a terminal outcome for late external feedback
 
 [src/types/matcher.ts:792](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L792)
 
-___
+---
 
 ### features
 
@@ -35,7 +35,7 @@ ___
 
 [src/types/matcher.ts:793](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L793)
 
-___
+---
 
 ### outcome
 
@@ -47,7 +47,7 @@ Terminal outcome that archived this episode
 
 [src/types/matcher.ts:795](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L795)
 
-___
+---
 
 ### tags
 
@@ -59,7 +59,7 @@ Assignment tags captured at decision time (used for auto routing weights)
 
 [src/types/matcher.ts:797](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L797)
 
-___
+---
 
 ### timestamp
 
@@ -69,7 +69,7 @@ ___
 
 [src/types/matcher.ts:798](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L798)
 
-___
+---
 
 ### userId
 

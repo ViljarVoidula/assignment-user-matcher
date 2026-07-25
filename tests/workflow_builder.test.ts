@@ -252,9 +252,9 @@ describe('WorkflowBuilder', function () {
     });
 
     it('should throw when finishing an external step without a name', () => {
-        expect(() =>
-            WorkflowBuilder.create('wf', 'WF').step('x').taskType('external').done(),
-        ).to.throw(/requires external\(name\)/);
+        expect(() => WorkflowBuilder.create('wf', 'WF').step('x').taskType('external').done()).to.throw(
+            /requires external\(name\)/,
+        );
     });
 
     it('should build external task steps', () => {

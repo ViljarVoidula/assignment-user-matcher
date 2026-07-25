@@ -124,7 +124,10 @@ describe('Workflow Scalability & Reliability', function () {
         // the scheduling (setStepTimeout) is verified by the index-population test
         // above; these assert the draining behavior, which only needs a due entry.
         async function forceStepDue(instanceId: string, stepId: string) {
-            await redisClient.zAdd(keys.workflowStepExpiryIndex(), { score: Date.now() - 1, value: `${instanceId}|${stepId}` });
+            await redisClient.zAdd(keys.workflowStepExpiryIndex(), {
+                score: Date.now() - 1,
+                value: `${instanceId}|${stepId}`,
+            });
         }
 
         it('should fire an expiry exactly once and be idempotent across calls', async function () {

@@ -35,9 +35,9 @@ Builder for individual workflow steps.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
-| `id` | `string` |
+| Name            | Type                                    |
+| :-------------- | :-------------------------------------- |
+| `id`            | `string`                                |
 | `parentBuilder` | [`WorkflowBuilder`](WorkflowBuilder.md) |
 
 #### Returns
@@ -52,7 +52,7 @@ Builder for individual workflow steps.
 
 ### \_getStep
 
-▸ **_getStep**(): [`WorkflowStep`](../interfaces/WorkflowStep.md)
+▸ **\_getStep**(): [`WorkflowStep`](../interfaces/WorkflowStep.md)
 
 Get the built step (for internal use).
 
@@ -64,7 +64,7 @@ Get the built step (for internal use).
 
 [src/workflow-builder.ts:189](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L189)
 
-___
+---
 
 ### assignment
 
@@ -74,8 +74,8 @@ Set the assignment template for this step.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name       | Type                                                  |
+| :--------- | :---------------------------------------------------- |
 | `template` | `Partial`\<[`Assignment`](../modules.md#assignment)\> |
 
 #### Returns
@@ -86,7 +86,7 @@ Set the assignment template for this step.
 
 [src/workflow-builder.ts:88](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L88)
 
-___
+---
 
 ### defaultNext
 
@@ -96,9 +96,9 @@ Set the default next step if no routing conditions match.
 
 #### Parameters
 
-| Name | Type | Description |
-| :------ | :------ | :------ |
-| `stepId` | ``null`` \| `string` | Next step ID, or null to end workflow |
+| Name     | Type               | Description                           |
+| :------- | :----------------- | :------------------------------------ |
+| `stepId` | `null` \| `string` | Next step ID, or null to end workflow |
 
 #### Returns
 
@@ -108,7 +108,7 @@ Set the default next step if no routing conditions match.
 
 [src/workflow-builder.ts:128](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L128)
 
-___
+---
 
 ### done
 
@@ -124,7 +124,7 @@ Finish configuring this step and return to the parent builder.
 
 [src/workflow-builder.ts:177](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L177)
 
-___
+---
 
 ### failurePolicy
 
@@ -134,9 +134,9 @@ Set the failure policy for parallel execution.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
-| `policy` | ``"abort"`` \| ``"continue"`` \| ``"retry"`` |
+| Name     | Type                                   |
+| :------- | :------------------------------------- |
+| `policy` | `"abort"` \| `"continue"` \| `"retry"` |
 
 #### Returns
 
@@ -146,7 +146,7 @@ Set the failure policy for parallel execution.
 
 [src/workflow-builder.ts:153](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L153)
 
-___
+---
 
 ### machineTask
 
@@ -156,10 +156,10 @@ Configure this step as a machine/code task.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
-| `handler` | `string` |
-| `input?` | `Record`\<`string`, `any`\> |
+| Name      | Type                        |
+| :-------- | :-------------------------- |
+| `handler` | `string`                    |
+| `input?`  | `Record`\<`string`, `any`\> |
 
 #### Returns
 
@@ -169,7 +169,7 @@ Configure this step as a machine/code task.
 
 [src/workflow-builder.ts:96](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L96)
 
-___
+---
 
 ### maxRetries
 
@@ -179,8 +179,8 @@ Set the maximum retry count for this step.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name    | Type     |
+| :------ | :------- |
 | `count` | `number` |
 
 #### Returns
@@ -191,7 +191,7 @@ Set the maximum retry count for this step.
 
 [src/workflow-builder.ts:161](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L161)
 
-___
+---
 
 ### name
 
@@ -201,8 +201,8 @@ Set the step name.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name   | Type     |
+| :----- | :------- |
 | `name` | `string` |
 
 #### Returns
@@ -213,7 +213,7 @@ Set the step name.
 
 [src/workflow-builder.ts:80](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L80)
 
-___
+---
 
 ### parallel
 
@@ -223,8 +223,8 @@ Configure parallel execution with other steps.
 
 #### Parameters
 
-| Name | Type | Description |
-| :------ | :------ | :------ |
+| Name      | Type       | Description                                             |
+| :-------- | :--------- | :------------------------------------------------------ |
 | `stepIds` | `string`[] | Array of step IDs to execute in parallel with this step |
 
 #### Returns
@@ -235,7 +235,7 @@ Configure parallel execution with other steps.
 
 [src/workflow-builder.ts:137](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L137)
 
-___
+---
 
 ### route
 
@@ -245,10 +245,10 @@ Add a routing rule for conditional branching.
 
 #### Parameters
 
-| Name | Type | Description |
-| :------ | :------ | :------ |
-| `condition` | `string` | Expression to evaluate (e.g., 'result.approved === true') |
-| `targetStepId` | `string` | Step to go to if condition is true |
+| Name           | Type     | Description                                               |
+| :------------- | :------- | :-------------------------------------------------------- |
+| `condition`    | `string` | Expression to evaluate (e.g., 'result.approved === true') |
+| `targetStepId` | `string` | Step to go to if condition is true                        |
 
 #### Returns
 
@@ -258,7 +258,7 @@ Add a routing rule for conditional branching.
 
 [src/workflow-builder.ts:116](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L116)
 
-___
+---
 
 ### targetUser
 
@@ -268,8 +268,8 @@ Set the target user for this step.
 
 #### Parameters
 
-| Name | Type | Description |
-| :------ | :------ | :------ |
+| Name     | Type                                                     | Description                                            |
+| :------- | :------------------------------------------------------- | :----------------------------------------------------- |
 | `target` | [`WorkflowTargetUser`](../modules.md#workflowtargetuser) | 'initiator' \| 'previous' \| userId \| { tag: string } |
 
 #### Returns
@@ -280,7 +280,7 @@ Set the target user for this step.
 
 [src/workflow-builder.ts:106](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L106)
 
-___
+---
 
 ### taskType
 
@@ -290,8 +290,8 @@ Set execution mode for this step.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name   | Type                                                 |
+| :----- | :--------------------------------------------------- |
 | `type` | [`WorkflowTaskType`](../modules.md#workflowtasktype) |
 
 #### Returns
@@ -302,7 +302,7 @@ Set execution mode for this step.
 
 [src/workflow-builder.ts:72](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L72)
 
-___
+---
 
 ### timeout
 
@@ -312,8 +312,8 @@ Set a timeout for this step in milliseconds.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name | Type     |
+| :--- | :------- |
 | `ms` | `number` |
 
 #### Returns
@@ -324,7 +324,7 @@ Set a timeout for this step in milliseconds.
 
 [src/workflow-builder.ts:169](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L169)
 
-___
+---
 
 ### waitForAll
 
@@ -334,9 +334,9 @@ Set whether to wait for all parallel branches before continuing.
 
 #### Parameters
 
-| Name | Type | Default value |
-| :------ | :------ | :------ |
-| `wait` | `boolean` | `true` |
+| Name   | Type      | Default value |
+| :----- | :-------- | :------------ |
+| `wait` | `boolean` | `true`        |
 
 #### Returns
 

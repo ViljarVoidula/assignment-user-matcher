@@ -24,7 +24,7 @@ Only traces for this assignment (an assignment re-queued and re-matched has seve
 
 [src/types/matcher.ts:228](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L228)
 
-___
+---
 
 ### limit
 
@@ -36,7 +36,7 @@ Maximum traces returned (default 50), newest first
 
 [src/types/matcher.ts:232](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L232)
 
-___
+---
 
 ### userId
 

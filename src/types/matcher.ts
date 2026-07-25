@@ -46,8 +46,76 @@ export type Assignment = {
     maxDistanceKm?: number;
     // When true, users without valid coordinates are not eligible
     requireGeo?: boolean;
+    // Optional response deadline + escalation ladder. See EscalationPolicy.
+    escalation?: EscalationPolicy;
     [key: string]: any;
 };
+
+/**
+ * What should happen when the user an assignment was matched to lets the
+ * response deadline run out without accepting or rejecting it.
+ *
+ * Without a policy, an unanswered assignment is simply requeued after the
+ * matcher-wide `matchExpirationMs` — and the same user may win it straight
+ * back. A policy makes that behaviour explicit and controllable: a
+ * per-assignment deadline, an optional block on the non-responder, a priority
+ * climb, and an optional tier ladder that moves the assignment to a different
+ * pool on each hop (primary → secondary → manager) with no workflow involved.
+ *
+ * @example
+ * ```typescript
+ * await matcher.addAssignment({
+ *     id: 'incident-1',
+ *     tags: ['sev:1', 'oncall-primary'],
+ *     escalation: {
+ *         respondWithinMs: 60_000,
+ *         onNoResponse: 'block',
+ *         priorityBoost: 500,
+ *         tiers: [['oncall-primary'], ['oncall-secondary'], ['oncall-manager']],
+ *         onExhausted: 'park',
+ *     },
+ * });
+ * ```
+ */
+export interface EscalationPolicy {
+    /**
+     * Milliseconds the matched user has to respond before the assignment is
+     * taken back. Per-assignment override of `matchExpirationMs`.
+     */
+    respondWithinMs: number;
+    /**
+     * What happens to the user who let the clock run out.
+     * - `'block'` — treated as a soft rejection: the user is added to their
+     *   rejected set so the requeue cannot land back on them.
+     * - `'allow'` — the assignment returns to the open pool and the same user
+     *   may win it again (the historical behaviour).
+     * @default 'allow'
+     */
+    onNoResponse?: 'block' | 'allow';
+    /** Priority delta applied on each escalation so ignored work climbs the queue. */
+    priorityBoost?: number;
+    /**
+     * Tag ladder. Each escalation replaces the assignment's tier tags with the
+     * next entry, so tier routing needs no workflow. Tags not named by any
+     * tier are preserved across hops. Entry 0 describes the tags the
+     * assignment starts with; the first escalation moves it to entry 1.
+     */
+    tiers?: string[][];
+    /**
+     * Maximum number of escalations.
+     * @default `tiers.length - 1` when tiers are given, otherwise unlimited
+     */
+    maxEscalations?: number;
+    /**
+     * Terminal behaviour once the ladder is exhausted.
+     * - `'queue'` — requeue and keep offering it (default).
+     * - `'park'` — stop matching it and move it to the parked store, where
+     *   `getParkedAssignments()` / `unparkAssignment()` can pick it up. This is
+     *   the honest "escalated to the top and nobody answered" state.
+     * @default 'queue'
+     */
+    onExhausted?: 'queue' | 'park';
+}
 
 export type GeoMatchResult = {
     eligible: boolean;
@@ -259,7 +327,63 @@ export type AssignmentLifecycleEvent =
     | { kind: 'released'; taskId: string; workerId: string; reason: 'idle' | 'operator'; releasedAt: number }
     | { kind: 'accepted'; taskId: string; workerId: string; acceptedAt: number }
     | { kind: 'rejected'; taskId: string; workerId: string; rejectedAt: number }
-    | { kind: 'completed'; taskId: string; workerId: string; completedAt: number };
+    | { kind: 'completed'; taskId: string; workerId: string; completedAt: number }
+    /**
+     * An `EscalationPolicy` moved an unanswered assignment on. Always follows
+     * the `expired` event for the same assignment — `expired` says the deadline
+     * elapsed, `escalated` says what the policy did about it.
+     */
+    | {
+          kind: 'escalated';
+          taskId: string;
+          fromWorkerId: string | null;
+          /** Level after this hop; 1 is the first escalation */
+          level: number;
+          /** Whether the timed-out owner was blocked from winning it back */
+          blockedPreviousOwner: boolean;
+          reason: 'no-response';
+          escalatedAt: number;
+      }
+    /** The ladder ran out of hops. `parked` reflects the policy's `onExhausted`. */
+    | { kind: 'escalationExhausted'; taskId: string; level: number; parked: boolean; at: number };
+
+/** Outcome of one `processResponseDeadlines()` sweep. */
+export type EscalationSweepResult = {
+    /** Pending assignments whose response deadline elapsed */
+    expired: number;
+    /** How many of those an escalation policy moved to the next hop */
+    escalations: number;
+    /** How many exhausted their ladder and were parked */
+    parked: number;
+};
+
+/** One pass of `runMaintenanceOnce()`. Counts are per pass, not cumulative. */
+export type MaintenanceReport = {
+    /** Pending assignments whose response deadline elapsed */
+    expiredMatches: number;
+    /** How many of those an escalation policy moved on */
+    escalations: number;
+    /** How many exhausted their ladder and were parked */
+    parked: number;
+    /** Workflow steps whose timeout fired */
+    expiredSteps: number;
+    /** Idle users removed from the pool (see `idleUserTimeoutMs`) */
+    releasedIdleUsers: number;
+    /** Wall-clock duration of the pass */
+    tookMs: number;
+};
+
+/** Which sweeps `startMaintenance()` runs, and how often. */
+export type MaintenanceOptions = {
+    /** Master tick interval for every enabled sweep. @default 5000 */
+    intervalMs?: number;
+    /** Response deadlines / escalation. @default true */
+    responseDeadlines?: boolean;
+    /** Workflow step timeouts. @default true when `enableWorkflows` */
+    workflowStepTimeouts?: boolean;
+    /** Idle-user release. @default true when `idleUserTimeoutMs` is set */
+    idleUsers?: boolean;
+};
 
 export type MatcherOptions = {
     relevantBatchSize?: number;
@@ -643,6 +767,17 @@ export interface WorkflowStep {
     maxRetries?: number;
     /** Timeout override for this step in milliseconds */
     timeoutMs?: number;
+    /**
+     * Step to advance to when this step's timeout expires, instead of the
+     * default failure path. The step's outstanding assignment is removed (so a
+     * late responder cannot act on a superseded tier) and the run continues at
+     * `onTimeoutStepId` with `context._escalatedFrom` set.
+     *
+     * Requires `timeoutMs` (or the workflow's `defaultTimeoutMs`). Does not
+     * consume `maxRetries` — an escalation is not a retry. Not supported on
+     * steps that are members of a parallel group.
+     */
+    onTimeoutStepId?: string;
 }
 
 /** A workflow definition (template) */
@@ -659,6 +794,13 @@ export interface WorkflowDefinition {
     steps: WorkflowStep[];
     /** Default timeout for steps in milliseconds */
     defaultTimeoutMs?: number;
+    /**
+     * Safety net for `onTimeoutStepId` ladders: once a run has escalated this
+     * many times it falls back to the ordinary failure path instead of
+     * climbing further, so a mis-wired cycle still terminates.
+     * @default 10
+     */
+    maxEscalationDepth?: number;
     /** Metadata for the workflow */
     metadata?: Record<string, any>;
 }
@@ -677,6 +819,13 @@ export interface WorkflowDefinitionInput {
     steps: WorkflowStep[];
     /** Default timeout for steps in milliseconds */
     defaultTimeoutMs?: number;
+    /**
+     * Safety net for `onTimeoutStepId` ladders: once a run has escalated this
+     * many times it falls back to the ordinary failure path instead of
+     * climbing further, so a mis-wired cycle still terminates.
+     * @default 10
+     */
+    maxEscalationDepth?: number;
     /** Metadata for the workflow */
     metadata?: Record<string, any>;
 }
@@ -721,6 +870,8 @@ export type WorkflowTransition = {
         | 'step.completed'
         | 'step.failed'
         | 'step.expired'
+        /** A timed-out step escalated forward via `onTimeoutStepId` instead of failing */
+        | 'step.escalated'
         | 'run.completed'
         | 'run.failed'
         | 'run.cancelled';

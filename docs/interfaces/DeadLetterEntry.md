@@ -27,7 +27,7 @@ Error message if available
 
 [src/types/matcher.ts:694](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L694)
 
-___
+---
 
 ### errorStack
 
@@ -39,7 +39,7 @@ Error stack trace if available
 
 [src/types/matcher.ts:696](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L696)
 
-___
+---
 
 ### event
 
@@ -51,7 +51,7 @@ Original event that failed
 
 [src/types/matcher.ts:690](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L690)
 
-___
+---
 
 ### movedAt
 
@@ -63,7 +63,7 @@ Timestamp when moved to DLQ
 
 [src/types/matcher.ts:698](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L698)
 
-___
+---
 
 ### reason
 
@@ -75,7 +75,7 @@ Reason the event failed
 
 [src/types/matcher.ts:692](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L692)
 
-___
+---
 
 ### retryCount
 

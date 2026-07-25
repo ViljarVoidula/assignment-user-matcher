@@ -17,6 +17,13 @@ import {
 import { calculateMatchScore, calculateDefaultPriority, explainMatchScore } from './scoring/match-score';
 import { arbitrateFair, resolveFairnessKnobs } from './scoring/fair-arbitration';
 import {
+    escalateAssignment,
+    escalationLevelOf,
+    normalizeEscalationPolicy,
+    responseDeadlineFromJson,
+    responseDeadlineMs,
+} from './escalation/policy';
+import {
     TraceCollector,
     buildDecisionTraces,
     buildWorkflowTraces,
@@ -73,6 +80,10 @@ import type {
     MatchPreviewInput,
     DecisionTraceQuery,
     AssignmentLifecycleEvent,
+    EscalationPolicy,
+    EscalationSweepResult,
+    MaintenanceOptions,
+    MaintenanceReport,
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
@@ -102,6 +113,10 @@ export type {
     MatchPreviewInput,
     DecisionTraceQuery,
     AssignmentLifecycleEvent,
+    EscalationPolicy,
+    EscalationSweepResult,
+    MaintenanceOptions,
+    MaintenanceReport,
 } from './types/matcher';
 
 export type {
@@ -332,13 +347,14 @@ export default class AssignmentMatcher implements WorkflowHost {
         }
     }
 
-    /** Keys for the three assignment stores (used by pagination queries) */
+    /** Keys for the assignment stores (used by pagination queries) */
     private get assignmentStoreKeys() {
         return {
             queued: this.assignmentsRefKey,
             pending: this.pendingAssignmentsKey,
             accepted: this.acceptedAssignmentsKey,
             completed: this.completedAssignmentsKey,
+            parked: this.keys.parkedAssignments(),
         };
     }
 
@@ -959,9 +975,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         let userList: User[];
         if (opts?.userIds && opts.userIds.length > 0) {
             const jsons = await this.redisClient.hmGet(this.usersKey, opts.userIds);
-            userList = jsons
-                .filter((json: string | null): json is string => Boolean(json))
-                .map((json) => JSON.parse(json));
+            userList = jsons.filter((json: string | null): json is string => Boolean(json)).map((json) => JSON.parse(json));
         } else {
             const all = await this.redisClient.hGetAll(this.usersKey);
             userList = Object.values(all).map((json) => JSON.parse(json as string));
@@ -2162,23 +2176,29 @@ export default class AssignmentMatcher implements WorkflowHost {
                     rm.zRem(this.keys.tagAssignments(tag), s.id);
                 }
 
-                // Add to pending structures
+                // Add to pending structures. An assignment carrying an
+                // EscalationPolicy sets its own response deadline; everything
+                // else uses the matcher-wide one and never pays for a parse.
                 if (json) {
                     rm.hSet(this.pendingAssignmentsKey, s.id, json);
-                    rm.zAdd(this.pendingAssignmentsExpiryKey, { score: now + this.matchExpirationMs, value: s.id });
+                    rm.zAdd(this.pendingAssignmentsExpiryKey, {
+                        score: now + responseDeadlineFromJson(json, this.matchExpirationMs),
+                        value: s.id,
+                    });
                     rm.hSet(this.assignmentOwnerKey, s.id, user.id);
                 }
             }
             await rm.exec();
 
-            for (const s of selected) {
+            for (let i = 0; i < selected.length; i++) {
+                const s = selected[i];
                 if (!claimedIds.has(s.id)) continue;
                 this.emitAssignmentLifecycle({
                     kind: 'pending',
                     taskId: s.id,
                     workerId: user.id,
                     matchedAt: now,
-                    expiresAt: now + this.matchExpirationMs,
+                    expiresAt: now + responseDeadlineFromJson(jsons[i], this.matchExpirationMs),
                 });
             }
         }
@@ -2605,14 +2625,17 @@ export default class AssignmentMatcher implements WorkflowHost {
             await this.redisClient.sAdd(this.keys.userAssignments(userId), `assignment:${assignmentId}`);
         } else {
             // Pending under another user: transfer ownership and restart the
-            // expiry clock for the new owner.
+            // expiry clock for the new owner (honouring the assignment's own
+            // response deadline when it declares one).
+            const pendingJson = await this.redisClient.hGet(this.pendingAssignmentsKey, assignmentId);
+            const deadlineMs = responseDeadlineFromJson(pendingJson, this.matchExpirationMs);
             const transfer = this.redisClient
                 .multi()
                 .sRem(this.keys.userAssignments(previousOwnerId!), `assignment:${assignmentId}`)
                 .sAdd(this.keys.userAssignments(userId), `assignment:${assignmentId}`)
                 .hSet(this.assignmentOwnerKey, assignmentId, userId)
                 .zAdd(this.pendingAssignmentsExpiryKey, {
-                    score: Date.now() + this.matchExpirationMs,
+                    score: Date.now() + deadlineMs,
                     value: assignmentId,
                 });
             await transfer.exec();
@@ -2623,7 +2646,7 @@ export default class AssignmentMatcher implements WorkflowHost {
                 taskId: assignmentId,
                 workerId: userId,
                 matchedAt: reassignedAt,
-                expiresAt: reassignedAt + this.matchExpirationMs,
+                expiresAt: reassignedAt + deadlineMs,
             });
         }
 
@@ -3083,19 +3106,44 @@ export default class AssignmentMatcher implements WorkflowHost {
         return this.workflow.getWorkflowMetrics();
     }
 
-    async processExpiredMatches(): Promise<number> {
+    /**
+     * Requeue pending assignments whose response deadline elapsed, applying
+     * each assignment's `EscalationPolicy` when it has one.
+     *
+     * Assignments without a policy take exactly the path they always did: the
+     * owner loses the assignment, it returns to the open pool, and they may
+     * win it again. With a policy the non-responder can be blocked, the
+     * priority can climb, the tier tags can advance, and an exhausted ladder
+     * can park the assignment instead of recirculating it forever.
+     *
+     * The wait clock (`assignmentsQueuedAt`) always survives: the requeue goes
+     * through `addAssignment()`, whose `NX` keeps the original first-enqueue
+     * time, so `oldestWaitingMs` measures the work item and not the tier.
+     */
+    async processResponseDeadlines(): Promise<EscalationSweepResult> {
         await this.readyPromise;
 
         const now = Date.now();
         const expiredIds = await this.redisClient.zRangeByScore(this.pendingAssignmentsExpiryKey, '-inf', now);
+        let escalations = 0;
+        let parked = 0;
 
         for (const id of expiredIds) {
             const owner = await this.redisClient.hGet(this.assignmentOwnerKey, id);
             const json = await this.redisClient.hGet(this.pendingAssignmentsKey, id);
 
+            const assignment: Assignment | null = json ? JSON.parse(json) : null;
+            const policy = assignment ? normalizeEscalationPolicy(assignment.escalation) : null;
+            const decision = assignment && policy ? escalateAssignment(assignment, policy) : null;
+
             const multi = this.redisClient.multi();
             if (owner) {
                 multi.sRem(this.keys.userAssignments(owner), `assignment:${id}`);
+                // A blocking policy treats "never answered" as a soft rejection,
+                // reusing the same rejected set an explicit reject writes to —
+                // so the requeue cannot land back on the non-responder, and
+                // decision traces already explain it as `rejectedPreviously`.
+                if (decision?.blockPreviousOwner) multi.sAdd(this.keys.userRejected(owner), id);
             }
             multi.hDel(this.pendingAssignmentsKey, id);
             multi.zRem(this.pendingAssignmentsExpiryKey, id);
@@ -3124,15 +3172,198 @@ export default class AssignmentMatcher implements WorkflowHost {
                 });
             }
 
-            if (json) {
-                await this.addAssignment(JSON.parse(json));
+            if (!assignment) continue;
+
+            if (decision && decision.exhausted) {
+                this.emitAssignmentLifecycle({
+                    kind: 'escalationExhausted',
+                    taskId: id,
+                    level: decision.level,
+                    parked: decision.onExhausted === 'park',
+                    at: now,
+                });
+                if (decision.onExhausted === 'park') {
+                    // Held out of matching entirely: no requeue, and the wait
+                    // clock is cleared so a parked item stops inflating
+                    // oldestWaitingMs for work that is still winnable.
+                    await this.redisClient
+                        .multi()
+                        .hSet(this.keys.parkedAssignments(), id, JSON.stringify(assignment))
+                        .zRem(this.keys.assignmentsQueuedAt(), id)
+                        .exec();
+                    parked++;
+                    continue;
+                }
+                await this.addAssignment(assignment);
+                continue;
             }
+
+            if (decision) {
+                await this.addAssignment(decision.assignment);
+                escalations++;
+                this.emitAssignmentLifecycle({
+                    kind: 'escalated',
+                    taskId: id,
+                    fromWorkerId: owner ?? null,
+                    level: decision.level,
+                    blockedPreviousOwner: decision.blockPreviousOwner && Boolean(owner),
+                    reason: 'no-response',
+                    escalatedAt: now,
+                });
+                continue;
+            }
+
+            await this.addAssignment(assignment);
         }
-        return expiredIds.length;
+
+        return { expired: expiredIds.length, escalations, parked };
+    }
+
+    /**
+     * Backwards-compatible alias of `processResponseDeadlines()` returning
+     * only the number of expired assignments.
+     */
+    async processExpiredMatches(): Promise<number> {
+        const { expired } = await this.processResponseDeadlines();
+        return expired;
+    }
+
+    /**
+     * Assignments held out of matching because their escalation ladder was
+     * exhausted under `onExhausted: 'park'` — nobody answered, all the way up.
+     */
+    async getParkedAssignments(): Promise<Assignment[]> {
+        await this.readyPromise;
+        const all = await this.redisClient.hGetAll(this.keys.parkedAssignments());
+        return Object.values(all).map((json) => JSON.parse(json as string));
+    }
+
+    /**
+     * Return a parked assignment to the queue, optionally resetting its
+     * escalation level so the ladder can run again from the top.
+     *
+     * @returns false when the id was not parked
+     */
+    async unparkAssignment(id: string, opts?: { resetEscalation?: boolean }): Promise<boolean> {
+        await this.readyPromise;
+        const json = await this.redisClient.hGet(this.keys.parkedAssignments(), id);
+        if (!json) return false;
+
+        const assignment: Assignment = JSON.parse(json);
+        if (opts?.resetEscalation) delete (assignment as Record<string, any>)._escalationLevel;
+
+        await this.redisClient.hDel(this.keys.parkedAssignments(), id);
+        await this.addAssignment(assignment);
+        return true;
+    }
+
+    /** Current escalation level of an assignment (0 = never escalated). */
+    async getEscalationLevel(id: string): Promise<number> {
+        await this.readyPromise;
+        const assignment = await this.getAssignment(id);
+        return assignment ? escalationLevelOf(assignment) : 0;
+    }
+
+    // ============================================================================
+    // Maintenance — the periodic sweeps that make deadlines actually fire
+    // ============================================================================
+
+    private maintenanceInterval: NodeJS.Timeout | null = null;
+    private maintenanceOptions: Required<Omit<MaintenanceOptions, 'intervalMs'>> | null = null;
+    private maintenanceRunning = false;
+
+    /**
+     * Run every enabled maintenance sweep once: response deadlines and
+     * escalations, workflow step timeouts, and idle-user release.
+     *
+     * Deadlines are not self-firing — something has to sweep them. Hosts that
+     * already own a tick (a multi-tenant worker, a serverless schedule) should
+     * call this instead of holding a timer per matcher; everyone else should
+     * call `startMaintenance()` once and forget about it.
+     */
+    async runMaintenanceOnce(options?: MaintenanceOptions): Promise<MaintenanceReport> {
+        await this.readyPromise;
+        const startedAt = Date.now();
+        const opts = this.resolveMaintenanceOptions(options);
+
+        let expiredMatches = 0;
+        let escalations = 0;
+        let parked = 0;
+        let expiredSteps = 0;
+        let releasedIdleUsers = 0;
+
+        if (opts.responseDeadlines) {
+            const result = await this.processResponseDeadlines();
+            expiredMatches = result.expired;
+            escalations = result.escalations;
+            parked = result.parked;
+        }
+        if (opts.workflowStepTimeouts && this.enableWorkflows) {
+            expiredSteps = await this.processExpiredWorkflowSteps();
+        }
+        if (opts.idleUsers && this.idleUserTimeoutMs !== null) {
+            releasedIdleUsers = (await this.processIdleUsers()).length;
+        }
+
+        return {
+            expiredMatches,
+            escalations,
+            parked,
+            expiredSteps,
+            releasedIdleUsers,
+            tookMs: Date.now() - startedAt,
+        };
+    }
+
+    /**
+     * Start the periodic maintenance tick. Idempotent; a second call with
+     * different options replaces the first.
+     *
+     * @param options.intervalMs how often to sweep (default 5000)
+     */
+    startMaintenance(options?: MaintenanceOptions): void {
+        this.stopMaintenance();
+        this.maintenanceOptions = this.resolveMaintenanceOptions(options);
+        const intervalMs = options?.intervalMs ?? 5000;
+        this.maintenanceInterval = setInterval(() => {
+            // Skip a tick rather than pile up overlapping sweeps when a pass
+            // takes longer than the interval.
+            if (this.maintenanceRunning) return;
+            this.maintenanceRunning = true;
+            this.runMaintenanceOnce(this.maintenanceOptions ?? undefined)
+                .catch((err) => console.error('Maintenance tick failed:', err))
+                .finally(() => {
+                    this.maintenanceRunning = false;
+                });
+        }, intervalMs);
+        this.maintenanceInterval.unref?.();
+    }
+
+    /** Stop the periodic maintenance tick. Safe to call when not started. */
+    stopMaintenance(): void {
+        if (this.maintenanceInterval) {
+            clearInterval(this.maintenanceInterval);
+            this.maintenanceInterval = null;
+        }
+        this.maintenanceOptions = null;
+    }
+
+    /** Whether the maintenance tick is currently running. */
+    isMaintenanceRunning(): boolean {
+        return this.maintenanceInterval !== null;
+    }
+
+    private resolveMaintenanceOptions(options?: MaintenanceOptions): Required<Omit<MaintenanceOptions, 'intervalMs'>> {
+        return {
+            responseDeadlines: options?.responseDeadlines ?? true,
+            workflowStepTimeouts: options?.workflowStepTimeouts ?? this.enableWorkflows,
+            idleUsers: options?.idleUsers ?? this.idleUserTimeoutMs !== null,
+        };
     }
 
     private autoReleaseInterval: NodeJS.Timeout | null = null;
 
+    /** @deprecated Use `startMaintenance()`, which also sweeps workflow step timeouts. */
     startAutoReleaseInterval(intervalMs: number = 10000) {
         if (this.autoReleaseInterval) return;
         this.autoReleaseInterval = setInterval(() => {

@@ -34,11 +34,11 @@ Assignment template - merged with workflow context when creating the assignment
 
 [src/types/matcher.ts:562](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L562)
 
-___
+---
 
 ### defaultNextStepId
 
-• `Optional` **defaultNextStepId**: ``null`` \| `string`
+• `Optional` **defaultNextStepId**: `null` \| `string`
 
 Default next step if no routing condition matches (null = end workflow)
 
@@ -46,11 +46,11 @@ Default next step if no routing condition matches (null = end workflow)
 
 [src/types/matcher.ts:570](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L570)
 
-___
+---
 
 ### failurePolicy
 
-• `Optional` **failurePolicy**: ``"abort"`` \| ``"continue"`` \| ``"retry"``
+• `Optional` **failurePolicy**: `"abort"` \| `"continue"` \| `"retry"`
 
 Failure policy for parallel steps: 'abort' | 'continue' | 'retry'
 
@@ -58,7 +58,7 @@ Failure policy for parallel steps: 'abort' | 'continue' | 'retry'
 
 [src/types/matcher.ts:576](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L576)
 
-___
+---
 
 ### id
 
@@ -70,7 +70,7 @@ Unique identifier for this step within the workflow
 
 [src/types/matcher.ts:556](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L556)
 
-___
+---
 
 ### machineTask
 
@@ -82,7 +82,7 @@ Machine task metadata used for code/task worker execution
 
 [src/types/matcher.ts:566](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L566)
 
-___
+---
 
 ### maxRetries
 
@@ -94,7 +94,7 @@ Maximum retries for this step (default: 0)
 
 [src/types/matcher.ts:578](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L578)
 
-___
+---
 
 ### name
 
@@ -106,7 +106,7 @@ Human-readable name
 
 [src/types/matcher.ts:558](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L558)
 
-___
+---
 
 ### parallelStepIds
 
@@ -118,7 +118,7 @@ For parallel execution: IDs of steps to execute simultaneously
 
 [src/types/matcher.ts:572](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L572)
 
-___
+---
 
 ### routing
 
@@ -130,7 +130,7 @@ Routing rules for branching (evaluated in order, first match wins)
 
 [src/types/matcher.ts:568](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L568)
 
-___
+---
 
 ### targetUser
 
@@ -142,7 +142,7 @@ Target user selector: 'initiator' | 'previous' | specific userId | tag-based sel
 
 [src/types/matcher.ts:564](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L564)
 
-___
+---
 
 ### taskType
 
@@ -154,7 +154,7 @@ Step execution mode (default: 'assignment')
 
 [src/types/matcher.ts:560](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L560)
 
-___
+---
 
 ### timeoutMs
 
@@ -166,7 +166,7 @@ Timeout override for this step in milliseconds
 
 [src/types/matcher.ts:580](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L580)
 
-___
+---
 
 ### waitForAll
 

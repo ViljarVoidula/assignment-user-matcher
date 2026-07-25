@@ -25,7 +25,7 @@ Number of reward observations for this tag
 
 [src/types/matcher.ts:814](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L814)
 
-___
+---
 
 ### meanReward
 
@@ -37,7 +37,7 @@ rewardSum / count (0 when no observations)
 
 [src/types/matcher.ts:818](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L818)
 
-___
+---
 
 ### rewardSum
 
@@ -49,7 +49,7 @@ Sum of observed rewards for this tag
 
 [src/types/matcher.ts:816](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L816)
 
-___
+---
 
 ### tag
 

@@ -27,7 +27,7 @@ Whether this user actually received (or currently owns) the assignment
 
 [src/types/matcher.ts:178](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L178)
 
-___
+---
 
 ### effectivePriority
 
@@ -39,7 +39,7 @@ What arbitration compares: base priority + score + geo boost + learning boost
 
 [src/types/matcher.ts:182](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L182)
 
-___
+---
 
 ### eligible
 
@@ -51,7 +51,7 @@ Whether the user could have received the assignment under the hard rules
 
 [src/types/matcher.ts:176](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L176)
 
-___
+---
 
 ### reasons
 
@@ -61,7 +61,7 @@ ___
 
 [src/types/matcher.ts:183](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L183)
 
-___
+---
 
 ### score
 
@@ -73,7 +73,7 @@ Pure match score (routing-weight sum or tag-overlap ratio); 0 when excluded
 
 [src/types/matcher.ts:180](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L180)
 
-___
+---
 
 ### userId
 

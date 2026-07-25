@@ -22,8 +22,8 @@
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name         | Type                                     |
+| :----------- | :--------------------------------------- |
 | `assignment` | [`Assignment`](../modules.md#assignment) |
 
 #### Returns
@@ -34,7 +34,7 @@
 
 [src/managers/WorkflowManager.ts:25](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/managers/WorkflowManager.ts#L25)
 
-___
+---
 
 ### executeMachineTask
 
@@ -42,12 +42,12 @@ ___
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
-| `args` | `Object` |
+| Name              | Type                                          |
+| :---------------- | :-------------------------------------------- |
+| `args`            | `Object`                                      |
 | `args.definition` | [`WorkflowDefinition`](WorkflowDefinition.md) |
-| `args.instance` | [`WorkflowInstance`](WorkflowInstance.md) |
-| `args.step` | [`WorkflowStep`](WorkflowStep.md) |
+| `args.instance`   | [`WorkflowInstance`](WorkflowInstance.md)     |
+| `args.step`       | [`WorkflowStep`](WorkflowStep.md)             |
 
 #### Returns
 
@@ -57,7 +57,7 @@ ___
 
 [src/managers/WorkflowManager.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/managers/WorkflowManager.ts#L27)
 
-___
+---
 
 ### matchUsersAssignments
 
@@ -65,8 +65,8 @@ ___
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name     | Type     |
+| :------- | :------- |
 | `userId` | `string` |
 
 #### Returns

@@ -63,7 +63,7 @@ describe('Idle User Auto-Rejection Tests', async function () {
         expect(assignments2).to.include('task1');
     });
 
-    it('publishes an EXPIRED workflow event when releasing an idle user\'s pending assignments', async function () {
+    it("publishes an EXPIRED workflow event when releasing an idle user's pending assignments", async function () {
         const matcher = new AssignmentMatcher(redisClient, {
             redisPrefix: 'test:idle:wf:',
             relevantBatchSize: 50,

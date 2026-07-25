@@ -27,7 +27,7 @@ Event published to Redis Streams for workflow orchestration
 
 [src/types/matcher.ts:538](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L538)
 
-___
+---
 
 ### eventId
 
@@ -37,7 +37,7 @@ ___
 
 [src/types/matcher.ts:535](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L535)
 
-___
+---
 
 ### payload
 
@@ -47,7 +47,7 @@ ___
 
 [src/types/matcher.ts:542](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L542)
 
-___
+---
 
 ### stepId
 
@@ -57,7 +57,7 @@ ___
 
 [src/types/matcher.ts:540](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L540)
 
-___
+---
 
 ### timestamp
 
@@ -67,7 +67,7 @@ ___
 
 [src/types/matcher.ts:541](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L541)
 
-___
+---
 
 ### type
 
@@ -77,7 +77,7 @@ ___
 
 [src/types/matcher.ts:536](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L536)
 
-___
+---
 
 ### userId
 
@@ -87,7 +87,7 @@ ___
 
 [src/types/matcher.ts:537](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L537)
 
-___
+---
 
 ### workflowInstanceId
 

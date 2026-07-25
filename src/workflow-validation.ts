@@ -96,7 +96,38 @@ export function validateWorkflowDefinition(definition: WorkflowDefinition): Work
         }
     }
 
+    validateEscalationTargets(definition, stepIds);
+
     return definition;
+}
+
+/**
+ * `onTimeoutStepId` turns a timeout into a forward hop instead of a failure.
+ * Everything that would make that hop meaningless or non-terminating is
+ * rejected at registration rather than discovered at 3am.
+ */
+function validateEscalationTargets(definition: WorkflowDefinition, stepIds: Set<string>): void {
+    const parallelMembers = new Set<string>();
+    for (const step of definition.steps) {
+        for (const id of step.parallelStepIds ?? []) parallelMembers.add(id);
+    }
+
+    for (const step of definition.steps) {
+        if (!step.onTimeoutStepId) continue;
+
+        if (!stepIds.has(step.onTimeoutStepId)) {
+            throw new Error(`Step "${step.id}" escalates to non-existent step "${step.onTimeoutStepId}" on timeout`);
+        }
+        if (step.onTimeoutStepId === step.id) {
+            throw new Error(`Step "${step.id}" escalates to itself on timeout, which never terminates`);
+        }
+        if (!step.timeoutMs && !definition.defaultTimeoutMs) {
+            throw new Error(`Step "${step.id}" escalates on timeout but has no timeoutMs (or workflow defaultTimeoutMs)`);
+        }
+        if (parallelMembers.has(step.id)) {
+            throw new Error(`Step "${step.id}" is part of a parallel group; escalate-on-timeout is not supported there`);
+        }
+    }
 }
 
 export function normalizeWorkflowDefinition(definition: WorkflowDefinitionInput | WorkflowDefinition): WorkflowDefinition {
@@ -115,6 +146,10 @@ export function normalizeWorkflowDefinition(definition: WorkflowDefinitionInput 
 
     if (definition.defaultTimeoutMs !== undefined) {
         normalized.defaultTimeoutMs = definition.defaultTimeoutMs;
+    }
+
+    if (definition.maxEscalationDepth !== undefined) {
+        normalized.maxEscalationDepth = definition.maxEscalationDepth;
     }
 
     if (definition.metadata !== undefined) {

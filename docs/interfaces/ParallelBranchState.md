@@ -23,7 +23,7 @@ Tracks the state of a parallel execution branch
 
 [src/types/matcher.ts:631](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L631)
 
-___
+---
 
 ### result
 
@@ -33,17 +33,17 @@ ___
 
 [src/types/matcher.ts:633](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L633)
 
-___
+---
 
 ### status
 
-• **status**: ``"pending"`` \| ``"completed"`` \| ``"failed"``
+• **status**: `"pending"` \| `"completed"` \| `"failed"`
 
 #### Defined in
 
 [src/types/matcher.ts:632](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L632)
 
-___
+---
 
 ### stepId
 
