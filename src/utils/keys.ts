@@ -91,6 +91,9 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         learningUsers: () => `${prefix}learning:users`,
         learningUserTagCounts: (userId: string) => `${prefix}learning:user:${userId}:tag:counts`,
         learningUserTagRewards: (userId: string) => `${prefix}learning:user:${userId}:tag:rewards`,
+        learningUserTagRewardSq: (userId: string) => `${prefix}learning:user:${userId}:tag:rewards:sq`,
+        learningUserTagTs: (userId: string) => `${prefix}learning:user:${userId}:tag:ts`,
+        autoWeightsSyncLock: () => `${prefix}autoweights:sync:lock`,
 
         // Workflow reliability keys
         // Reliability and audit keys

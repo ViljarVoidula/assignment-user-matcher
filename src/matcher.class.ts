@@ -152,6 +152,7 @@ export type {
     LearningStats,
     LearningTagStat,
     AutoRoutingWeightsOptions,
+    AutoRoutingWeightsPolicy,
     WorkflowEngineMetrics,
 } from './types/matcher';
 export type { MachineTaskHandler, WorkflowHost } from './managers/WorkflowManager';
@@ -212,6 +213,8 @@ export default class AssignmentMatcher implements WorkflowHost {
     private enableAutoRoutingWeights: boolean;
     private learning: LearningManager;
     private learningFeatureExtractor: LearningFeatureExtractor;
+    private autoRoutingWeightsSyncIntervalMs?: number;
+    private autoRoutingWeightsSyncInterval: NodeJS.Timeout | null = null;
     private enableGeoMatching: boolean;
     private geoDefaultMaxDistanceKm?: number;
     private geoScoreWeight: number;
@@ -331,7 +334,15 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         this.onAssignmentLifecycle = options?.onAssignmentLifecycle;
 
-        this.readyPromise = this.initRedis();
+        this.autoRoutingWeightsSyncIntervalMs = options?.autoRoutingWeightsSyncIntervalMs;
+        if (this.enableAutoRoutingWeights && this.autoRoutingWeightsSyncIntervalMs) {
+            this.readyPromise = this.initRedis().then((self) => {
+                this.startAutoRoutingWeightsSync(this.autoRoutingWeightsSyncIntervalMs);
+                return self;
+            });
+        } else {
+            this.readyPromise = this.initRedis();
+        }
     }
 
     /**
@@ -1157,17 +1168,24 @@ export default class AssignmentMatcher implements WorkflowHost {
      * The applied learned map is stored on the user as `learnedRoutingWeights`
      * for observability.
      *
+     * Guardrails: evidence floor (`minTotalSamples`), strict veto gate for
+     * manual tags (`minSamplesForVeto`), and per-sync step clamp
+     * (`maxDeltaPerSync`) are applied automatically. Set `dryRun: true` to
+     * compute the would-be map without writing anything.
+     *
      * Returns the applied weights per user id.
      */
     async syncLearnedRoutingWeights(
         userId?: string,
-        opts?: { overrideManual?: boolean; includeUnexploredTags?: boolean },
+        opts?: { overrideManual?: boolean; includeUnexploredTags?: boolean; dryRun?: boolean },
     ): Promise<Record<string, Record<string, number>>> {
         await this.readyPromise;
 
         const targets = userId ? [userId] : await this.learning.listTrackedUsers();
         const knownTags = opts?.includeUnexploredTags ? await this.getKnownTagsForAutoWeights() : undefined;
         const applied: Record<string, Record<string, number>> = {};
+        const maxDelta = this.learning.autoWeights.maxDeltaPerSync;
+        const maxWeight = this.learning.autoWeights.maxWeight ?? 100;
 
         for (const id of targets) {
             const userJson = await this.redisClient.hGet(this.usersKey, id);
@@ -1185,26 +1203,140 @@ export default class AssignmentMatcher implements WorkflowHost {
             const learned = await this.learning.getLearnedRoutingWeights(id, knownTags, existingForSynthesis);
             if (Object.keys(learned).length === 0) continue;
 
+            // Apply per-sync step clamp. Vetoes (weight 0) that passed the
+            // strict veto gate are allowed to jump despite the clamp.
+            const clampedLearned: Record<string, number> = {};
+            for (const [tag, weight] of Object.entries(learned)) {
+                if (weight === 0 || maxDelta === undefined) {
+                    clampedLearned[tag] = weight;
+                    continue;
+                }
+                const previous = previousLearned[tag] ?? user.routingWeights?.[tag];
+                if (previous === undefined) {
+                    clampedLearned[tag] = Math.min(weight, maxWeight);
+                    continue;
+                }
+                const lower = previous - maxDelta;
+                const upper = previous + maxDelta;
+                clampedLearned[tag] = Math.min(Math.max(weight, lower, 1), upper, maxWeight);
+            }
+
             let routingWeights: Record<string, number>;
             if (opts?.overrideManual) {
-                routingWeights = learned;
+                routingWeights = { ...clampedLearned };
             } else {
                 const manualEntries: Record<string, number> = {};
                 for (const [tag, weight] of Object.entries(user.routingWeights ?? {})) {
-                    if (!(tag in previousLearned) && !(tag in learned)) manualEntries[tag] = weight;
+                    if (!(tag in previousLearned) && !(tag in clampedLearned)) manualEntries[tag] = weight;
                 }
-                routingWeights = { ...manualEntries, ...learned };
+                routingWeights = { ...manualEntries, ...clampedLearned };
             }
+
+            applied[id] = routingWeights;
+            if (opts?.dryRun) continue;
 
             await this.redisClient.hSet(
                 this.usersKey,
                 id,
-                JSON.stringify({ ...user, routingWeights, learnedRoutingWeights: learned }),
+                JSON.stringify({
+                    ...user,
+                    routingWeights,
+                    routingWeightsSnapshot: user.routingWeights,
+                    learnedRoutingWeights: clampedLearned,
+                    learnedRoutingWeightsSyncedAt: Date.now(),
+                }),
             );
-            applied[id] = routingWeights;
         }
 
         return applied;
+    }
+
+    /**
+     * Revert learned routing weights for one user (or all users with a
+     * snapshot) to the map saved before the last sync. No-op when no snapshot
+     * exists.
+     *
+     * Returns reverted user ids.
+     */
+    async revertLearnedRoutingWeights(userId?: string): Promise<string[]> {
+        await this.readyPromise;
+
+        const targets: string[] = [];
+        if (userId) {
+            targets.push(userId);
+        } else {
+            const all = await this.redisClient.hGetAll(this.usersKey);
+            for (const [id, json] of Object.entries(all)) {
+                try {
+                    const u = JSON.parse(json) as User;
+                    if (u.routingWeightsSnapshot) targets.push(id);
+                } catch {
+                    // ignore malformed user entries
+                }
+            }
+        }
+
+        const reverted: string[] = [];
+        for (const id of targets) {
+            const userJson = await this.redisClient.hGet(this.usersKey, id);
+            if (!userJson) continue;
+            const user = JSON.parse(userJson) as User;
+            if (!user.routingWeightsSnapshot) continue;
+
+            await this.redisClient.hSet(
+                this.usersKey,
+                id,
+                JSON.stringify({
+                    ...user,
+                    routingWeights: user.routingWeightsSnapshot,
+                    routingWeightsSnapshot: undefined,
+                    learnedRoutingWeights: undefined,
+                    learnedRoutingWeightsSyncedAt: undefined,
+                }),
+            );
+            reverted.push(id);
+        }
+        return reverted;
+    }
+
+    /** Start the automatic learned-weights sync tick. Idempotent. */
+    startAutoRoutingWeightsSync(intervalMs?: number): void {
+        this.stopAutoRoutingWeightsSync();
+        if (intervalMs) this.autoRoutingWeightsSyncIntervalMs = intervalMs;
+        const ms = this.autoRoutingWeightsSyncIntervalMs;
+        if (!ms || !this.enableAutoRoutingWeights) return;
+
+        this.autoRoutingWeightsSyncInterval = setInterval(() => {
+            this.runAutoRoutingWeightsSyncTick().catch((err) =>
+                console.error('Auto routing-weights sync tick failed:', err),
+            );
+        }, ms);
+        this.autoRoutingWeightsSyncInterval.unref?.();
+    }
+
+    /** Stop the automatic learned-weights sync tick. Safe when not started. */
+    stopAutoRoutingWeightsSync(): void {
+        if (this.autoRoutingWeightsSyncInterval) {
+            clearInterval(this.autoRoutingWeightsSyncInterval);
+            this.autoRoutingWeightsSyncInterval = null;
+        }
+    }
+
+    /** Whether the automatic learned-weights sync tick is running. */
+    isAutoRoutingWeightsSyncRunning(): boolean {
+        return this.autoRoutingWeightsSyncInterval !== null;
+    }
+
+    private async runAutoRoutingWeightsSyncTick(): Promise<void> {
+        const ms = this.autoRoutingWeightsSyncIntervalMs;
+        if (!ms) return;
+        const lockTtl = Math.max(1000, ms - 1000);
+        const acquired = await this.redisClient.set(this.keys.autoWeightsSyncLock(), this.streamConsumerName, {
+            NX: true,
+            PX: lockTtl,
+        });
+        if (!acquired) return;
+        await this.syncLearnedRoutingWeights();
     }
 
     /** All known tags except the internal 'default' tag (for exploration priors) */

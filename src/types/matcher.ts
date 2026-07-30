@@ -21,6 +21,12 @@ export interface User {
     // ignored). The fairness rolling-window auto-cap derivation stays
     // team-level and keeps using the global value.
     maxBacklogSize?: number;
+    /** Snapshot of routingWeights before the last learned sync; used by revertLearnedRoutingWeights(). */
+    routingWeightsSnapshot?: Record<string, number>;
+    /** Unix epoch ms of the last learned routing-weights sync for this user. */
+    learnedRoutingWeightsSyncedAt?: number;
+    /** The weights last applied by syncLearnedRoutingWeights(); for observability only. */
+    learnedRoutingWeights?: Record<string, number>;
     [key: string]: any;
 }
 
@@ -660,6 +666,13 @@ export type MatcherOptions = {
     enableAutoRoutingWeights?: boolean;
     /** Tuning for automatic routing-weight synthesis (UCB1 policy) */
     autoRoutingWeights?: AutoRoutingWeightsOptions;
+    /**
+     * Milliseconds between automatic learned routing-weight syncs for all
+     * tracked users. When unset (default), sync remains operator-driven.
+     * Set on at most one replica per deployment; a Redis lock prevents
+     * overlapping runs.
+     */
+    autoRoutingWeightsSyncIntervalMs?: number;
 };
 
 /** @deprecated Use MatcherOptions instead */
@@ -1075,7 +1088,18 @@ export interface LearningTagStat {
     rewardSum: number;
     /** rewardSum / count (0 when no observations) */
     meanReward: number;
+    /** Sum of squared observed rewards (available when reward-squared tracking is enabled) */
+    rewardSqSum?: number;
+    /** Unix epoch ms of the most recent observation (used for time decay) */
+    lastUpdatedAt?: number;
+    /** Population variance of observed rewards (0 when absent or single observation) */
+    variance?: number;
+    /** Standard error of the mean (0 when absent or single observation) */
+    standardError?: number;
 }
+
+/** Synthesis policy for automatic routing weights. */
+export type AutoRoutingWeightsPolicy = 'ucb1' | 'confidence' | 'thompson';
 
 /** Options controlling automatic routing-weight synthesis (UCB1 policy) */
 export interface AutoRoutingWeightsOptions {
@@ -1089,6 +1113,52 @@ export interface AutoRoutingWeightsOptions {
     explorationBonus?: number;
     /** Optimistic weight assigned to under-sampled or unobserved known tags (default: maxWeight / 2) */
     priorWeight?: number;
+    /**
+     * Synthesis policy.
+     * - 'ucb1' (default): current mean + exploration-bonus mapping.
+     * - 'confidence': upper-confidence-bound for weight, lower-confidence-bound for veto.
+     * - 'thompson': sample from the per-tag posterior when mapping to a weight.
+     */
+    policy?: AutoRoutingWeightsPolicy;
+    /**
+     * Z-score used by the 'confidence' policy for UCB/LCB bounds (default: 1.96).
+     * Also reused as the exploration multiplier by 'ucb1' when explorationBonus
+     * is omitted and policy is 'confidence' for backward compatibility.
+     */
+    confidenceZ?: number;
+    /**
+     * Minimum total samples across all of a user's tags before sync will write
+     * any learned weights (default: 0 = off).
+     */
+    minTotalSamples?: number;
+    /**
+     * Minimum samples required before a learned veto may override a tag that
+     * already has a manual (non-learned) routing weight (default: 20).
+     */
+    minSamplesForVeto?: number;
+    /**
+     * Maximum absolute change allowed per sync on a single learned weight
+     * (default: undefined = no clamping). Vetoes that pass the strict veto
+     * gate may still jump to 0 despite the clamp.
+     */
+    maxDeltaPerSync?: number;
+    /**
+     * Reward-squared half-life in ms for tag statistics. When set, older
+     * observations are decayed exponentially on read (default: undefined =
+     * no decay).
+     */
+    decayHalfLifeMs?: number;
+    /**
+     * If true, only terminal outcomes (complete/reject/expire/fail plus manual
+     * rewards/feedback) feed tag statistics; non-terminal 'accept' updates are
+     * skipped (default: false).
+     */
+    terminalOnlyTagStats?: boolean;
+    /**
+     * Optional random source for Thompson sampling. Defaults to Math.random.
+     * Must return values in [0, 1).
+     */
+    rng?: () => number;
 }
 
 /** Aggregate learning statistics */

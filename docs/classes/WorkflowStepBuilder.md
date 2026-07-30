@@ -16,6 +16,8 @@ Builder for individual workflow steps.
 - [assignment](WorkflowStepBuilder.md#assignment)
 - [defaultNext](WorkflowStepBuilder.md#defaultnext)
 - [done](WorkflowStepBuilder.md#done)
+- [escalateTo](WorkflowStepBuilder.md#escalateto)
+- [external](WorkflowStepBuilder.md#external)
 - [failurePolicy](WorkflowStepBuilder.md#failurepolicy)
 - [machineTask](WorkflowStepBuilder.md#machinetask)
 - [maxRetries](WorkflowStepBuilder.md#maxretries)
@@ -35,9 +37,9 @@ Builder for individual workflow steps.
 
 #### Parameters
 
-| Name            | Type                                    |
-| :-------------- | :-------------------------------------- |
-| `id`            | `string`                                |
+| Name | Type |
+| :------ | :------ |
+| `id` | `string` |
 | `parentBuilder` | [`WorkflowBuilder`](WorkflowBuilder.md) |
 
 #### Returns
@@ -46,13 +48,13 @@ Builder for individual workflow steps.
 
 #### Defined in
 
-[src/workflow-builder.ts:58](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L58)
+[src/workflow-builder.ts:58](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L58)
 
 ## Methods
 
 ### \_getStep
 
-▸ **\_getStep**(): [`WorkflowStep`](../interfaces/WorkflowStep.md)
+▸ **_getStep**(): [`WorkflowStep`](../interfaces/WorkflowStep.md)
 
 Get the built step (for internal use).
 
@@ -62,9 +64,9 @@ Get the built step (for internal use).
 
 #### Defined in
 
-[src/workflow-builder.ts:189](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L189)
+[src/workflow-builder.ts:225](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L225)
 
----
+___
 
 ### assignment
 
@@ -74,8 +76,8 @@ Set the assignment template for this step.
 
 #### Parameters
 
-| Name       | Type                                                  |
-| :--------- | :---------------------------------------------------- |
+| Name | Type |
+| :------ | :------ |
 | `template` | `Partial`\<[`Assignment`](../modules.md#assignment)\> |
 
 #### Returns
@@ -84,9 +86,9 @@ Set the assignment template for this step.
 
 #### Defined in
 
-[src/workflow-builder.ts:88](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L88)
+[src/workflow-builder.ts:88](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L88)
 
----
+___
 
 ### defaultNext
 
@@ -96,9 +98,9 @@ Set the default next step if no routing conditions match.
 
 #### Parameters
 
-| Name     | Type               | Description                           |
-| :------- | :----------------- | :------------------------------------ |
-| `stepId` | `null` \| `string` | Next step ID, or null to end workflow |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `stepId` | ``null`` \| `string` | Next step ID, or null to end workflow |
 
 #### Returns
 
@@ -106,9 +108,9 @@ Set the default next step if no routing conditions match.
 
 #### Defined in
 
-[src/workflow-builder.ts:128](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L128)
+[src/workflow-builder.ts:139](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L139)
 
----
+___
 
 ### done
 
@@ -122,9 +124,69 @@ Finish configuring this step and return to the parent builder.
 
 #### Defined in
 
-[src/workflow-builder.ts:177](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L177)
+[src/workflow-builder.ts:209](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L209)
 
----
+___
+
+### escalateTo
+
+▸ **escalateTo**(`stepId`): `this`
+
+Advance to `stepId` when this step times out, instead of failing the run.
+
+The classic escalation ladder — page the primary, and if nobody responds
+within the timeout, move on to the secondary rather than giving up:
+
+```typescript
+.step('page-primary')
+    .targetUser({ tag: 'oncall-primary' })
+    .timeout(60_000)
+    .escalateTo('page-secondary')
+    .done()
+```
+
+Requires a timeout on this step or a workflow `defaultTimeout()`.
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `stepId` | `string` |
+
+#### Returns
+
+`this`
+
+#### Defined in
+
+[src/workflow-builder.ts:201](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L201)
+
+___
+
+### external
+
+▸ **external**(`name`, `input?`): `this`
+
+Configure this step as an external (callback) task, completed by a
+caller outside this process via completeWorkflowStep()/failWorkflowStep().
+Requires a timeout — set here or via the workflow's defaultTimeout().
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `name` | `string` |
+| `input?` | `Record`\<`string`, `any`\> |
+
+#### Returns
+
+`this`
+
+#### Defined in
+
+[src/workflow-builder.ts:107](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L107)
+
+___
 
 ### failurePolicy
 
@@ -134,9 +196,9 @@ Set the failure policy for parallel execution.
 
 #### Parameters
 
-| Name     | Type                                   |
-| :------- | :------------------------------------- |
-| `policy` | `"abort"` \| `"continue"` \| `"retry"` |
+| Name | Type |
+| :------ | :------ |
+| `policy` | ``"abort"`` \| ``"continue"`` \| ``"retry"`` |
 
 #### Returns
 
@@ -144,9 +206,9 @@ Set the failure policy for parallel execution.
 
 #### Defined in
 
-[src/workflow-builder.ts:153](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L153)
+[src/workflow-builder.ts:164](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L164)
 
----
+___
 
 ### machineTask
 
@@ -156,10 +218,10 @@ Configure this step as a machine/code task.
 
 #### Parameters
 
-| Name      | Type                        |
-| :-------- | :-------------------------- |
-| `handler` | `string`                    |
-| `input?`  | `Record`\<`string`, `any`\> |
+| Name | Type |
+| :------ | :------ |
+| `handler` | `string` |
+| `input?` | `Record`\<`string`, `any`\> |
 
 #### Returns
 
@@ -167,9 +229,9 @@ Configure this step as a machine/code task.
 
 #### Defined in
 
-[src/workflow-builder.ts:96](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L96)
+[src/workflow-builder.ts:96](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L96)
 
----
+___
 
 ### maxRetries
 
@@ -179,8 +241,8 @@ Set the maximum retry count for this step.
 
 #### Parameters
 
-| Name    | Type     |
-| :------ | :------- |
+| Name | Type |
+| :------ | :------ |
 | `count` | `number` |
 
 #### Returns
@@ -189,9 +251,9 @@ Set the maximum retry count for this step.
 
 #### Defined in
 
-[src/workflow-builder.ts:161](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L161)
+[src/workflow-builder.ts:172](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L172)
 
----
+___
 
 ### name
 
@@ -201,8 +263,8 @@ Set the step name.
 
 #### Parameters
 
-| Name   | Type     |
-| :----- | :------- |
+| Name | Type |
+| :------ | :------ |
 | `name` | `string` |
 
 #### Returns
@@ -211,9 +273,9 @@ Set the step name.
 
 #### Defined in
 
-[src/workflow-builder.ts:80](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L80)
+[src/workflow-builder.ts:80](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L80)
 
----
+___
 
 ### parallel
 
@@ -223,8 +285,8 @@ Configure parallel execution with other steps.
 
 #### Parameters
 
-| Name      | Type       | Description                                             |
-| :-------- | :--------- | :------------------------------------------------------ |
+| Name | Type | Description |
+| :------ | :------ | :------ |
 | `stepIds` | `string`[] | Array of step IDs to execute in parallel with this step |
 
 #### Returns
@@ -233,9 +295,9 @@ Configure parallel execution with other steps.
 
 #### Defined in
 
-[src/workflow-builder.ts:137](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L137)
+[src/workflow-builder.ts:148](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L148)
 
----
+___
 
 ### route
 
@@ -245,10 +307,10 @@ Add a routing rule for conditional branching.
 
 #### Parameters
 
-| Name           | Type     | Description                                               |
-| :------------- | :------- | :-------------------------------------------------------- |
-| `condition`    | `string` | Expression to evaluate (e.g., 'result.approved === true') |
-| `targetStepId` | `string` | Step to go to if condition is true                        |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `condition` | `string` | Expression to evaluate (e.g., 'result.approved === true') |
+| `targetStepId` | `string` | Step to go to if condition is true |
 
 #### Returns
 
@@ -256,9 +318,9 @@ Add a routing rule for conditional branching.
 
 #### Defined in
 
-[src/workflow-builder.ts:116](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L116)
+[src/workflow-builder.ts:127](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L127)
 
----
+___
 
 ### targetUser
 
@@ -268,8 +330,8 @@ Set the target user for this step.
 
 #### Parameters
 
-| Name     | Type                                                     | Description                                            |
-| :------- | :------------------------------------------------------- | :----------------------------------------------------- |
+| Name | Type | Description |
+| :------ | :------ | :------ |
 | `target` | [`WorkflowTargetUser`](../modules.md#workflowtargetuser) | 'initiator' \| 'previous' \| userId \| { tag: string } |
 
 #### Returns
@@ -278,9 +340,9 @@ Set the target user for this step.
 
 #### Defined in
 
-[src/workflow-builder.ts:106](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L106)
+[src/workflow-builder.ts:117](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L117)
 
----
+___
 
 ### taskType
 
@@ -290,8 +352,8 @@ Set execution mode for this step.
 
 #### Parameters
 
-| Name   | Type                                                 |
-| :----- | :--------------------------------------------------- |
+| Name | Type |
+| :------ | :------ |
 | `type` | [`WorkflowTaskType`](../modules.md#workflowtasktype) |
 
 #### Returns
@@ -300,9 +362,9 @@ Set execution mode for this step.
 
 #### Defined in
 
-[src/workflow-builder.ts:72](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L72)
+[src/workflow-builder.ts:72](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L72)
 
----
+___
 
 ### timeout
 
@@ -312,8 +374,8 @@ Set a timeout for this step in milliseconds.
 
 #### Parameters
 
-| Name | Type     |
-| :--- | :------- |
+| Name | Type |
+| :------ | :------ |
 | `ms` | `number` |
 
 #### Returns
@@ -322,9 +384,9 @@ Set a timeout for this step in milliseconds.
 
 #### Defined in
 
-[src/workflow-builder.ts:169](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L169)
+[src/workflow-builder.ts:180](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L180)
 
----
+___
 
 ### waitForAll
 
@@ -334,9 +396,9 @@ Set whether to wait for all parallel branches before continuing.
 
 #### Parameters
 
-| Name   | Type      | Default value |
-| :----- | :-------- | :------------ |
-| `wait` | `boolean` | `true`        |
+| Name | Type | Default value |
+| :------ | :------ | :------ |
+| `wait` | `boolean` | `true` |
 
 #### Returns
 
@@ -344,4 +406,4 @@ Set whether to wait for all parallel branches before continuing.
 
 #### Defined in
 
-[src/workflow-builder.ts:145](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/workflow-builder.ts#L145)
+[src/workflow-builder.ts:156](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/workflow-builder.ts#L156)

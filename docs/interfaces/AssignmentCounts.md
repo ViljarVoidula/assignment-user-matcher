@@ -7,6 +7,7 @@
 ### Properties
 
 - [accepted](AssignmentCounts.md#accepted)
+- [parked](AssignmentCounts.md#parked)
 - [pending](AssignmentCounts.md#pending)
 - [queued](AssignmentCounts.md#queued)
 - [total](AssignmentCounts.md#total)
@@ -19,9 +20,21 @@
 
 #### Defined in
 
-[src/queries/pagination.ts:25](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/queries/pagination.ts#L25)
+[src/queries/pagination.ts:25](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/queries/pagination.ts#L25)
 
----
+___
+
+### parked
+
+• **parked**: `number`
+
+Assignments held out of matching by an exhausted escalation ladder
+
+#### Defined in
+
+[src/queries/pagination.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/queries/pagination.ts#L27)
+
+___
 
 ### pending
 
@@ -29,9 +42,9 @@
 
 #### Defined in
 
-[src/queries/pagination.ts:24](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/queries/pagination.ts#L24)
+[src/queries/pagination.ts:24](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/queries/pagination.ts#L24)
 
----
+___
 
 ### queued
 
@@ -39,14 +52,16 @@
 
 #### Defined in
 
-[src/queries/pagination.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/queries/pagination.ts#L23)
+[src/queries/pagination.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/queries/pagination.ts#L23)
 
----
+___
 
 ### total
 
 • **total**: `number`
 
+queued + pending + accepted — parked items are counted separately
+
 #### Defined in
 
-[src/queries/pagination.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/queries/pagination.ts#L26)
+[src/queries/pagination.ts:29](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/queries/pagination.ts#L29)

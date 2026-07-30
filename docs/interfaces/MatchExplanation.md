@@ -25,9 +25,9 @@ actually happened, use decision traces instead.
 
 #### Defined in
 
-[src/types/matcher.ts:213](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L213)
+[src/types/matcher.ts:287](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L287)
 
----
+___
 
 ### candidates
 
@@ -35,9 +35,9 @@ actually happened, use decision traces instead.
 
 #### Defined in
 
-[src/types/matcher.ts:222](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L222)
+[src/types/matcher.ts:296](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L296)
 
----
+___
 
 ### evaluatedAt
 
@@ -45,13 +45,13 @@ actually happened, use decision traces instead.
 
 #### Defined in
 
-[src/types/matcher.ts:221](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L221)
+[src/types/matcher.ts:295](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L295)
 
----
+___
 
 ### ownerId
 
-• **ownerId**: `null` \| `string`
+• **ownerId**: ``null`` \| `string`
 
 Current owner for pending assignments and completer for completed ones.
 `null` while queued and for accepted assignments (ownership metadata is
@@ -59,14 +59,14 @@ released on acceptance — consult decision traces for the full history).
 
 #### Defined in
 
-[src/types/matcher.ts:220](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L220)
+[src/types/matcher.ts:294](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L294)
 
----
+___
 
 ### status
 
-• **status**: `"queued"` \| `"pending"` \| `"accepted"` \| `"completed"` \| `"not_found"`
+• **status**: ``"queued"`` \| ``"pending"`` \| ``"accepted"`` \| ``"completed"`` \| ``"not_found"``
 
 #### Defined in
 
-[src/types/matcher.ts:214](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L214)
+[src/types/matcher.ts:288](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L288)

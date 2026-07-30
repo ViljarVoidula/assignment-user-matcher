@@ -809,26 +809,52 @@ Beyond re-ranking, the learning layer can fully automate `routingWeights`
 authoring. With `enableAutoRoutingWeights: true` (requires `enableLearning`),
 every reward observation also updates per-user, per-tag statistics in Redis
 (atomic `HINCRBY`/`HINCRBYFLOAT` — O(tags) per outcome, no scans, no
-read-modify-write), and weights are synthesized on demand with a UCB1 bandit
-policy:
+read-modify-write), and weights are synthesized on demand with a configurable
+bandit policy.
 
-- tags with a high mean reward get proportionally high weights (UCB
-  exploration bonus favors less-sampled tags),
-- tags with a mean reward at/below `vetoThreshold` (after `minSamples`
-  observations) get weight `0` — the matcher's hard-veto semantics,
-- under-sampled or unobserved known tags get an optimistic `priorWeight` so
-  the system keeps exploring them.
+**Policies:**
+
+- `policy: 'ucb1'` (default): high-mean tags get high weights, an exploration
+  bonus favors less-sampled tags, and bad tags are hard-vetoed at weight `0`.
+- `policy: 'confidence'`: uses upper-confidence-bound for the weight and a
+  conservative lower-confidence-bound for the veto decision, so uncertainty
+  works against exclusion.
+- `policy: 'thompson'`: samples from the per-tag posterior when mapping to a
+  weight.
+
+**Guardrails (all opt-in):**
+
+- `minSamplesForVeto`: a learned weight-0 may only override a _manual_
+  (non-learned) weight after this many observations, preventing a few bad
+  rolls from silently starving a user.
+- `maxDeltaPerSync`: clamps how far any single learned weight can move per
+  sync, avoiding oscillation.
+- `minTotalSamples`: skip users whose total evidence is still too thin.
+- `decayHalfLifeMs`: exponentially decay older observations on read so stale
+  history cannot veto a user's improving skills.
+- `terminalOnlyTagStats`: when `true`, only terminal outcomes
+  (complete/reject/expire/fail plus manual rewards/feedback) feed tag stats;
+  the non-terminal `accept` update is skipped.
 
 ```typescript
 const matcher = new AssignmentMatcher(redisClient, {
     enableLearning: true,
     enableAutoRoutingWeights: true,
+    // Optional: run the guarded sync automatically on one replica.
+    // A Redis lock prevents overlapping runs across replicas.
+    autoRoutingWeightsSyncIntervalMs: 60_000,
     autoRoutingWeights: {
         minSamples: 5, // observations before a tag's stats are trusted
         vetoThreshold: -0.5, // mean reward at/below this → weight 0 (hard veto)
         maxWeight: 100, // top of the synthesized weight scale
         explorationBonus: 0.5, // UCB coefficient; higher → more exploration
         priorWeight: 50, // optimistic weight for unexplored tags
+        policy: 'confidence', // or 'ucb1' (default) / 'thompson'
+        confidenceZ: 1.5, // z-score for the confidence policy
+        minSamplesForVeto: 20, // stricter bar for overriding manual weights
+        maxDeltaPerSync: 25, // max change per sync on a single weight
+        decayHalfLifeMs: 24 * 60 * 60 * 1000, // 24h half-life
+        terminalOnlyTagStats: false,
     },
 });
 
@@ -844,14 +870,27 @@ await matcher.syncLearnedRoutingWeights(); // all tracked users
 
 // Include exploration priors for known tags the user has never seen:
 await matcher.syncLearnedRoutingWeights('user-1', { includeUnexploredTags: true });
+
+// Preview the would-be map without writing anything:
+const wouldBe = await matcher.syncLearnedRoutingWeights('user-1', { dryRun: true });
+
+// Undo the last sync if the result looks wrong:
+await matcher.revertLearnedRoutingWeights('user-1');
 ```
 
 Synthesis happens outside the matching hot path — matching itself reads the
 user's stored `routingWeights` exactly as before, so the per-match cost is
 unchanged. The last-applied learned map is stored on the user as
-`learnedRoutingWeights` for observability, and `resetLearningModel()` clears
-all per-user tag statistics. The pure synthesis function is exported as
+`learnedRoutingWeights` for observability, the previous map is snapshotted as
+`routingWeightsSnapshot` for rollback, and `resetLearningModel()` clears all
+per-user tag statistics. The pure synthesis function is exported as
 `synthesizeRoutingWeights` for offline pipelines.
+
+Run the regression gate to validate a new policy before shipping it:
+
+```bash
+./node_modules/.bin/ts-node benchmark-weights.ts
+```
 
 ### RL Scalability & Redis Constraints
 

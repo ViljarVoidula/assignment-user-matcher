@@ -65,6 +65,7 @@ export type {
     LearningStats,
     LearningTagStat,
     AutoRoutingWeightsOptions,
+    AutoRoutingWeightsPolicy,
     PendingAssignmentInfo,
     WorkflowEngineMetrics,
     MachineTaskHandler,

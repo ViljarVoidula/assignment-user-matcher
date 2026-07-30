@@ -190,7 +190,7 @@ export class LearningManager {
         if (!decision) return false;
 
         await this.updateModel(decision.features, reward);
-        await this.updateTagStats(decision.userId, decision.tags, reward);
+        await this.updateTagStats(decision.userId, decision.tags, reward, terminal);
 
         if (terminal) {
             // Archive as episode so external post-processing feedback can
@@ -257,7 +257,7 @@ export class LearningManager {
         }
 
         await this.updateModel(context.features, reward);
-        await this.updateTagStats(context.userId, context.tags, reward);
+        await this.updateTagStats(context.userId, context.tags, reward, true);
         return true;
     }
 
@@ -280,28 +280,81 @@ export class LearningManager {
      * Uses atomic hash increments only - O(tags) with no read-modify-write -
      * so high-throughput outcome streams scale without contention.
      */
-    private async updateTagStats(userId: string, tags: string[] | undefined, reward: number): Promise<void> {
+    private async updateTagStats(
+        userId: string,
+        tags: string[] | undefined,
+        reward: number,
+        terminal: boolean,
+    ): Promise<void> {
         if (!this.trackTagStats || !tags || tags.length === 0) return;
+        if (this.autoWeights.terminalOnlyTagStats && !terminal) return;
+
+        const needVariance = this.needsVarianceTracking();
+        const now = Date.now();
         const multi = this.redisClient.multi();
         for (const tag of tags) {
             if (!tag) continue;
             multi.hIncrBy(this.keys.learningUserTagCounts(userId), tag, 1);
             multi.hIncrByFloat(this.keys.learningUserTagRewards(userId), tag, reward);
+            if (needVariance) {
+                multi.hIncrByFloat(this.keys.learningUserTagRewardSq(userId), tag, reward * reward);
+                multi.hSet(this.keys.learningUserTagTs(userId), tag, now.toString());
+            }
         }
         multi.sAdd(this.keys.learningUsers(), userId);
         await multi.exec();
     }
 
+    /** True when the configured policy/decay needs reward variance/timestamps. */
+    private needsVarianceTracking(): boolean {
+        const policy = this.autoWeights.policy;
+        return policy === 'confidence' || policy === 'thompson' || (this.autoWeights.decayHalfLifeMs ?? 0) > 0;
+    }
+
     /** Per-user, per-tag reward statistics aggregated from observed outcomes */
     async getUserTagStats(userId: string): Promise<LearningTagStat[]> {
-        const [counts, rewards] = await Promise.all([
+        const needVariance = this.needsVarianceTracking();
+        const [counts, rewards, sq, ts] = await Promise.all([
             this.redisClient.hGetAll(this.keys.learningUserTagCounts(userId)),
             this.redisClient.hGetAll(this.keys.learningUserTagRewards(userId)),
+            needVariance ? this.redisClient.hGetAll(this.keys.learningUserTagRewardSq(userId)) : Promise.resolve({}),
+            needVariance ? this.redisClient.hGetAll(this.keys.learningUserTagTs(userId)) : Promise.resolve({}),
         ]);
+
+        const halfLife = this.autoWeights.decayHalfLifeMs;
+        const now = Date.now();
         return Object.entries(counts).map(([tag, rawCount]) => {
-            const count = Number(rawCount) || 0;
-            const rewardSum = Number(rewards[tag]) || 0;
-            return { tag, count, rewardSum, meanReward: count > 0 ? rewardSum / count : 0 };
+            let count = Number(rawCount) || 0;
+            let rewardSum = Number(rewards[tag]) || 0;
+            let rewardSqSum = needVariance ? Number(sq[tag]) || 0 : undefined;
+            let lastUpdatedAt = needVariance ? Number(ts[tag]) || undefined : undefined;
+
+            if (halfLife && halfLife > 0 && lastUpdatedAt) {
+                const elapsed = now - lastUpdatedAt;
+                const factor = Math.pow(2, -elapsed / halfLife);
+                count *= factor;
+                rewardSum *= factor;
+                if (rewardSqSum !== undefined) rewardSqSum *= factor;
+            }
+
+            const meanReward = count > 0 ? rewardSum / count : 0;
+            let variance: number | undefined;
+            let standardError: number | undefined;
+            if (needVariance && rewardSqSum !== undefined && count > 0) {
+                variance = Math.max(0, rewardSqSum / count - meanReward * meanReward);
+                standardError = Math.sqrt(variance / count);
+            }
+
+            return {
+                tag,
+                count,
+                rewardSum,
+                meanReward,
+                rewardSqSum,
+                lastUpdatedAt,
+                variance,
+                standardError,
+            };
         });
     }
 
@@ -352,6 +405,8 @@ export class LearningManager {
         for (const userId of trackedUsers) {
             multi.del(this.keys.learningUserTagCounts(userId));
             multi.del(this.keys.learningUserTagRewards(userId));
+            multi.del(this.keys.learningUserTagRewardSq(userId));
+            multi.del(this.keys.learningUserTagTs(userId));
         }
         multi.del(this.keys.learningUsers());
         await multi.exec();

@@ -29,9 +29,9 @@ back to their auto-derived behavior.
 
 #### Defined in
 
-[src/types/matcher.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L119)
+[src/types/matcher.ts:193](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L193)
 
----
+___
 
 ### fairness
 
@@ -39,9 +39,9 @@ back to their auto-derived behavior.
 
 #### Defined in
 
-[src/types/matcher.ts:118](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L118)
+[src/types/matcher.ts:192](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L192)
 
----
+___
 
 ### fairnessLoadPenalty
 
@@ -49,9 +49,9 @@ back to their auto-derived behavior.
 
 #### Defined in
 
-[src/types/matcher.ts:120](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L120)
+[src/types/matcher.ts:194](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L194)
 
----
+___
 
 ### fairnessMaxPerWindow
 
@@ -59,9 +59,9 @@ back to their auto-derived behavior.
 
 #### Defined in
 
-[src/types/matcher.ts:122](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L122)
+[src/types/matcher.ts:196](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L196)
 
----
+___
 
 ### fairnessTieBand
 
@@ -69,9 +69,9 @@ back to their auto-derived behavior.
 
 #### Defined in
 
-[src/types/matcher.ts:121](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L121)
+[src/types/matcher.ts:195](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L195)
 
----
+___
 
 ### fairnessWindowMs
 
@@ -79,4 +79,4 @@ back to their auto-derived behavior.
 
 #### Defined in
 
-[src/types/matcher.ts:123](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a243014d9767b8083172045261cc58852a94fd80/src/types/matcher.ts#L123)
+[src/types/matcher.ts:197](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L197)
