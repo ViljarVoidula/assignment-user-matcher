@@ -39,7 +39,7 @@ Internal method to add a step from the step builder.
 
 #### Defined in
 
-[src/workflow-builder.ts:307](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/workflow-builder.ts#L307)
+[src/workflow-builder.ts:307](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/workflow-builder.ts#L307)
 
 ___
 
@@ -61,7 +61,7 @@ Add a pre-built step to the workflow.
 
 #### Defined in
 
-[src/workflow-builder.ts:299](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/workflow-builder.ts#L299)
+[src/workflow-builder.ts:299](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/workflow-builder.ts#L299)
 
 ___
 
@@ -81,7 +81,7 @@ Error if the workflow is invalid
 
 #### Defined in
 
-[src/workflow-builder.ts:323](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/workflow-builder.ts#L323)
+[src/workflow-builder.ts:323](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/workflow-builder.ts#L323)
 
 ___
 
@@ -103,7 +103,7 @@ Set the default timeout for all steps (in milliseconds).
 
 #### Defined in
 
-[src/workflow-builder.ts:274](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/workflow-builder.ts#L274)
+[src/workflow-builder.ts:274](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/workflow-builder.ts#L274)
 
 ___
 
@@ -125,7 +125,7 @@ Set the initial (entry point) step ID.
 
 #### Defined in
 
-[src/workflow-builder.ts:314](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/workflow-builder.ts#L314)
+[src/workflow-builder.ts:314](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/workflow-builder.ts#L314)
 
 ___
 
@@ -148,7 +148,7 @@ falling back to the ordinary failure path (default 10).
 
 #### Defined in
 
-[src/workflow-builder.ts:283](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/workflow-builder.ts#L283)
+[src/workflow-builder.ts:283](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/workflow-builder.ts#L283)
 
 ___
 
@@ -170,7 +170,7 @@ Set workflow metadata.
 
 #### Defined in
 
-[src/workflow-builder.ts:266](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/workflow-builder.ts#L266)
+[src/workflow-builder.ts:266](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/workflow-builder.ts#L266)
 
 ___
 
@@ -192,7 +192,7 @@ Start building a new step.
 
 #### Defined in
 
-[src/workflow-builder.ts:292](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/workflow-builder.ts#L292)
+[src/workflow-builder.ts:292](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/workflow-builder.ts#L292)
 
 ___
 
@@ -214,7 +214,7 @@ Set the workflow version.
 
 #### Defined in
 
-[src/workflow-builder.ts:258](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/workflow-builder.ts#L258)
+[src/workflow-builder.ts:258](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/workflow-builder.ts#L258)
 
 ___
 
@@ -237,4 +237,4 @@ Create a new workflow builder.
 
 #### Defined in
 
-[src/workflow-builder.ts:251](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/workflow-builder.ts#L251)
+[src/workflow-builder.ts:251](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/workflow-builder.ts#L251)
