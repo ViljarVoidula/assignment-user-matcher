@@ -468,18 +468,45 @@ export type AssignmentLifecycleEvent =
           taskId: string;
           workerId: string | null;
           action: 'notify' | 'requeue' | 'fail' | 'park';
+          /** The assignment as it stood when the deadline elapsed. See the note below. */
+          assignment: Assignment;
           at: number;
       }
     /**
      * The freshness TTL (`sla.expireAfterMs`) elapsed; the assignment was
      * removed from whichever store it occupied.
      */
-    | { kind: 'slaExpired'; taskId: string; ownerId: string | null; action: 'drop' | 'park'; at: number }
+    | {
+          kind: 'slaExpired';
+          taskId: string;
+          ownerId: string | null;
+          action: 'drop' | 'park';
+          /** The assignment as it stood when the TTL elapsed. See the note below. */
+          assignment: Assignment;
+          at: number;
+      }
     /**
      * The rejection budget (`sla.maxRejections`) ran out; the assignment was
      * pulled from rotation.
      */
-    | { kind: 'rejectionBudgetExhausted'; taskId: string; rejections: number; action: 'park' | 'fail'; at: number };
+    | {
+          kind: 'rejectionBudgetExhausted';
+          taskId: string;
+          rejections: number;
+          action: 'park' | 'fail';
+          /** The assignment as it stood when the budget ran out. See the note below. */
+          assignment: Assignment;
+          at: number;
+      };
+
+/*
+ * Why the three SLA events carry a full `assignment` and the others do not:
+ * they are the only ones that can *destroy* the record. `onExpire: 'drop'`
+ * removes the assignment outright, and by the time the handler runs there is
+ * nothing left to read — a host that wants to archive the outcome would have
+ * only an id. Every other event leaves the assignment somewhere the host can
+ * still fetch it (queued, pending, accepted, parked, or the completed store).
+ */
 
 /** Outcome of one `processResponseDeadlines()` sweep. */
 export type EscalationSweepResult = {

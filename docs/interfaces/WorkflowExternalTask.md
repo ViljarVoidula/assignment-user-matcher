@@ -28,7 +28,7 @@ Optional static input merged with workflow context, surfaced to the caller
 
 #### Defined in
 
-[src/types/matcher.ts:885](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L885)
+[src/types/matcher.ts:912](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/types/matcher.ts#L912)
 
 ___
 
@@ -40,4 +40,4 @@ Caller-facing name identifying what this step asks an external party to do
 
 #### Defined in
 
-[src/types/matcher.ts:883](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L883)
+[src/types/matcher.ts:910](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/types/matcher.ts#L910)

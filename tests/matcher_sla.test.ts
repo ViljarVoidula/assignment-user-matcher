@@ -188,6 +188,65 @@ describe('SLA policies', function () {
         });
     });
 
+    describe('terminal events carry the assignment', function () {
+        // A dropped assignment is gone by the time the handler runs, so without
+        // a snapshot on the event a host has no way to record what it lost.
+        it('carries the dropped assignment on slaExpired', async function () {
+            await matcher.addAssignment({
+                id: 'a1',
+                tags: ['t', 'urgent'],
+                priority: 42,
+                meta: { customer: 'acme' },
+                sla: { expireAfterMs: 100 },
+            });
+
+            clock.tick(150);
+            await matcher.processSlaExpiries();
+
+            expect(await matcher.getAssignment('a1'), 'dropped, so unreadable afterwards').to.be.null;
+            const [event] = kinds('slaExpired') as any[];
+            expect(event.assignment.id).to.equal('a1');
+            expect(event.assignment.tags).to.deep.equal(['t', 'urgent']);
+            expect(event.assignment.priority).to.equal(42);
+            expect(event.assignment.meta).to.deep.equal({ customer: 'acme' });
+        });
+
+        it('carries the assignment on completionBreached', async function () {
+            await matcher.addUser({ id: 'u1', tags: ['t'] });
+            await matcher.addAssignment({
+                id: 'a1',
+                tags: ['t'],
+                priority: 7,
+                sla: { completeWithinMs: 100, onCompletionBreach: 'fail' },
+            });
+            await matcher.matchUsersAssignments('u1');
+            await matcher.acceptAssignment('u1', 'a1');
+
+            clock.tick(150);
+            await matcher.processCompletionDeadlines();
+
+            const [event] = kinds('completionBreached') as any[];
+            expect(event.assignment.id).to.equal('a1');
+            expect(event.assignment.priority).to.equal(7);
+        });
+
+        it('carries the assignment on rejectionBudgetExhausted', async function () {
+            await matcher.addUser({ id: 'u1', tags: ['t'] });
+            await matcher.addAssignment({
+                id: 'a1',
+                tags: ['t'],
+                priority: 3,
+                sla: { maxRejections: 1, onMaxRejections: 'fail' },
+            });
+            await matcher.matchUsersAssignments('u1');
+            await matcher.rejectAssignment('u1', 'a1');
+
+            const [event] = kinds('rejectionBudgetExhausted') as any[];
+            expect(event.assignment.id).to.equal('a1');
+            expect(event.assignment.priority).to.equal(3);
+        });
+    });
+
     describe('expireAfterMs (freshness TTL)', function () {
         it('expires a queued assignment (drop by default)', async function () {
             await matcher.addAssignment({ id: 'a1', tags: ['t'], sla: { expireAfterMs: 100 } });

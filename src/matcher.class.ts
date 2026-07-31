@@ -3167,6 +3167,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             taskId: assignment.id,
             rejections,
             action,
+            assignment,
             at: now,
         });
 
@@ -3701,6 +3702,7 @@ export default class AssignmentMatcher implements WorkflowHost {
                 taskId: id,
                 workerId,
                 action,
+                assignment,
                 at: now,
             });
             await this.bumpSlaStats(assignment.tags, { completionBreaches: 1 });
@@ -3833,6 +3835,9 @@ export default class AssignmentMatcher implements WorkflowHost {
                 taskId: id,
                 ownerId,
                 action,
+                // Emitted after the removal above, so this snapshot is the only
+                // remaining copy on the 'drop' path.
+                assignment,
                 at: now,
             });
             await this.bumpSlaStats(assignment.tags, { ttlExpiries: 1 });

@@ -19,7 +19,7 @@ Paginated result of `listWorkflowInstances()`.
 
 #### Defined in
 
-[src/types/matcher.ts:1021](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1021)
+[src/types/matcher.ts:1048](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/types/matcher.ts#L1048)
 
 ___
 
@@ -31,4 +31,4 @@ Present when more instances remain; pass back as `cursor` for the next page
 
 #### Defined in
 
-[src/types/matcher.ts:1023](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1023)
+[src/types/matcher.ts:1050](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/types/matcher.ts#L1050)

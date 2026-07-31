@@ -21,7 +21,7 @@ Condition expression evaluated against assignment result (e.g., 'result.score > 
 
 #### Defined in
 
-[src/types/matcher.ts:903](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L903)
+[src/types/matcher.ts:930](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/types/matcher.ts#L930)
 
 ___
 
@@ -33,4 +33,4 @@ Target step ID if condition is true
 
 #### Defined in
 
-[src/types/matcher.ts:905](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L905)
+[src/types/matcher.ts:932](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/types/matcher.ts#L932)
