@@ -218,12 +218,17 @@ describe('Auto Routing Weights v2 - Matcher Integration', function () {
             await runLifecycle(matcher, 'user1', 'a1', ['good'], 'complete');
 
             try {
-                matcher.startAutoRoutingWeightsSync(50);
+                matcher.startAutoRoutingWeightsSync(30);
                 expect(matcher.isAutoRoutingWeightsSyncRunning()).to.be.true;
 
-                await new Promise((r) => setTimeout(r, 150));
-
-                const user = JSON.parse(await redisClient.hGet('test-awv2:users', 'user1'));
+                // Poll briefly for the first tick instead of sleeping a fixed delay.
+                const deadline = Date.now() + 1500;
+                let user: any = null;
+                while (Date.now() < deadline) {
+                    user = JSON.parse(await redisClient.hGet('test-awv2:users', 'user1'));
+                    if (user?.learnedRoutingWeights) break;
+                    await new Promise((r) => setTimeout(r, 15));
+                }
                 expect(user.learnedRoutingWeights).to.exist;
             } finally {
                 matcher.stopAutoRoutingWeightsSync();
@@ -246,12 +251,17 @@ describe('Auto Routing Weights v2 - Matcher Integration', function () {
             await runLifecycle(matcher1, 'user1', 'a1', ['good'], 'complete');
 
             try {
-                matcher1.startAutoRoutingWeightsSync(200);
-                matcher2.startAutoRoutingWeightsSync(200);
+                matcher1.startAutoRoutingWeightsSync(40);
+                matcher2.startAutoRoutingWeightsSync(40);
 
-                await new Promise((r) => setTimeout(r, 250));
-
-                const lock = await redisClient.get('test-awv2-lock:autoweights:sync:lock');
+                // Poll briefly for the lock instead of sleeping a full interval.
+                const deadline = Date.now() + 1500;
+                let lock: string | null = null;
+                while (Date.now() < deadline) {
+                    lock = await redisClient.get('test-awv2-lock:autoweights:sync:lock');
+                    if (lock) break;
+                    await new Promise((r) => setTimeout(r, 15));
+                }
                 expect(lock).to.be.a('string');
             } finally {
                 matcher1.stopAutoRoutingWeightsSync();

@@ -100,6 +100,31 @@ describe('synthesizeRoutingWeights (v2 policies)', function () {
             });
             expect(weights.bad).to.equal(0);
         });
+
+        it('stays sane on extreme rng draws near the distribution tails', function () {
+            // rng near 1 exercises the upper-tail branch of the normal
+            // quantile approximation; rng near 0 the lower tail.
+            const high = synthesizeRoutingWeights([stat('t', 20, 10, 10, 0.5)], {
+                policy: 'thompson',
+                minSamples: 5,
+                rng: () => 0.9999,
+            });
+            expect(high.t).to.be.at.least(1).and.at.most(100);
+
+            const low = synthesizeRoutingWeights([stat('t', 20, 10, 10, 0.5)], {
+                policy: 'thompson',
+                minSamples: 5,
+                rng: () => 0.0001,
+            });
+            expect(low.t).to.be.at.least(0).and.at.most(100);
+
+            const clamped = synthesizeRoutingWeights([stat('t', 20, 10, 10, 0.5)], {
+                policy: 'thompson',
+                minSamples: 5,
+                rng: () => 0,
+            });
+            expect(clamped.t).to.be.at.least(0).and.at.most(100);
+        });
     });
 
     describe('strict veto gate', function () {

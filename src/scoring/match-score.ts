@@ -16,6 +16,17 @@ export function matchesPattern(pattern: string, tag: string): boolean {
 }
 
 /**
+ * Where a zero-weight veto came from: the learning layer's last sync, or an
+ * operator. Returns undefined for users with no learned weights at all, which
+ * keeps the trace shape unchanged for everyone not using the learning layer.
+ */
+export function vetoSource(user: User, pattern: string): 'manual' | 'learned' | undefined {
+    const learned = user.learnedRoutingWeights;
+    if (!learned) return undefined;
+    return learned[pattern] === 0 ? 'learned' : 'manual';
+}
+
+/**
  * Get the effective weight for a skill tag from user's routingWeights
  * Supports wildcard patterns (e.g., 'eng*' matches 'english')
  */
@@ -181,7 +192,12 @@ export function explainMatchScore(
             if (weight === 0) {
                 for (const t of aTags) {
                     if (matchesPattern(pattern, t)) {
-                        reasons.push({ kind: 'veto', tag: t, pattern });
+                        const source = vetoSource(user, pattern);
+                        reasons.push(
+                            source
+                                ? { kind: 'veto', tag: t, pattern, source }
+                                : { kind: 'veto', tag: t, pattern },
+                        );
                         vetoed = true;
                     }
                 }

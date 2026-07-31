@@ -27,7 +27,7 @@ Number of reward observations for this tag
 
 #### Defined in
 
-[src/types/matcher.ts:1086](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1086)
+[src/types/matcher.ts:1241](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1241)
 
 ___
 
@@ -39,7 +39,7 @@ Unix epoch ms of the most recent observation (used for time decay)
 
 #### Defined in
 
-[src/types/matcher.ts:1094](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1094)
+[src/types/matcher.ts:1249](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1249)
 
 ___
 
@@ -51,7 +51,7 @@ rewardSum / count (0 when no observations)
 
 #### Defined in
 
-[src/types/matcher.ts:1090](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1090)
+[src/types/matcher.ts:1245](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1245)
 
 ___
 
@@ -63,7 +63,7 @@ Sum of squared observed rewards (available when reward-squared tracking is enabl
 
 #### Defined in
 
-[src/types/matcher.ts:1092](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1092)
+[src/types/matcher.ts:1247](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1247)
 
 ___
 
@@ -75,7 +75,7 @@ Sum of observed rewards for this tag
 
 #### Defined in
 
-[src/types/matcher.ts:1088](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1088)
+[src/types/matcher.ts:1243](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1243)
 
 ___
 
@@ -87,7 +87,7 @@ Standard error of the mean (0 when absent or single observation)
 
 #### Defined in
 
-[src/types/matcher.ts:1098](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1098)
+[src/types/matcher.ts:1253](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1253)
 
 ___
 
@@ -97,7 +97,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1084](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1084)
+[src/types/matcher.ts:1239](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1239)
 
 ___
 
@@ -109,4 +109,4 @@ Population variance of observed rewards (0 when absent or single observation)
 
 #### Defined in
 
-[src/types/matcher.ts:1096](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1096)
+[src/types/matcher.ts:1251](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1251)

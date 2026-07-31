@@ -1,6 +1,7 @@
 import Matcher from '../src/matcher.class';
 import { createClient } from 'redis';
 import { expect } from 'chai';
+import sinon from 'sinon';
 
 describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)', function () {
     this.timeout(10000);
@@ -263,32 +264,39 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
     });
 
     it('fairnessMaxPerWindow accumulates across matching passes and releases as the window rolls', async function () {
-        const matcher = new Matcher(redisClient, {
-            redisPrefix: 'fair_window_roll_test:',
-            maxUserBacklogSize: 10,
-            relevantBatchSize: 20,
-            fairness: 'best-match',
-            fairnessMaxPerWindow: 2,
-            fairnessWindowMs: 400,
-        });
-        await matcher.redisClient.flushAll();
+        // Window grants are Date.now()-scored zset entries: fake Date rolls
+        // the window instantly instead of sleeping it out.
+        const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+        try {
+            const matcher = new Matcher(redisClient, {
+                redisPrefix: 'fair_window_roll_test:',
+                maxUserBacklogSize: 10,
+                relevantBatchSize: 20,
+                fairness: 'best-match',
+                fairnessMaxPerWindow: 2,
+                fairnessWindowMs: 400,
+            });
+            await matcher.redisClient.flushAll();
 
-        await matcher.addUser({ id: 'solo', tags: ['plumbing'], routingWeights: { plumbing: 100 } });
+            await matcher.addUser({ id: 'solo', tags: ['plumbing'], routingWeights: { plumbing: 100 } });
 
-        await matcher.addAssignment({ id: 'job-1', tags: ['plumbing'], priority: 100 });
-        await matcher.addAssignment({ id: 'job-2', tags: ['plumbing'], priority: 100 });
-        await matcher.matchUsersAssignments();
-        expect((await matcher.getCurrentAssignmentsForUser('solo')).length).to.equal(2);
+            await matcher.addAssignment({ id: 'job-1', tags: ['plumbing'], priority: 100 });
+            await matcher.addAssignment({ id: 'job-2', tags: ['plumbing'], priority: 100 });
+            await matcher.matchUsersAssignments();
+            expect((await matcher.getCurrentAssignmentsForUser('solo')).length).to.equal(2);
 
-        // Window exhausted: a third job must stay queued even across passes.
-        await matcher.addAssignment({ id: 'job-3', tags: ['plumbing'], priority: 100 });
-        await matcher.matchUsersAssignments();
-        expect((await matcher.getCurrentAssignmentsForUser('solo')).length).to.equal(2);
+            // Window exhausted: a third job must stay queued even across passes.
+            await matcher.addAssignment({ id: 'job-3', tags: ['plumbing'], priority: 100 });
+            await matcher.matchUsersAssignments();
+            expect((await matcher.getCurrentAssignmentsForUser('solo')).length).to.equal(2);
 
-        // Once the window rolls past the first grants, capacity frees up.
-        await new Promise((resolve) => setTimeout(resolve, 450));
-        await matcher.matchUsersAssignments();
-        expect(await matcher.getCurrentAssignmentsForUser('solo')).to.include('job-3');
+            // Once the window rolls past the first grants, capacity frees up.
+            clock.tick(450);
+            await matcher.matchUsersAssignments();
+            expect(await matcher.getCurrentAssignmentsForUser('solo')).to.include('job-3');
+        } finally {
+            clock.restore();
+        }
     });
 
     it('workflow-targeted assignments bypass fairnessMaxPerWindow (direct handoffs must not stall)', async function () {

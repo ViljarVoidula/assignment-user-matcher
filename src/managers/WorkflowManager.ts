@@ -78,6 +78,8 @@ export class WorkflowManager {
             pollBlockMs?: number;
             /** Per-replica cap on processed events per second; unlimited when unset */
             maxEventsPerSecond?: number;
+            /** Throttle window length in ms (default: 1000). Internal tuning knob. */
+            throttleWindowMs?: number;
             /** Fired after every durably-applied transition; best-effort, errors swallowed */
             onWorkflowEvent?: (transition: WorkflowTransition) => void;
         },
@@ -1552,14 +1554,15 @@ export class WorkflowManager {
         const limit = this.options.maxEventsPerSecond;
         if (!limit || limit <= 0) return;
 
+        const windowMs = this.options.throttleWindowMs ?? 1000;
         const now = Date.now();
-        if (now - this.throttleWindowStart >= 1000) {
+        if (now - this.throttleWindowStart >= windowMs) {
             this.throttleWindowStart = now;
             this.throttleTokensUsed = 0;
         }
 
         if (this.throttleTokensUsed >= limit) {
-            const waitMs = Math.max(this.throttleWindowStart + 1000 - now, 1);
+            const waitMs = Math.max(this.throttleWindowStart + windowMs - now, 1);
             await new Promise((r) => setTimeout(r, waitMs));
             this.throttleWindowStart = Date.now();
             this.throttleTokensUsed = 0;

@@ -80,6 +80,33 @@ describe('Matcher Decision Traces & Explainability', function () {
             expect(explanation.candidates[0].userId).to.equal('alice');
         });
 
+        it('attributes vetoes to the learning layer or the operator', async function () {
+            // No learned weights at all: source stays absent so traces are
+            // unchanged for workspaces that never enable learning.
+            await matcher.addUser({ id: 'alice', tags: [], routingWeights: { english: 100, german: 0 } });
+            // A learned sync vetoed german; french was vetoed by an operator.
+            await matcher.addUser({
+                id: 'bob',
+                tags: [],
+                routingWeights: { english: 80, german: 0, french: 0 },
+                learnedRoutingWeights: { english: 80, german: 0 },
+            });
+            await matcher.addAssignment({ id: 'a1', tags: ['english', 'german', 'french'], priority: 100 });
+
+            const explanation = await matcher.explainMatch('a1');
+
+            const aliceVetoes = reasonsOfKind(
+                explanation.candidates.find((c) => c.userId === 'alice')!.reasons,
+                'veto',
+            );
+            expect(aliceVetoes).to.have.length(1);
+            expect((aliceVetoes[0] as any).source).to.equal(undefined);
+
+            const bobVetoes = reasonsOfKind(explanation.candidates.find((c) => c.userId === 'bob')!.reasons, 'veto');
+            const byTag = Object.fromEntries(bobVetoes.map((v) => [(v as any).tag, (v as any).source]));
+            expect(byTag).to.deep.equal({ german: 'learned', french: 'manual' });
+        });
+
         it('marks the actual owner as chosen after matching', async function () {
             await matcher.addUser({ id: 'alice', tags: [], routingWeights: { english: 100 } });
             await matcher.addAssignment({ id: 'a1', tags: ['english'], priority: 100 });
@@ -334,6 +361,30 @@ describe('Matcher Decision Traces & Explainability', function () {
             const vetoes = reasonsOfKind(bob!.reasons, 'veto');
             expect(vetoes).to.have.length(1);
             expect((vetoes[0] as any).tag).to.equal('german');
+        });
+
+        it('attributes prefiltered vetoes to the learning layer or the operator', async function () {
+            const matcher = new Matcher(redisClient, {
+                redisPrefix: 'trace_veto_source_test:',
+                enableDecisionTraces: true,
+            });
+            await matcher.waitUntilReady();
+            await matcher.addUser({ id: 'alice', tags: [], routingWeights: { english: 100 } });
+            await matcher.addUser({
+                id: 'bob',
+                tags: [],
+                routingWeights: { english: 80, german: 0, french: 0 },
+                learnedRoutingWeights: { english: 80, german: 0 },
+            });
+            await matcher.addAssignment({ id: 'a1', tags: ['english', 'german', 'french'], priority: 100 });
+            await matcher.matchUsersAssignments();
+
+            const traces = await matcher.getDecisionTraces({ assignmentId: 'a1' });
+            const bob = traces[0].candidates.find((c) => c.userId === 'bob')!;
+            const byTag = Object.fromEntries(
+                reasonsOfKind(bob.reasons, 'veto').map((v) => [(v as any).tag, (v as any).source]),
+            );
+            expect(byTag).to.deep.equal({ german: 'learned', french: 'manual' });
         });
 
         it('records best-match traces where the higher scorer wins deterministically', async function () {

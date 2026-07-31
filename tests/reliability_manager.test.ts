@@ -71,19 +71,39 @@ describe('ReliabilityManager', function () {
         });
 
         it('should expire idempotency keys', async function () {
-            this.timeout(3000);
+            // Redis TTLs expire server-side, so this needs a real (short)
+            // TTL rather than a fake clock.
+            const shortTtlManager = new ReliabilityManager(redisClient, keys, {
+                workflowMaxRetries: 3,
+                workflowIdempotencyTtlMs: 50,
+                workflowCircuitBreakerThreshold: 2,
+                workflowCircuitBreakerResetMs: 500,
+                workflowAuditEnabled: false,
+                streamConsumerName: 'test-short-ttl',
+            });
             const eventId = 'event-3';
-            await reliabilityManager.markEventProcessed(eventId);
+            await shortTtlManager.markEventProcessed(eventId);
 
-            // Wait for TTL (1000ms)
-            await new Promise((resolve) => setTimeout(resolve, 1100));
+            await new Promise((resolve) => setTimeout(resolve, 80));
 
-            const isProcessed = await reliabilityManager.isEventProcessed(eventId);
+            const isProcessed = await shortTtlManager.isEventProcessed(eventId);
             expect(isProcessed).to.be.false;
         });
     });
 
     describe('Circuit Breaker', function () {
+        let clock: sinon.SinonFakeTimers;
+
+        beforeEach(function () {
+            // Breaker timing is pure Date.now() logic: fake the clock and
+            // fast-forward instead of sleeping.
+            clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+        });
+
+        afterEach(function () {
+            clock.restore();
+        });
+
         it('should open circuit after threshold failures', async function () {
             expect(reliabilityManager.shouldProcessCircuitBreaker()).to.be.true;
 
@@ -96,11 +116,10 @@ describe('ReliabilityManager', function () {
         });
 
         it('should reset circuit after reset timeout', async function () {
-            this.timeout(2000);
             // Circuit is open from previous test
             expect(reliabilityManager.shouldProcessCircuitBreaker()).to.be.false;
 
-            await new Promise((resolve) => setTimeout(resolve, 600));
+            clock.tick(600);
 
             // Should be half-open/closed now
             expect(reliabilityManager.shouldProcessCircuitBreaker()).to.be.true;
@@ -113,7 +132,7 @@ describe('ReliabilityManager', function () {
             expect(reliabilityManager.shouldProcessCircuitBreaker()).to.be.false;
 
             // Wait for reset
-            await new Promise((resolve) => setTimeout(resolve, 600));
+            clock.tick(600);
 
             // Now in half-open (shouldProcess returns true)
             expect(reliabilityManager.shouldProcessCircuitBreaker()).to.be.true;
@@ -234,6 +253,16 @@ describe('ReliabilityManager', function () {
     });
 
     describe('Circuit Breaker - Extended', function () {
+        let clock: sinon.SinonFakeTimers;
+
+        beforeEach(function () {
+            clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+        });
+
+        afterEach(function () {
+            clock.restore();
+        });
+
         it('should return circuit breaker state object', function () {
             const state = reliabilityManager.getCircuitBreakerState();
             expect(state).to.have.all.keys(['state', 'failureCount', 'lastFailureTime']);
@@ -241,7 +270,6 @@ describe('ReliabilityManager', function () {
         });
 
         it('should allow requests when in half-open state', async function () {
-            this.timeout(2000);
             const mgr = new ReliabilityManager(redisClient, keys, {
                 workflowMaxRetries: 3,
                 workflowIdempotencyTtlMs: 5000,
@@ -255,7 +283,7 @@ describe('ReliabilityManager', function () {
             mgr.recordCircuitBreakerFailure();
             expect(mgr.shouldProcessCircuitBreaker()).to.be.false;
 
-            await new Promise((resolve) => setTimeout(resolve, 400));
+            clock.tick(400);
 
             // First call transitions open → half-open
             expect(mgr.shouldProcessCircuitBreaker()).to.be.true;
@@ -265,7 +293,6 @@ describe('ReliabilityManager', function () {
         });
 
         it('should reopen circuit on failure in half-open state', async function () {
-            this.timeout(2000);
             const mgr = new ReliabilityManager(redisClient, keys, {
                 workflowMaxRetries: 3,
                 workflowIdempotencyTtlMs: 5000,
@@ -277,7 +304,7 @@ describe('ReliabilityManager', function () {
 
             mgr.recordCircuitBreakerFailure();
             mgr.recordCircuitBreakerFailure();
-            await new Promise((resolve) => setTimeout(resolve, 400));
+            clock.tick(400);
             mgr.shouldProcessCircuitBreaker(); // transitions to half-open
             expect(mgr.getCircuitBreakerState().state).to.equal('half-open');
 
@@ -497,24 +524,28 @@ describe('ReliabilityManager', function () {
         });
 
         it('should persist state when circuit closes from half-open success', async function () {
-            this.timeout(2000);
-            const mgr = new ReliabilityManager(redisClient, keys, {
-                workflowMaxRetries: 3,
-                workflowIdempotencyTtlMs: 5000,
-                workflowCircuitBreakerThreshold: 1,
-                workflowCircuitBreakerResetMs: 200,
-                workflowAuditEnabled: false,
-                streamConsumerName: 'test-persist-close',
-                circuitBreakerPersistState: true,
-            });
-            await mgr.init();
-            mgr.recordCircuitBreakerFailure(); // opens
-            await new Promise((resolve) => setTimeout(resolve, 300));
-            mgr.shouldProcessCircuitBreaker(); // transitions to half-open, persists
-            mgr.recordCircuitBreakerSuccess(); // closes, persists
+            const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+            try {
+                const mgr = new ReliabilityManager(redisClient, keys, {
+                    workflowMaxRetries: 3,
+                    workflowIdempotencyTtlMs: 5000,
+                    workflowCircuitBreakerThreshold: 1,
+                    workflowCircuitBreakerResetMs: 200,
+                    workflowAuditEnabled: false,
+                    streamConsumerName: 'test-persist-close',
+                    circuitBreakerPersistState: true,
+                });
+                await mgr.init();
+                mgr.recordCircuitBreakerFailure(); // opens
+                clock.tick(300);
+                mgr.shouldProcessCircuitBreaker(); // transitions to half-open, persists
+                mgr.recordCircuitBreakerSuccess(); // closes, persists
 
-            const saved = await redisClient.hGetAll(keys.circuitBreakerState());
-            expect(saved.state).to.equal('closed');
+                const saved = await redisClient.hGetAll(keys.circuitBreakerState());
+                expect(saved.state).to.equal('closed');
+            } finally {
+                clock.restore();
+            }
         });
 
         it('resets the shared failure counter when a shared breaker closes from half-open success', async function () {

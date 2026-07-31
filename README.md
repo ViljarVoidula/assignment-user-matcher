@@ -385,15 +385,59 @@ The wait clock always survives an escalation: requeues go through `addAssignment
 
 Subscribe via `onAssignmentLifecycle` for `escalated` (`{ fromWorkerId, level, blockedPreviousOwner }`) and `escalationExhausted` (`{ level, parked }`) events; `expired` is still emitted first, so existing consumers are unaffected. Parked assignments are reachable with `getParkedAssignments()`, returned to the queue with `unparkAssignment(id, { resetEscalation? })`, and report `_status: 'parked'` from `getAssignment()` — they never read as "not found". `getEscalationLevel(id)` reports how far an assignment has climbed.
 
+### SLA policies (`Assignment.sla`)
+
+Escalation owns the *response* side (how long a matched user has to accept). `SlaPolicy` owns everything after that: how long the accepting user has to finish, how many times the work may be refused before it is pulled from rotation, and an absolute freshness cutoff after which the work is moot.
+
+```ts
+await matcher.addAssignment({
+    id: 'order-42',
+    tags: ['fulfillment'],
+    sla: {
+        completeWithinMs: 30 * 60_000, // finish within 30 min of accepting
+        onCompletionBreach: 'requeue', // take it back if they don't
+        maxRejections: 3, // after 3 refusals, stop offering it
+        expireAfterMs: 24 * 3600_000, // moot after 24h no matter what
+    },
+});
+
+matcher.startMaintenance(); // SLA clocks are swept by the maintenance tick
+```
+
+| Field                | Meaning                                                                                                                                                          | Default   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `completeWithinMs`   | Completion deadline, measured from `acceptAssignment()`. Swept by `processCompletionDeadlines()`                                                                 | none      |
+| `expireAfterMs`      | Absolute freshness cutoff from **first enqueue** — survives requeues and applies in every state (queued, pending, accepted). Swept by `processSlaExpiries()`     | none      |
+| `maxRejections`      | Refusal budget. Explicit `rejectAssignment()` calls **and** blocking no-response expiries (`escalation.onNoResponse: 'block'`) count; idle/operator releases don't | none      |
+| `onCompletionBreach` | `'notify'` (event only, worker keeps it) / `'requeue'` (take back, block breacher) / `'fail'` / `'park'`                                                          | `'notify'` |
+| `onMaxRejections`    | `'park'` / `'fail'` / `'keep'` (keep offering; budget becomes measurement-only)                                                                                  | `'park'`  |
+| `onExpire`           | `'drop'` (remove entirely) / `'park'` (retain for inspection)                                                                                                    | `'drop'`  |
+
+Semantics worth knowing:
+
+- **Fire-once.** A breached completion deadline is removed from the deadline index before the action runs, so a `'notify'` breach doesn't re-fire every tick; a requeued-after-breach assignment gets a fresh completion clock only on its next accept.
+- **The TTL never extends.** Rejection ping-pong re-adds the same JSON, whose `_enqueuedAt` keeps the original first-enqueue time — the freshness cutoff is a hard wall, not a sliding window.
+- **Rejection budget outranks escalation.** Once `maxRejections` is exhausted the assignment is parked/failed instead of climbing further tiers.
+- **Sweep granularity.** Like response deadlines, SLA clocks fire on the maintenance tick, not at the exact deadline.
+- **Unparking.** `unparkAssignment(id, { resetSla: true })` clears the first-enqueue clock and rejection counter; without it an unparked TTL-expired item simply expires again on the next sweep.
+
+Lifecycle events: `completionBreached` (`{ workerId, action }`), `slaExpired` (`{ ownerId, action }`), `rejectionBudgetExhausted` (`{ rejections, action }`).
+
+**SLO measurement.** `getSlaStats(tag?)` returns aggregate attainment counters — global, or for one tag: `offers`, `acceptedInTime`, `acceptanceBreaches`, `completionBreaches`, `ttlExpiries`, `rejectionParked`, plus `meanAcceptLatencyMs` (matched→accepted) and `meanCompleteLatencyMs` (accepted→completed). Counters are best-effort `HINCRBY`s piggybacking paths that already touch Redis; only SLA-bearing assignments are measured.
+
+**Learning integration.** Breach outcomes flow into the contextual bandit as ordinary rewards (TTL expiry and completion breach → `expire`; completion breach with `'fail'` → `fail`), so per-user/per-tag stats and the automatic routing-weight vetoes pick up chronic breachers with no extra configuration. The default feature extractor also emits `sla:hasDeadline` and `sla:tightness` (normalized against `learningSlaTightnessReferenceMs`, default 1h) for assignments with a completion deadline, letting the model learn that tight-deadline work needs fast finishers. Custom feature extractors are unaffected.
+
 ### `startMaintenance(options?)` / `stopMaintenance()` / `runMaintenanceOnce(options?)`
 
 Deadlines are not self-firing — something has to sweep them. `startMaintenance()` runs every enabled sweep on one tick:
 
 - `responseDeadlines` (default on) — expiry, escalation, parking.
+- `completionDeadlines` (default on) — SLA completion deadlines (`sla.completeWithinMs`).
+- `slaExpiries` (default on) — SLA freshness TTLs (`sla.expireAfterMs`).
 - `workflowStepTimeouts` (default on when `enableWorkflows`) — the step-timeout index. **Note:** `startOrchestrator()` consumes the event stream but does not sweep step timeouts; without maintenance, `timeoutMs` on a workflow step never fires.
 - `idleUsers` (default on when `idleUserTimeoutMs` is set).
 
-`runMaintenanceOnce()` does one pass and returns a `MaintenanceReport` (`expiredMatches`, `escalations`, `parked`, `expiredSteps`, `releasedIdleUsers`, `tookMs`) — use it from a host that already owns a tick (a multi-tenant worker, a serverless schedule) instead of holding a timer per matcher. `startAutoReleaseInterval()` remains as a deprecated alias that sweeps response deadlines only.
+`runMaintenanceOnce()` does one pass and returns a `MaintenanceReport` (`expiredMatches`, `escalations`, `parked`, `completionBreaches`, `slaExpiries`, `expiredSteps`, `releasedIdleUsers`, `tookMs`) — use it from a host that already owns a tick (a multi-tenant worker, a serverless schedule) instead of holding a timer per matcher. `startAutoReleaseInterval()` remains as a deprecated alias that sweeps response deadlines only.
 
 ### `getQueueStats(): Promise<QueueStats>`
 
@@ -585,6 +629,10 @@ type Options = {
     // tag-overlap-ratio and embedding-similarity features.
     learningFeatureExtractor?: (user: User, assignment: { id: string; tags: string[] }) => Record<string, number>;
 
+    // Reference duration (ms) used to normalize the `sla:tightness` feature
+    // emitted by the default extractor for assignments with sla.completeWithinMs.
+    learningSlaTightnessReferenceMs?: number; // Default: 3600000 (1 hour)
+
     // TTL for stored decision contexts in ms.
     learningDecisionTtlMs?: number; // Default: 604800000 (7 days)
 
@@ -658,6 +706,11 @@ What a trace contains:
   `assignmentVeto` (the assignment's `vetoedUsers`), and `rejectedPreviously` —
   are struck out in the trace even though the Redis-side prefilter kept them
   out of the scoring pass entirely.
+- Where a veto came from. For users carrying `learnedRoutingWeights`, each
+  `veto` reason also has `source: 'learned' | 'manual'`, separating a veto the
+  automatic routing-weight sync synthesized from one an operator configured.
+  The field is absent for users with no learned weights, so traces are
+  unchanged when the learning layer is off.
 
 Honesty notes: in the default `'first-come'` mode users evaluate and claim in
 parallel, so a candidate whose snapshot read happened after the winner's claim
@@ -826,7 +879,8 @@ bandit policy.
 
 - `minSamplesForVeto`: a learned weight-0 may only override a _manual_
   (non-learned) weight after this many observations, preventing a few bad
-  rolls from silently starving a user.
+  rolls from silently starving a user. Defaults to `minSamples` (5) for
+  backward compatibility; 20 is a reasonable production floor.
 - `maxDeltaPerSync`: clamps how far any single learned weight can move per
   sync, avoiding oscillation.
 - `minTotalSamples`: skip users whose total evidence is still too thin.

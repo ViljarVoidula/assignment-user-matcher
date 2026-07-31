@@ -24,6 +24,20 @@ import {
     responseDeadlineMs,
 } from './escalation/policy';
 import {
+    SLA_ACCEPTED_AT_FIELD,
+    SLA_ACCEPTED_BY_FIELD,
+    SLA_ENQUEUED_AT_FIELD,
+    SLA_MATCHED_AT_FIELD,
+    SLA_REJECTION_COUNT_FIELD,
+    completionDeadlineScore,
+    normalizeSlaPolicy,
+    rejectionBudgetExhausted,
+    rejectionCountOf,
+    slaExpiryScore,
+    slaFromJson,
+    type NormalizedSlaPolicy,
+} from './sla/policy';
+import {
     TraceCollector,
     buildDecisionTraces,
     buildWorkflowTraces,
@@ -82,8 +96,12 @@ import type {
     AssignmentLifecycleEvent,
     EscalationPolicy,
     EscalationSweepResult,
+    CompletionDeadlineSweepResult,
+    SlaExpirySweepResult,
     MaintenanceOptions,
     MaintenanceReport,
+    SlaPolicy,
+    SlaStats,
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
@@ -115,8 +133,12 @@ export type {
     AssignmentLifecycleEvent,
     EscalationPolicy,
     EscalationSweepResult,
+    CompletionDeadlineSweepResult,
+    SlaExpirySweepResult,
     MaintenanceOptions,
     MaintenanceReport,
+    SlaPolicy,
+    SlaStats,
 } from './types/matcher';
 
 export type {
@@ -192,6 +214,8 @@ export default class AssignmentMatcher implements WorkflowHost {
     assignmentOwnerKey: string;
     allTagsKey: string;
     acceptedAssignmentsKey: string;
+    private acceptedAssignmentsExpiryKey: string;
+    private assignmentsSlaExpiryKey: string;
     private keys: KeyBuilders;
 
     // Workflow-related properties
@@ -213,6 +237,7 @@ export default class AssignmentMatcher implements WorkflowHost {
     private enableAutoRoutingWeights: boolean;
     private learning: LearningManager;
     private learningFeatureExtractor: LearningFeatureExtractor;
+    private learningSlaTightnessReferenceMs: number;
     private autoRoutingWeightsSyncIntervalMs?: number;
     private autoRoutingWeightsSyncInterval: NodeJS.Timeout | null = null;
     private enableGeoMatching: boolean;
@@ -256,6 +281,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         this.assignmentOwnerKey = this.keys.assignmentOwner();
         this.allTagsKey = this.keys.allTags();
         this.acceptedAssignmentsKey = this.keys.acceptedAssignments();
+        this.acceptedAssignmentsExpiryKey = this.keys.acceptedAssignmentsExpiry();
+        this.assignmentsSlaExpiryKey = this.keys.assignmentsSlaExpiry();
         this.completedAssignmentsKey = this.keys.completedAssignments();
         this.calculatePriority = options?.prioritizationFunction ?? this.calculatePriority;
         this.usingDefaultMatchScore = !options?.matchingFunction;
@@ -296,7 +323,12 @@ export default class AssignmentMatcher implements WorkflowHost {
         // Learning layer (opt-in contextual bandit re-ranking)
         this.enableLearning = options?.enableLearning ?? false;
         this.enableAutoRoutingWeights = options?.enableAutoRoutingWeights ?? false;
-        this.learningFeatureExtractor = options?.learningFeatureExtractor ?? extractMatchFeatures;
+        this.learningSlaTightnessReferenceMs = options?.learningSlaTightnessReferenceMs ?? 3600000;
+        // The default extractor closes over the configured SLA tightness
+        // reference; custom extractors keep their exact signature.
+        this.learningFeatureExtractor =
+            options?.learningFeatureExtractor ??
+            ((user, assignment) => extractMatchFeatures(user, assignment, this.learningSlaTightnessReferenceMs));
         this.learning = new LearningManager(this.redisClient, this.keys, {
             learningRate: options?.learningRate,
             explorationRate: options?.learningExplorationRate,
@@ -356,6 +388,89 @@ export default class AssignmentMatcher implements WorkflowHost {
         } catch (err) {
             // Best-effort hook: do not propagate.
         }
+    }
+
+    // ============================================================================
+    // SLO stats — minimal aggregate counters (global + per-tag hashes)
+    // ============================================================================
+
+    /** Increment SLO counters globally and per assignment tag. Best-effort. */
+    private async bumpSlaStats(tags: string[] | undefined, deltas: Record<string, number>): Promise<void> {
+        try {
+            const multi = this.redisClient.multi();
+            const apply = (key: string) => {
+                for (const [field, delta] of Object.entries(deltas)) {
+                    multi.hIncrByFloat(key, field, delta);
+                }
+            };
+            apply(this.keys.slaStats());
+            for (const tag of tags ?? []) {
+                if (tag) apply(this.keys.slaTagStats(tag));
+            }
+            await multi.exec();
+        } catch {
+            // Best-effort: stats never break the lifecycle.
+        }
+    }
+
+    /**
+     * Accept-path stats: offers were counted at claim time; here we record
+     * the accept, its latency (acceptedAt - matchedAt), and whether it beat
+     * the response deadline that was in effect.
+     */
+    private async recordSlaAccept(pendingJson: string, acceptedAt: number): Promise<void> {
+        try {
+            const parsed = JSON.parse(pendingJson);
+            const matchedAt = Number(parsed[SLA_MATCHED_AT_FIELD]);
+            if (!Number.isFinite(matchedAt) || matchedAt <= 0) return;
+            const latency = Math.max(0, acceptedAt - matchedAt);
+            const respondWithin = responseDeadlineMs(parsed, this.matchExpirationMs);
+            const deltas: Record<string, number> = {
+                accepts: 1,
+                acceptLatencyMsSum: latency,
+            };
+            if (matchedAt + respondWithin >= acceptedAt) deltas.acceptedInTime = 1;
+            await this.bumpSlaStats(parsed.tags, deltas);
+        } catch {
+            // best-effort: stats never break the lifecycle
+        }
+    }
+
+    /** Completion-path stats: completion latency (completedAt - acceptedAt). */
+    private async recordSlaComplete(acceptedJson: string, completedAt: number): Promise<void> {
+        try {
+            const parsed = JSON.parse(acceptedJson);
+            const acceptedAt = Number(parsed[SLA_ACCEPTED_AT_FIELD]);
+            if (!Number.isFinite(acceptedAt) || acceptedAt <= 0) return;
+            await this.bumpSlaStats(parsed.tags, {
+                completes: 1,
+                completeLatencyMsSum: Math.max(0, completedAt - acceptedAt),
+            });
+        } catch {
+            // best-effort
+        }
+    }
+
+    /**
+     * Aggregate SLO attainment counters, globally or for a single tag.
+     * Means are computed from sum/count pairs; 0 when no data.
+     */
+    async getSlaStats(tag?: string): Promise<SlaStats> {
+        await this.readyPromise;
+        const raw = await this.redisClient.hGetAll(tag ? this.keys.slaTagStats(tag) : this.keys.slaStats());
+        const num = (field: string) => Number(raw[field]) || 0;
+        const accepts = num('accepts');
+        const completes = num('completes');
+        return {
+            offers: num('offers'),
+            acceptedInTime: num('acceptedInTime'),
+            acceptanceBreaches: num('acceptanceBreaches'),
+            completionBreaches: num('completionBreaches'),
+            ttlExpiries: num('ttlExpiries'),
+            rejectionParked: num('rejectionParked'),
+            meanAcceptLatencyMs: accepts > 0 ? num('acceptLatencyMsSum') / accepts : 0,
+            meanCompleteLatencyMs: completes > 0 ? num('completeLatencyMsSum') / completes : 0,
+        };
     }
 
     /** Keys for the assignment stores (used by pagination queries) */
@@ -1398,6 +1513,21 @@ export default class AssignmentMatcher implements WorkflowHost {
         let { id, tags, priority, latitude, longitude } = assignment;
         if (!priority) priority = await this.calculatePriority(assignment);
 
+        // First-enqueue clock for the freshness TTL: NX semantics via the
+        // object itself — a requeue re-adds the same JSON (with the original
+        // _enqueuedAt), so the TTL is never extended by rejection ping-pong.
+        // Only stamped when the assignment actually declares a TTL, so
+        // non-SLA assignments keep byte-identical stored JSON.
+        const slaPolicy = normalizeSlaPolicy(assignment.sla);
+        let slaExpiry: number | null = null;
+        if (slaPolicy?.expireAfterMs !== undefined) {
+            const record = assignment as Record<string, any>;
+            if (record[SLA_ENQUEUED_AT_FIELD] === undefined) {
+                record[SLA_ENQUEUED_AT_FIELD] = Date.now();
+            }
+            slaExpiry = slaExpiryScore(record[SLA_ENQUEUED_AT_FIELD] as number, slaPolicy);
+        }
+
         const assignmentPriorityKey = this.keys.assignmentPriority(id);
         const assignmentTagsKey = this.keys.assignmentTags(id);
         const assignmentGeoKey = this.keys.assignmentsGeo();
@@ -1415,6 +1545,10 @@ export default class AssignmentMatcher implements WorkflowHost {
                 score: priority,
                 value: id,
             });
+
+        if (slaExpiry !== null) {
+            multi.zAdd(this.assignmentsSlaExpiryKey, { score: slaExpiry, value: id });
+        }
 
         if (isValidLatitude(latitude) && isValidLongitude(longitude)) {
             multi.geoAdd(assignmentGeoKey, {
@@ -1495,6 +1629,10 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         // 3. Remove from Accepted state
         multi.hDel(this.acceptedAssignmentsKey, id);
+
+        // 4. Clear SLA indexes (no-ops for non-SLA assignments)
+        multi.zRem(this.acceptedAssignmentsExpiryKey, id);
+        multi.zRem(this.assignmentsSlaExpiryKey, id);
 
         await multi.exec();
         return id;
@@ -2312,7 +2450,25 @@ export default class AssignmentMatcher implements WorkflowHost {
                 // EscalationPolicy sets its own response deadline; everything
                 // else uses the matcher-wide one and never pays for a parse.
                 if (json) {
-                    rm.hSet(this.pendingAssignmentsKey, s.id, json);
+                    // SLA-bearing assignments get a match timestamp for
+                    // accept-latency SLO stats; everyone else's JSON stays
+                    // byte-identical (guarded by the same cheap indexOf).
+                    let pendingJson = json;
+                    if (json.indexOf('"sla"') !== -1) {
+                        try {
+                            const parsed = JSON.parse(json);
+                            parsed[SLA_MATCHED_AT_FIELD] = now;
+                            pendingJson = JSON.stringify(parsed);
+                            // Count the offer (global + per-tag) in the same batch.
+                            rm.hIncrByFloat(this.keys.slaStats(), 'offers', 1);
+                            for (const tag of (parsed.tags ?? []) as string[]) {
+                                if (tag) rm.hIncrByFloat(this.keys.slaTagStats(tag), 'offers', 1);
+                            }
+                        } catch {
+                            // keep original JSON on parse failure
+                        }
+                    }
+                    rm.hSet(this.pendingAssignmentsKey, s.id, pendingJson);
                     rm.zAdd(this.pendingAssignmentsExpiryKey, {
                         score: now + responseDeadlineFromJson(json, this.matchExpirationMs),
                         value: s.id,
@@ -2761,18 +2917,30 @@ export default class AssignmentMatcher implements WorkflowHost {
             // response deadline when it declares one).
             const pendingJson = await this.redisClient.hGet(this.pendingAssignmentsKey, assignmentId);
             const deadlineMs = responseDeadlineFromJson(pendingJson, this.matchExpirationMs);
+            const now = Date.now();
             const transfer = this.redisClient
                 .multi()
                 .sRem(this.keys.userAssignments(previousOwnerId!), `assignment:${assignmentId}`)
                 .sAdd(this.keys.userAssignments(userId), `assignment:${assignmentId}`)
                 .hSet(this.assignmentOwnerKey, assignmentId, userId)
                 .zAdd(this.pendingAssignmentsExpiryKey, {
-                    score: Date.now() + deadlineMs,
+                    score: now + deadlineMs,
                     value: assignmentId,
                 });
+            // Refresh the SLA match timestamp for the new owner so accept
+            // latency is measured against the transfer, not the original claim.
+            if (pendingJson && pendingJson.indexOf('"sla"') !== -1) {
+                try {
+                    const parsed = JSON.parse(pendingJson);
+                    parsed[SLA_MATCHED_AT_FIELD] = now;
+                    transfer.hSet(this.pendingAssignmentsKey, assignmentId, JSON.stringify(parsed));
+                } catch {
+                    // keep original JSON on parse failure
+                }
+            }
             await transfer.exec();
 
-            const reassignedAt = Date.now();
+            const reassignedAt = now;
             this.emitAssignmentLifecycle({
                 kind: 'pending',
                 taskId: assignmentId,
@@ -2835,6 +3003,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         // Get the assignment JSON before removing from pending
         const json = await this.redisClient.hGet(this.pendingAssignmentsKey, assignmentId);
 
+        const now = Date.now();
         const multi = this.redisClient.multi();
         multi.sRem(this.keys.userAssignments(userId), `assignment:${assignmentId}`);
         multi.hDel(this.pendingAssignmentsKey, assignmentId);
@@ -2843,11 +3012,35 @@ export default class AssignmentMatcher implements WorkflowHost {
         // The wait clock stops when a user takes the work
         multi.zRem(this.keys.assignmentsQueuedAt(), assignmentId);
 
-        // Store in accepted assignments
+        // Store in accepted assignments. SLA-bearing assignments are stamped
+        // with the accept timestamp/owner and registered on the completion-
+        // deadline index when they declare completeWithinMs.
         if (json) {
-            multi.hSet(this.acceptedAssignmentsKey, assignmentId, json);
+            const slaPolicy = slaFromJson(json);
+            let acceptedJson = json;
+            if (slaPolicy) {
+                try {
+                    const parsed = JSON.parse(json);
+                    parsed[SLA_ACCEPTED_AT_FIELD] = now;
+                    parsed[SLA_ACCEPTED_BY_FIELD] = userId;
+                    acceptedJson = JSON.stringify(parsed);
+                    const deadline = completionDeadlineScore(now, slaPolicy);
+                    if (deadline !== null) {
+                        multi.zAdd(this.acceptedAssignmentsExpiryKey, { score: deadline, value: assignmentId });
+                    }
+                } catch {
+                    // keep original JSON on parse failure
+                }
+            }
+            multi.hSet(this.acceptedAssignmentsKey, assignmentId, acceptedJson);
         }
         await multi.exec();
+
+        // SLO accept stats piggyback the accept path (internally guarded:
+        // stats errors never break the lifecycle).
+        if (json && json.indexOf('"sla"') !== -1) {
+            await this.recordSlaAccept(json, now);
+        }
 
         if (this.enableLearning) {
             await this.learning.applyOutcome(assignmentId, 'accept');
@@ -2857,7 +3050,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             kind: 'accepted',
             taskId: assignmentId,
             workerId: userId,
-            acceptedAt: Date.now(),
+            acceptedAt: now,
         });
 
         await this.touchUser(userId);
@@ -2901,10 +3094,85 @@ export default class AssignmentMatcher implements WorkflowHost {
         await this.touchUser(userId);
 
         if (json) {
-            await this.addAssignment(JSON.parse(json));
+            await this.requeueAfterRefusal(JSON.parse(json), 'reject');
         }
 
         return true;
+    }
+
+    /**
+     * Shared requeue path for refusals (explicit rejects and blocking
+     * no-response expiries): increments the SLA rejection counter and, when
+     * the budget is exhausted, applies `onMaxRejections` instead of
+     * requeueing. Non-SLA assignments take the untouched legacy path.
+     */
+    private async requeueAfterRefusal(assignment: Assignment, cause: 'reject' | 'blocking-expiry'): Promise<void> {
+        const policy = normalizeSlaPolicy(assignment.sla);
+        if (!policy) {
+            await this.addAssignment(assignment);
+            return;
+        }
+
+        const record = assignment as Record<string, any>;
+        const rejections = rejectionCountOf(assignment) + 1;
+        record[SLA_REJECTION_COUNT_FIELD] = rejections;
+
+        // 'keep' makes the budget measurement-only: the counter keeps
+        // accumulating so stats stay honest, but the assignment is requeued.
+        if (!rejectionBudgetExhausted(assignment, policy) || policy.onMaxRejections === 'keep') {
+            await this.addAssignment(assignment);
+            return;
+        }
+
+        await this.applyRejectionExhaustion(assignment, policy, rejections, cause);
+    }
+
+    /**
+     * Terminal step for an assignment whose rejection budget is exhausted:
+     * parked or failed per `onMaxRejections`. The caller must already have
+     * removed it from the pending structures.
+     */
+    private async applyRejectionExhaustion(
+        assignment: Assignment,
+        policy: NormalizedSlaPolicy,
+        rejections: number,
+        cause: 'reject' | 'blocking-expiry',
+    ): Promise<void> {
+        const action = policy.onMaxRejections === 'fail' ? ('fail' as const) : ('park' as const);
+        const now = Date.now();
+
+        // The assignment leaves the queued/pending universe: stop both clocks.
+        const multi = this.redisClient
+            .multi()
+            .zRem(this.keys.assignmentsQueuedAt(), assignment.id)
+            .zRem(this.assignmentsSlaExpiryKey, assignment.id);
+
+        if (action === 'park') {
+            multi.hSet(this.keys.parkedAssignments(), assignment.id, JSON.stringify(assignment));
+        } else {
+            multi.hSet(
+                this.completedAssignmentsKey,
+                assignment.id,
+                JSON.stringify({
+                    ...assignment,
+                    _failedAt: now,
+                    _failureReason: `rejection-budget-exhausted:${cause}`,
+                }),
+            );
+        }
+        await multi.exec();
+
+        this.emitAssignmentLifecycle({
+            kind: 'rejectionBudgetExhausted',
+            taskId: assignment.id,
+            rejections,
+            action,
+            at: now,
+        });
+
+        if (action === 'park') {
+            await this.bumpSlaStats(assignment.tags, { rejectionParked: 1 });
+        }
     }
 
     /**
@@ -2931,6 +3199,9 @@ export default class AssignmentMatcher implements WorkflowHost {
         // Move from accepted to completed
         const multi = this.redisClient.multi();
         multi.hDel(this.acceptedAssignmentsKey, assignmentId);
+        // Clear SLA indexes (no-ops for non-SLA assignments)
+        multi.zRem(this.acceptedAssignmentsExpiryKey, assignmentId);
+        multi.zRem(this.assignmentsSlaExpiryKey, assignmentId);
 
         // Store in completed with result metadata
         const completedData = {
@@ -2942,6 +3213,10 @@ export default class AssignmentMatcher implements WorkflowHost {
         multi.hSet(this.completedAssignmentsKey, assignmentId, JSON.stringify(completedData));
 
         await multi.exec();
+
+        if (json.indexOf('"sla"') !== -1) {
+            await this.recordSlaComplete(json, now);
+        }
 
         if (this.enableLearning) {
             await this.learning.applyOutcome(assignmentId, 'complete');
@@ -2990,6 +3265,9 @@ export default class AssignmentMatcher implements WorkflowHost {
         // Move from accepted to completed (with failed status)
         const multi = this.redisClient.multi();
         multi.hDel(this.acceptedAssignmentsKey, assignmentId);
+        // Clear SLA indexes (no-ops for non-SLA assignments)
+        multi.zRem(this.acceptedAssignmentsExpiryKey, assignmentId);
+        multi.zRem(this.assignmentsSlaExpiryKey, assignmentId);
 
         const failedData = {
             ...assignment,
@@ -3266,6 +3544,15 @@ export default class AssignmentMatcher implements WorkflowHost {
 
             const assignment: Assignment | null = json ? JSON.parse(json) : null;
             const policy = assignment ? normalizeEscalationPolicy(assignment.escalation) : null;
+            const slaPolicy = assignment ? normalizeSlaPolicy(assignment.sla) : null;
+            // A blocking no-response expiry counts as a refusal against the
+            // SLA rejection budget (same as an explicit reject). Increment
+            // before escalateAssignment() spreads the object so the decision
+            // carries the bumped count.
+            const countsAsRefusal = Boolean(policy && policy.onNoResponse === 'block' && owner);
+            if (assignment && slaPolicy && countsAsRefusal) {
+                (assignment as Record<string, any>)[SLA_REJECTION_COUNT_FIELD] = rejectionCountOf(assignment) + 1;
+            }
             const decision = assignment && policy ? escalateAssignment(assignment, policy) : null;
 
             const multi = this.redisClient.multi();
@@ -3289,6 +3576,10 @@ export default class AssignmentMatcher implements WorkflowHost {
                 expiredAt: now,
             });
 
+            if (assignment && slaPolicy) {
+                await this.bumpSlaStats(assignment.tags, { acceptanceBreaches: 1 });
+            }
+
             if (this.enableLearning) {
                 await this.learning.applyOutcome(id, 'expire');
             }
@@ -3305,6 +3596,18 @@ export default class AssignmentMatcher implements WorkflowHost {
             }
 
             if (!assignment) continue;
+
+            // The SLA rejection budget outranks the escalation ladder: once
+            // nobody will take the work, tier hops are moot.
+            if (
+                slaPolicy &&
+                countsAsRefusal &&
+                rejectionBudgetExhausted(assignment, slaPolicy) &&
+                slaPolicy.onMaxRejections !== 'keep'
+            ) {
+                await this.applyRejectionExhaustion(assignment, slaPolicy, rejectionCountOf(assignment), 'blocking-expiry');
+                continue;
+            }
 
             if (decision && decision.exhausted) {
                 this.emitAssignmentLifecycle({
@@ -3361,6 +3664,188 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     /**
+     * Sweep accepted assignments whose completion deadline
+     * (`sla.completeWithinMs`, measured from accept) has elapsed.
+     *
+     * Each breached entry is removed from the deadline index before the
+     * action runs, so a breach fires exactly once: a `'notify'` breach does
+     * not re-fire every tick, and a `'requeue'`d assignment only gets a
+     * fresh completion clock on its next accept.
+     */
+    async processCompletionDeadlines(): Promise<CompletionDeadlineSweepResult> {
+        await this.readyPromise;
+
+        const now = Date.now();
+        const breachedIds = await this.redisClient.zRangeByScore(this.acceptedAssignmentsExpiryKey, '-inf', now);
+        let breached = 0;
+
+        for (const id of breachedIds) {
+            const json = await this.redisClient.hGet(this.acceptedAssignmentsKey, id);
+            // Fire-once: drop the index entry first. If the assignment is
+            // gone (completed/failed/removed between the zRange and now)
+            // there is nothing to do.
+            await this.redisClient.zRem(this.acceptedAssignmentsExpiryKey, id);
+            if (!json) continue;
+
+            const assignment: Assignment = JSON.parse(json);
+            const policy = normalizeSlaPolicy(assignment.sla);
+            if (!policy) continue;
+            breached++;
+
+            const record = assignment as Record<string, any>;
+            const workerId = (record[SLA_ACCEPTED_BY_FIELD] as string | undefined) ?? null;
+            const action = policy.onCompletionBreach;
+
+            this.emitAssignmentLifecycle({
+                kind: 'completionBreached',
+                taskId: id,
+                workerId,
+                action,
+                at: now,
+            });
+            await this.bumpSlaStats(assignment.tags, { completionBreaches: 1 });
+
+            if (this.enableLearning) {
+                await this.learning.applyOutcome(id, action === 'fail' ? 'fail' : 'expire');
+            }
+
+            if (action === 'notify') {
+                // Worker keeps the assignment; the event + learning outcome
+                // above are the whole breach response.
+                continue;
+            }
+
+            if (action === 'requeue') {
+                const multi = this.redisClient.multi().hDel(this.acceptedAssignmentsKey, id);
+                if (workerId) multi.sAdd(this.keys.userRejected(workerId), id);
+                await multi.exec();
+                // The JSON still carries _enqueuedAt, so the freshness TTL
+                // keeps ticking across the requeue. A requeue after a
+                // completion breach is not a refusal: _rejectionCount is
+                // untouched.
+                await this.addAssignment(assignment);
+                continue;
+            }
+
+            if (action === 'fail') {
+                await this.redisClient
+                    .multi()
+                    .hDel(this.acceptedAssignmentsKey, id)
+                    .hSet(
+                        this.completedAssignmentsKey,
+                        id,
+                        JSON.stringify({
+                            ...assignment,
+                            _failedBy: workerId,
+                            _failedAt: now,
+                            _failureReason: 'completion-sla-breach',
+                        }),
+                    )
+                    // Terminal: the freshness TTL no longer applies.
+                    .zRem(this.assignmentsSlaExpiryKey, id)
+                    .exec();
+                continue;
+            }
+
+            // 'park'
+            await this.redisClient
+                .multi()
+                .hDel(this.acceptedAssignmentsKey, id)
+                .hSet(this.keys.parkedAssignments(), id, JSON.stringify(assignment))
+                .zRem(this.assignmentsSlaExpiryKey, id)
+                .exec();
+        }
+
+        return { breached };
+    }
+
+    /**
+     * Sweep assignments whose freshness TTL (`sla.expireAfterMs`, measured
+     * from first enqueue) has elapsed. Applies in every state — queued,
+     * pending, accepted — because stale work is stale regardless of who
+     * holds it.
+     */
+    async processSlaExpiries(): Promise<SlaExpirySweepResult> {
+        await this.readyPromise;
+
+        const now = Date.now();
+        const expiredIds = await this.redisClient.zRangeByScore(this.assignmentsSlaExpiryKey, '-inf', now);
+        let expired = 0;
+
+        for (const id of expiredIds) {
+            // Locate the current store: pending (with owner), accepted, or queued.
+            const [pendingJson, acceptedJson, queuedJson] = await Promise.all([
+                this.redisClient.hGet(this.pendingAssignmentsKey, id),
+                this.redisClient.hGet(this.acceptedAssignmentsKey, id),
+                this.redisClient.hGet(this.assignmentsRefKey, id),
+            ]);
+            const json = pendingJson ?? acceptedJson ?? queuedJson;
+
+            // Stale index entry (already completed/failed/removed): just clean it.
+            if (!json) {
+                await this.redisClient.zRem(this.assignmentsSlaExpiryKey, id);
+                continue;
+            }
+
+            const assignment: Assignment = JSON.parse(json);
+            const policy = normalizeSlaPolicy(assignment.sla);
+            if (!policy || policy.expireAfterMs === undefined) {
+                await this.redisClient.zRem(this.assignmentsSlaExpiryKey, id);
+                continue;
+            }
+
+            const ownerId = pendingJson
+                ? await this.redisClient.hGet(this.assignmentOwnerKey, id)
+                : (((assignment as Record<string, any>)[SLA_ACCEPTED_BY_FIELD] as string | undefined) ?? null);
+            const action = policy.onExpire;
+            expired++;
+
+            if (action === 'park') {
+                await this.redisClient.hSet(this.keys.parkedAssignments(), id, JSON.stringify(assignment));
+            }
+
+            // Remove from whichever store it occupies, with full index cleanup.
+            if (pendingJson) {
+                const multi = this.redisClient.multi();
+                if (ownerId) multi.sRem(this.keys.userAssignments(ownerId), `assignment:${id}`);
+                multi.hDel(this.pendingAssignmentsKey, id);
+                multi.zRem(this.pendingAssignmentsExpiryKey, id);
+                multi.hDel(this.assignmentOwnerKey, id);
+                multi.zRem(this.assignmentsSlaExpiryKey, id);
+                // Leaving the queued/pending universe: the wait clock stops.
+                multi.zRem(this.keys.assignmentsQueuedAt(), id);
+                await multi.exec();
+            } else if (acceptedJson) {
+                await this.redisClient
+                    .multi()
+                    .hDel(this.acceptedAssignmentsKey, id)
+                    .zRem(this.acceptedAssignmentsExpiryKey, id)
+                    .zRem(this.assignmentsSlaExpiryKey, id)
+                    .exec();
+            } else {
+                // Queued: full index cleanup via removeAssignment (also zRems
+                // the SLA expiry index).
+                await this.removeAssignment(id);
+            }
+
+            this.emitAssignmentLifecycle({
+                kind: 'slaExpired',
+                taskId: id,
+                ownerId,
+                action,
+                at: now,
+            });
+            await this.bumpSlaStats(assignment.tags, { ttlExpiries: 1 });
+
+            if (this.enableLearning) {
+                await this.learning.applyOutcome(id, 'expire');
+            }
+        }
+
+        return { expired };
+    }
+
+    /**
      * Assignments held out of matching because their escalation ladder was
      * exhausted under `onExhausted: 'park'` — nobody answered, all the way up.
      */
@@ -3374,15 +3859,27 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Return a parked assignment to the queue, optionally resetting its
      * escalation level so the ladder can run again from the top.
      *
+     * `resetSla` clears the first-enqueue clock and rejection counter.
+     * Without it an unparked assignment whose freshness TTL already elapsed
+     * will simply expire again on the next TTL sweep.
+     *
      * @returns false when the id was not parked
      */
-    async unparkAssignment(id: string, opts?: { resetEscalation?: boolean }): Promise<boolean> {
+    async unparkAssignment(id: string, opts?: { resetEscalation?: boolean; resetSla?: boolean }): Promise<boolean> {
         await this.readyPromise;
         const json = await this.redisClient.hGet(this.keys.parkedAssignments(), id);
         if (!json) return false;
 
         const assignment: Assignment = JSON.parse(json);
-        if (opts?.resetEscalation) delete (assignment as Record<string, any>)._escalationLevel;
+        const record = assignment as Record<string, any>;
+        if (opts?.resetEscalation) delete record._escalationLevel;
+        if (opts?.resetSla) {
+            delete record[SLA_ENQUEUED_AT_FIELD];
+            delete record[SLA_REJECTION_COUNT_FIELD];
+            delete record[SLA_MATCHED_AT_FIELD];
+            delete record[SLA_ACCEPTED_AT_FIELD];
+            delete record[SLA_ACCEPTED_BY_FIELD];
+        }
 
         await this.redisClient.hDel(this.keys.parkedAssignments(), id);
         await this.addAssignment(assignment);
@@ -3423,12 +3920,20 @@ export default class AssignmentMatcher implements WorkflowHost {
         let parked = 0;
         let expiredSteps = 0;
         let releasedIdleUsers = 0;
+        let completionBreaches = 0;
+        let slaExpiries = 0;
 
         if (opts.responseDeadlines) {
             const result = await this.processResponseDeadlines();
             expiredMatches = result.expired;
             escalations = result.escalations;
             parked = result.parked;
+        }
+        if (opts.completionDeadlines) {
+            completionBreaches = (await this.processCompletionDeadlines()).breached;
+        }
+        if (opts.slaExpiries) {
+            slaExpiries = (await this.processSlaExpiries()).expired;
         }
         if (opts.workflowStepTimeouts && this.enableWorkflows) {
             expiredSteps = await this.processExpiredWorkflowSteps();
@@ -3443,6 +3948,8 @@ export default class AssignmentMatcher implements WorkflowHost {
             parked,
             expiredSteps,
             releasedIdleUsers,
+            completionBreaches,
+            slaExpiries,
             tookMs: Date.now() - startedAt,
         };
     }
@@ -3488,6 +3995,8 @@ export default class AssignmentMatcher implements WorkflowHost {
     private resolveMaintenanceOptions(options?: MaintenanceOptions): Required<Omit<MaintenanceOptions, 'intervalMs'>> {
         return {
             responseDeadlines: options?.responseDeadlines ?? true,
+            completionDeadlines: options?.completionDeadlines ?? true,
+            slaExpiries: options?.slaExpiries ?? true,
             workflowStepTimeouts: options?.workflowStepTimeouts ?? this.enableWorkflows,
             idleUsers: options?.idleUsers ?? this.idleUserTimeoutMs !== null,
         };

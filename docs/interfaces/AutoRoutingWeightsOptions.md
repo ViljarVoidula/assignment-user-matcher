@@ -34,7 +34,7 @@ is omitted and policy is 'confidence' for backward compatibility.
 
 #### Defined in
 
-[src/types/matcher.ts:1128](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1128)
+[src/types/matcher.ts:1283](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1283)
 
 ___
 
@@ -48,7 +48,7 @@ no decay).
 
 #### Defined in
 
-[src/types/matcher.ts:1150](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1150)
+[src/types/matcher.ts:1308](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1308)
 
 ___
 
@@ -60,7 +60,7 @@ UCB exploration coefficient; higher favors less-sampled tags (default: 0.5)
 
 #### Defined in
 
-[src/types/matcher.ts:1113](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1113)
+[src/types/matcher.ts:1268](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1268)
 
 ___
 
@@ -74,7 +74,7 @@ gate may still jump to 0 despite the clamp.
 
 #### Defined in
 
-[src/types/matcher.ts:1144](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1144)
+[src/types/matcher.ts:1302](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1302)
 
 ___
 
@@ -86,7 +86,7 @@ Maximum synthesized weight on the conventional 0-100 scale (default: 100)
 
 #### Defined in
 
-[src/types/matcher.ts:1111](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1111)
+[src/types/matcher.ts:1266](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1266)
 
 ___
 
@@ -98,7 +98,7 @@ Minimum observations before a tag's stats are trusted (default: 5)
 
 #### Defined in
 
-[src/types/matcher.ts:1107](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1107)
+[src/types/matcher.ts:1262](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1262)
 
 ___
 
@@ -107,11 +107,14 @@ ___
 • `Optional` **minSamplesForVeto**: `number`
 
 Minimum samples required before a learned veto may override a tag that
-already has a manual (non-learned) routing weight (default: 20).
+already has a manual (non-learned) routing weight (defaults to
+`minSamples`, i.e. 5, for backward compatibility). Raise it — 20 is a
+reasonable production floor — to make learned vetoes of operator-set
+weights harder to trigger.
 
 #### Defined in
 
-[src/types/matcher.ts:1138](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1138)
+[src/types/matcher.ts:1296](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1296)
 
 ___
 
@@ -124,7 +127,7 @@ any learned weights (default: 0 = off).
 
 #### Defined in
 
-[src/types/matcher.ts:1133](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1133)
+[src/types/matcher.ts:1288](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1288)
 
 ___
 
@@ -139,7 +142,7 @@ Synthesis policy.
 
 #### Defined in
 
-[src/types/matcher.ts:1122](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1122)
+[src/types/matcher.ts:1277](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1277)
 
 ___
 
@@ -151,7 +154,7 @@ Optimistic weight assigned to under-sampled or unobserved known tags (default: m
 
 #### Defined in
 
-[src/types/matcher.ts:1115](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1115)
+[src/types/matcher.ts:1270](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1270)
 
 ___
 
@@ -172,7 +175,7 @@ Must return values in [0, 1).
 
 #### Defined in
 
-[src/types/matcher.ts:1161](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1161)
+[src/types/matcher.ts:1319](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1319)
 
 ___
 
@@ -186,7 +189,7 @@ skipped (default: false).
 
 #### Defined in
 
-[src/types/matcher.ts:1156](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1156)
+[src/types/matcher.ts:1314](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1314)
 
 ___
 
@@ -198,4 +201,4 @@ Mean-reward UCB score at or below which a tag is hard-vetoed with weight 0 (defa
 
 #### Defined in
 
-[src/types/matcher.ts:1109](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L1109)
+[src/types/matcher.ts:1264](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1264)

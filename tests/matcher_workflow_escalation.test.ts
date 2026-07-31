@@ -1,16 +1,16 @@
 import Matcher from '../src/matcher.class';
 import { createClient } from 'redis';
 import { expect } from 'chai';
+import sinon from 'sinon';
 import { workflow } from '../src/workflow-builder';
 import type { WorkflowTransition } from '../src/types/matcher';
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('Workflow escalate-on-timeout', function () {
     this.timeout(20000);
     let matcher: Matcher;
     let redisClient: any;
     let transitions: WorkflowTransition[] = [];
+    let clock: sinon.SinonFakeTimers;
     const prefix = 'wf_escalation_test:';
 
     /** Fire due step timeouts, then drain the events they published. */
@@ -82,6 +82,13 @@ describe('Workflow escalate-on-timeout', function () {
         // returns 0 for that pass), so prime it before the run starts.
         await matcher.processWorkflowEvents(1);
         await matcher.addUser({ id: 'ines', tags: ['sev:1', 'oncall-primary'] });
+        // Step timeouts are Date.now()-scored zset entries: fake Date lets
+        // tests fast-forward past them instead of sleeping in real time.
+        clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+    });
+
+    afterEach(function () {
+        clock.restore();
     });
 
     after(async function () {
@@ -95,7 +102,7 @@ describe('Workflow escalate-on-timeout', function () {
 
         expect((await matcher.getWorkflowInstance(instanceId))!.currentStepId).to.equal('page-primary');
 
-        await sleep(200);
+        clock.tick(200);
         expect(await tick()).to.equal(1);
 
         const instance = (await matcher.getWorkflowInstance(instanceId))!;
@@ -110,7 +117,7 @@ describe('Workflow escalate-on-timeout', function () {
         const instanceId = await start('oncall-escalation');
         const supersededId = (await matcher.getWorkflowInstance(instanceId))!.currentAssignmentId!;
 
-        await sleep(200);
+        clock.tick(200);
         await tick();
 
         expect(await matcher.getAssignment(supersededId)).to.equal(null);
@@ -122,7 +129,7 @@ describe('Workflow escalate-on-timeout', function () {
         await matcher.registerWorkflow(ladder());
         await start('oncall-escalation');
 
-        await sleep(200);
+        clock.tick(200);
         await tick();
 
         const kinds = transitions.map((t) => t.kind);
@@ -139,7 +146,7 @@ describe('Workflow escalate-on-timeout', function () {
         const instanceId = await start('oncall-escalation');
 
         for (let hop = 0; hop < 3; hop++) {
-            await sleep(200);
+            clock.tick(200);
             await tick();
         }
 
@@ -152,7 +159,7 @@ describe('Workflow escalate-on-timeout', function () {
         await matcher.registerWorkflow(ladder());
         const instanceId = await start('oncall-escalation');
 
-        await sleep(200);
+        clock.tick(200);
         await tick();
 
         expect((await matcher.getWorkflowInstance(instanceId))!.retryCount).to.equal(0);
@@ -181,7 +188,7 @@ describe('Workflow escalate-on-timeout', function () {
 
         // Hop 1 escalates; hop 2 exceeds the depth cap and fails instead of looping.
         for (let hop = 0; hop < 2; hop++) {
-            await sleep(200);
+            clock.tick(200);
             await tick();
         }
 
@@ -201,7 +208,7 @@ describe('Workflow escalate-on-timeout', function () {
         await matcher.registerWorkflow(plain);
         const instanceId = await start('plain-timeout');
 
-        await sleep(200);
+        clock.tick(200);
         await tick();
 
         expect((await matcher.getWorkflowInstance(instanceId))!.status).to.equal('failed');

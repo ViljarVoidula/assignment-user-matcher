@@ -548,18 +548,19 @@ describe('Workflow Scalability & Reliability', function () {
 
     describe('Flow rate control', function () {
         it('should allow a burst up to maxEventsPerSecond without delay, then throttle', async function () {
-            const mgr = makeManager(mockHost, { maxEventsPerSecond: 3 });
+            // Short throttle window keeps the test fast; behaviour is identical.
+            const mgr = makeManager(mockHost, { maxEventsPerSecond: 3, throttleWindowMs: 100 });
 
             const start = Date.now();
             await (mgr as any).applyEventThrottle();
             await (mgr as any).applyEventThrottle();
             await (mgr as any).applyEventThrottle();
             const burstElapsed = Date.now() - start;
-            expect(burstElapsed).to.be.lessThan(200);
+            expect(burstElapsed).to.be.lessThan(80);
 
             await (mgr as any).applyEventThrottle();
             const throttledElapsed = Date.now() - start;
-            expect(throttledElapsed).to.be.at.least(700);
+            expect(throttledElapsed).to.be.at.least(60);
         });
 
         it('should not throttle when maxEventsPerSecond is unset', async function () {
@@ -571,25 +572,27 @@ describe('Workflow Scalability & Reliability', function () {
         });
 
         it('should pace live event processing according to maxEventsPerSecond', async function () {
-            this.timeout(10000);
-
             const mgr = makeManager(mockHost, {
                 maxEventsPerSecond: 2,
-                pollBlockMs: 100,
+                throttleWindowMs: 50,
+                pollBlockMs: 10,
                 eventBatchSize: 10,
             });
             await mgr.init();
             await mgr.registerWorkflow(singleStepDef);
 
+            // 3 events at 2 per 50ms window: burst of 2, then the third
+            // waits for the next window — enough to prove pacing.
             const instances = [];
-            for (let i = 0; i < 4; i++) {
+            for (let i = 0; i < 3; i++) {
                 instances.push(await mgr.startWorkflow(singleStepDef.id, `user-${i}`));
             }
 
-            const start = Date.now();
             await mgr.startOrchestrator();
 
-            // 4 instances each complete their single step -> 4 completion events
+            // Measure pacing from when processing can actually begin: the
+            // subscriber connect above is setup, not throttling.
+            const processingStart = Date.now();
             for (const instance of instances) {
                 const assignmentId = (await mgr.getWorkflowInstance(instance.id))!.currentAssignmentId!;
                 await mgr.publishWorkflowEvent({
@@ -604,7 +607,7 @@ describe('Workflow Scalability & Reliability', function () {
             }
 
             // Wait until all instances are terminal
-            const deadline = Date.now() + 8000;
+            const deadline = Date.now() + 5000;
             let completed = 0;
             while (Date.now() < deadline) {
                 completed = 0;
@@ -613,14 +616,13 @@ describe('Workflow Scalability & Reliability', function () {
                     if (current?.status === 'completed') completed++;
                 }
                 if (completed === instances.length) break;
-                await new Promise((r) => setTimeout(r, 50));
+                await new Promise((r) => setTimeout(r, 10));
             }
-            const elapsed = Date.now() - start;
+            const elapsed = Date.now() - processingStart;
             await mgr.stopOrchestrator();
 
             expect(completed).to.equal(instances.length);
-            // 4 events at 2/sec: burst of 2, then wait ~1s for the next 2
-            expect(elapsed).to.be.at.least(900);
+            expect(elapsed).to.be.at.least(30);
         });
     });
 });

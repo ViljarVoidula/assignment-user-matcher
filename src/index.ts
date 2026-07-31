@@ -25,6 +25,10 @@ export type {
     AssignmentLifecycleEvent,
     EscalationPolicy,
     EscalationSweepResult,
+    CompletionDeadlineSweepResult,
+    SlaExpirySweepResult,
+    SlaPolicy,
+    SlaStats,
     MaintenanceOptions,
     MaintenanceReport,
 } from './matcher.class';

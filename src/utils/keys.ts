@@ -45,6 +45,17 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         // `onExhausted: 'park'` — held out of matching until unparked.
         parkedAssignments: () => `${prefix}assignments:parked`,
 
+        // SLA keys
+        // Accepted assignments with a completion deadline (sla.completeWithinMs),
+        // scored by deadline epoch ms. Only SLA-bearing assignments appear here.
+        acceptedAssignmentsExpiry: () => `${prefix}assignments:accepted:expiry`,
+        // Assignments with a freshness TTL (sla.expireAfterMs), scored by
+        // first-enqueue + TTL. Entries survive requeues and state moves.
+        assignmentsSlaExpiry: () => `${prefix}assignments:sla:expiry`,
+        // Aggregate SLO counters (global + per-tag)
+        slaStats: () => `${prefix}sla:stats`,
+        slaTagStats: (tag: string) => `${prefix}sla:tag:${tag}:stats`,
+
         // Tag keys
         allTags: () => `${prefix}all:tags`,
         tagAssignments: (tag: string) => `${prefix}tag:${tag}:assignments`,

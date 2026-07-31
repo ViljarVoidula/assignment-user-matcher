@@ -170,11 +170,17 @@ describe('Idle User Auto-Rejection Tests', async function () {
         await matcher.addAssignment({ id: 'task1', tags: ['tag1'], priority: 100 });
         await matcher.matchUsersAssignments();
 
-        matcher.startIdleUserInterval(25);
-        await sleep(150);
+        matcher.startIdleUserInterval(20);
+        // Poll briefly for the idle removal instead of sleeping a fixed delay.
+        const deadline = Date.now() + 1500;
+        let users: Record<string, string> = {};
+        while (Date.now() < deadline) {
+            users = await redisClient.hGetAll('test:idle:users');
+            if (!('user1' in users)) break;
+            await sleep(15);
+        }
         matcher.stopIdleUserInterval();
 
-        const users = await redisClient.hGetAll('test:idle:users');
         expect(users).to.not.have.property('user1');
 
         // Assignment back in queued state

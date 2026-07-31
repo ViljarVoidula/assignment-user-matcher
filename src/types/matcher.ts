@@ -54,6 +54,8 @@ export type Assignment = {
     requireGeo?: boolean;
     // Optional response deadline + escalation ladder. See EscalationPolicy.
     escalation?: EscalationPolicy;
+    // Optional service-level agreement: completion deadline, TTL, rejection budget. See SlaPolicy.
+    sla?: SlaPolicy;
     [key: string]: any;
 };
 
@@ -121,6 +123,107 @@ export interface EscalationPolicy {
      * @default 'queue'
      */
     onExhausted?: 'queue' | 'park';
+}
+
+/**
+ * What service-level contract applies to an assignment once it is queued.
+ *
+ * EscalationPolicy owns the response/acceptance side (`respondWithinMs`);
+ * SlaPolicy owns everything after that: how long the accepting user has to
+ * finish, how many times the assignment may be rejected before it is pulled
+ * from rotation, and an absolute freshness cutoff after which the work is
+ * considered moot.
+ *
+ * All timers are swept by the maintenance tick (see `startMaintenance()` /
+ * `runMaintenanceOnce()`), so they fire with sweep granularity rather than
+ * at the exact deadline.
+ *
+ * @example
+ * ```typescript
+ * await matcher.addAssignment({
+ *     id: 'order-42',
+ *     tags: ['fulfillment'],
+ *     sla: {
+ *         completeWithinMs: 30 * 60_000,
+ *         onCompletionBreach: 'requeue',
+ *         maxRejections: 3,
+ *         expireAfterMs: 24 * 3600_000,
+ *     },
+ * });
+ * ```
+ */
+export interface SlaPolicy {
+    /**
+     * Milliseconds the accepting user has to complete the assignment,
+     * measured from the moment `acceptAssignment()` succeeds. When the clock
+     * runs out the completion-deadline sweep applies `onCompletionBreach`.
+     */
+    completeWithinMs?: number;
+    /**
+     * Absolute freshness cutoff in milliseconds, measured from the first
+     * enqueue (survives requeues and applies in every state — queued,
+     * pending, accepted). When the cutoff elapses the TTL sweep applies
+     * `onExpire`. Use this for work that becomes moot after a while
+     * regardless of who holds it.
+     */
+    expireAfterMs?: number;
+    /**
+     * Maximum number of times the assignment may be refused before
+     * `onMaxRejections` fires. Both explicit `rejectAssignment()` calls and
+     * blocking no-response expiries (`escalation.onNoResponse: 'block'`)
+     * count; idle releases, operator releases, and non-blocking expiries
+     * do not.
+     */
+    maxRejections?: number;
+    /**
+     * What happens when the completion deadline (`completeWithinMs`) elapses.
+     * - `'notify'` — emit a `completionBreached` lifecycle event and record
+     *   an `expire` learning outcome; the worker keeps the assignment.
+     * - `'requeue'` — take the assignment back, block the breaching user,
+     *   and return it to the queue. The TTL (`expireAfterMs`) keeps ticking.
+     * - `'fail'` — close the assignment as failed in the completed store.
+     * - `'park'` — hold the assignment out of matching (see parked store).
+     * @default 'notify'
+     */
+    onCompletionBreach?: 'notify' | 'requeue' | 'fail' | 'park';
+    /**
+     * What happens when the rejection budget (`maxRejections`) is exhausted.
+     * - `'park'` — move to the parked store; retrievable via
+     *   `getParkedAssignments()` / `unparkAssignment()`.
+     * - `'fail'` — close the assignment as failed in the completed store.
+     * - `'keep'` — keep requeueing (legacy behaviour; makes `maxRejections`
+     *   a measurement-only knob).
+     * @default 'park'
+     */
+    onMaxRejections?: 'park' | 'fail' | 'keep';
+    /**
+     * What happens when the freshness cutoff (`expireAfterMs`) elapses.
+     * - `'drop'` — remove the assignment entirely from whichever store it
+     *   occupies.
+     * - `'park'` — move it to the parked store for operator inspection.
+     * @default 'drop'
+     */
+    onExpire?: 'drop' | 'park';
+}
+
+/** Aggregate SLO attainment counters from `getSlaStats()`. */
+export interface SlaStats {
+    /** Total assignments offered (pending) for the scope */
+    offers: number;
+    /** Assignments accepted before their response deadline */
+    acceptedInTime: number;
+    /** Pending assignments whose response deadline elapsed (all, not only SLA-bearing) */
+    acceptanceBreaches: number;
+    /** Accepted assignments whose completion deadline elapsed */
+    completionBreaches: number;
+    /** Assignments removed/parked by the freshness TTL */
+    ttlExpiries: number;
+    /** Assignments parked because their rejection budget ran out */
+    rejectionParked: number;
+    /** Mean accept latency in ms (acceptedAt - matchedAt), 0 when no data */
+    meanAcceptLatencyMs: number;
+    /** Mean completion latency in ms (completedAt - acceptedAt), 0 when no data */
+    meanCompleteLatencyMs: number;
 }
 
 export type GeoMatchResult = {
@@ -216,8 +319,12 @@ export type MatchTraceReason =
     | { kind: 'tagOverlap'; matchedTags: string[]; overlapRatio: number }
     /** A custom `matchingFunction` produced the score; no further breakdown is available */
     | { kind: 'customScore'; score: number }
-    /** A zero-weight routing entry hard-vetoed an assignment tag */
-    | { kind: 'veto'; tag: string; pattern: string }
+    /**
+     * A zero-weight routing entry hard-vetoed an assignment tag. `source` is set
+     * only for users carrying `learnedRoutingWeights`, and distinguishes a veto
+     * the learning layer synthesized from one an operator configured.
+     */
+    | { kind: 'veto'; tag: string; pattern: string; source?: 'manual' | 'learned' }
     /** The user is in the assignment's `vetoedUsers` list */
     | { kind: 'assignmentVeto' }
     /** The user previously rejected this assignment */
@@ -351,7 +458,28 @@ export type AssignmentLifecycleEvent =
           escalatedAt: number;
       }
     /** The ladder ran out of hops. `parked` reflects the policy's `onExhausted`. */
-    | { kind: 'escalationExhausted'; taskId: string; level: number; parked: boolean; at: number };
+    | { kind: 'escalationExhausted'; taskId: string; level: number; parked: boolean; at: number }
+    /**
+     * An accepted assignment's completion deadline (`sla.completeWithinMs`)
+     * elapsed. `action` is what the policy did about it.
+     */
+    | {
+          kind: 'completionBreached';
+          taskId: string;
+          workerId: string | null;
+          action: 'notify' | 'requeue' | 'fail' | 'park';
+          at: number;
+      }
+    /**
+     * The freshness TTL (`sla.expireAfterMs`) elapsed; the assignment was
+     * removed from whichever store it occupied.
+     */
+    | { kind: 'slaExpired'; taskId: string; ownerId: string | null; action: 'drop' | 'park'; at: number }
+    /**
+     * The rejection budget (`sla.maxRejections`) ran out; the assignment was
+     * pulled from rotation.
+     */
+    | { kind: 'rejectionBudgetExhausted'; taskId: string; rejections: number; action: 'park' | 'fail'; at: number };
 
 /** Outcome of one `processResponseDeadlines()` sweep. */
 export type EscalationSweepResult = {
@@ -361,6 +489,18 @@ export type EscalationSweepResult = {
     escalations: number;
     /** How many exhausted their ladder and were parked */
     parked: number;
+};
+
+/** Outcome of one `processCompletionDeadlines()` sweep. */
+export type CompletionDeadlineSweepResult = {
+    /** Accepted assignments whose completion deadline elapsed */
+    breached: number;
+};
+
+/** Outcome of one `processSlaExpiries()` sweep. */
+export type SlaExpirySweepResult = {
+    /** Assignments whose freshness TTL elapsed */
+    expired: number;
 };
 
 /** One pass of `runMaintenanceOnce()`. Counts are per pass, not cumulative. */
@@ -375,6 +515,10 @@ export type MaintenanceReport = {
     expiredSteps: number;
     /** Idle users removed from the pool (see `idleUserTimeoutMs`) */
     releasedIdleUsers: number;
+    /** Accepted assignments whose completion deadline elapsed (SLA) */
+    completionBreaches: number;
+    /** Assignments whose freshness TTL elapsed (SLA) */
+    slaExpiries: number;
     /** Wall-clock duration of the pass */
     tookMs: number;
 };
@@ -385,6 +529,10 @@ export type MaintenanceOptions = {
     intervalMs?: number;
     /** Response deadlines / escalation. @default true */
     responseDeadlines?: boolean;
+    /** Completion deadlines (SLA `completeWithinMs`). @default true */
+    completionDeadlines?: boolean;
+    /** Freshness TTL expiries (SLA `expireAfterMs`). @default true */
+    slaExpiries?: boolean;
     /** Workflow step timeouts. @default true when `enableWorkflows` */
     workflowStepTimeouts?: boolean;
     /** Idle-user release. @default true when `idleUserTimeoutMs` is set */
@@ -652,6 +800,13 @@ export type MatcherOptions = {
     learningRewards?: Partial<LearningRewards>;
     /** Custom feature extractor; defaults to tag/skill/overlap/embedding features */
     learningFeatureExtractor?: LearningFeatureExtractor;
+    /**
+     * Reference duration (ms) used to normalize the `sla:tightness` learning
+     * feature (default: 3600000 = 1 hour). An assignment with
+     * `sla.completeWithinMs` equal to this value gets tightness 0; shorter
+     * deadlines approach 1. Only used by the default feature extractor.
+     */
+    learningSlaTightnessReferenceMs?: number;
     /** TTL for stored decision contexts in ms (default: 604800000 = 7 days) */
     learningDecisionTtlMs?: number;
     /** Weights applied to named external feedback signals when computing rewards (default weight: 1) */
@@ -1133,7 +1288,10 @@ export interface AutoRoutingWeightsOptions {
     minTotalSamples?: number;
     /**
      * Minimum samples required before a learned veto may override a tag that
-     * already has a manual (non-learned) routing weight (default: 20).
+     * already has a manual (non-learned) routing weight (defaults to
+     * `minSamples`, i.e. 5, for backward compatibility). Raise it — 20 is a
+     * reasonable production floor — to make learned vetoes of operator-set
+     * weights harder to trigger.
      */
     minSamplesForVeto?: number;
     /**

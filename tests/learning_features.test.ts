@@ -36,4 +36,13 @@ describe('extractMatchFeatures', function () {
         expect(features).to.not.have.property('skill:support');
         expect(features['tag:support']).to.equal(1);
     });
+
+    it('falls back to the one-hour reference when the tightness reference is unusable', function () {
+        const user: User = { id: 'u1', tags: [] };
+        const assignment = { id: 'a1', tags: [], sla: { completeWithinMs: 600000 } };
+        const expected = 1 - 600000 / 3600000;
+        expect(extractMatchFeatures(user, assignment, 0)['sla:tightness']).to.be.closeTo(expected, 1e-9);
+        expect(extractMatchFeatures(user, assignment, Number.NaN)['sla:tightness']).to.be.closeTo(expected, 1e-9);
+        expect(extractMatchFeatures(user, assignment, -50)['sla:tightness']).to.be.closeTo(expected, 1e-9);
+    });
 });

@@ -265,14 +265,43 @@ export class LearningManager {
      * Train the model directly with raw (features, reward) samples.
      * Enables offline/batch imports from external pipelines (data warehouses,
      * historical logs, post-processing jobs) without a live decision context.
+     *
+     * The model is loaded once and SGD is replayed locally, then the
+     * accumulated deltas are written in a single batched round trip —
+     * equivalent to per-sample updateModel calls when no concurrent writer
+     * interleaves, and orders of magnitude cheaper for bulk imports.
      */
     async trainSamples(samples: LearningSample[]): Promise<number> {
-        let applied = 0;
-        for (const sample of samples) {
-            await this.updateModel(sample.features, sample.reward);
-            applied++;
+        if (samples.length === 0) return 0;
+
+        const weights = await this.getModel();
+        const local: Record<string, number> = {};
+        for (const [feature, raw] of Object.entries(weights)) {
+            local[feature] = Number(raw) || 0;
         }
-        return applied;
+
+        const deltas = new Map<string, number>();
+        let totalReward = 0;
+        for (const sample of samples) {
+            const prediction = this.predict(sample.features, local);
+            const error = sample.reward - prediction;
+            for (const [feature, value] of Object.entries(sample.features)) {
+                if (value === 0) continue;
+                const delta = this.learningRate * error * value;
+                deltas.set(feature, (deltas.get(feature) ?? 0) + delta);
+                local[feature] = (local[feature] ?? 0) + delta;
+            }
+            totalReward += sample.reward;
+        }
+
+        const multi = this.redisClient.multi();
+        for (const [feature, delta] of deltas) {
+            multi.hIncrByFloat(this.keys.learningModel(), feature, delta);
+        }
+        multi.hIncrBy(this.keys.learningStats(), 'rewards', samples.length);
+        multi.hIncrByFloat(this.keys.learningStats(), 'totalReward', totalReward);
+        await multi.exec();
+        return samples.length;
     }
 
     /**

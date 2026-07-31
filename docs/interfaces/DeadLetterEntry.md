@@ -25,7 +25,7 @@ Error message if available
 
 #### Defined in
 
-[src/types/matcher.ts:966](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L966)
+[src/types/matcher.ts:1121](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1121)
 
 ___
 
@@ -37,7 +37,7 @@ Error stack trace if available
 
 #### Defined in
 
-[src/types/matcher.ts:968](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L968)
+[src/types/matcher.ts:1123](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1123)
 
 ___
 
@@ -49,7 +49,7 @@ Original event that failed
 
 #### Defined in
 
-[src/types/matcher.ts:962](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L962)
+[src/types/matcher.ts:1117](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1117)
 
 ___
 
@@ -61,7 +61,7 @@ Timestamp when moved to DLQ
 
 #### Defined in
 
-[src/types/matcher.ts:970](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L970)
+[src/types/matcher.ts:1125](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1125)
 
 ___
 
@@ -73,7 +73,7 @@ Reason the event failed
 
 #### Defined in
 
-[src/types/matcher.ts:964](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L964)
+[src/types/matcher.ts:1119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1119)
 
 ___
 
@@ -85,4 +85,4 @@ Number of processing attempts before moving to DLQ
 
 #### Defined in
 
-[src/types/matcher.ts:972](https://github.com/ViljarVoidula/assignment-user-matcher/blob/f853b579a0d896b86670698da5eb35de58484c98/src/types/matcher.ts#L972)
+[src/types/matcher.ts:1127](https://github.com/ViljarVoidula/assignment-user-matcher/blob/ce38696d728bd7e302c6783a680658616d9287f0/src/types/matcher.ts#L1127)

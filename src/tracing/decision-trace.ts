@@ -17,7 +17,7 @@
  * and are not synthesized.
  */
 import { randomUUID } from 'crypto';
-import { matchesPattern } from '../scoring/match-score';
+import { matchesPattern, vetoSource } from '../scoring/match-score';
 import type { MatchCandidateTrace, MatchDecisionMode, MatchDecisionTrace, MatchTraceReason, User } from '../types/matcher';
 
 /** One user's evaluation of one assignment, captured during a matching pass. */
@@ -77,8 +77,10 @@ function excludedCandidate(ctx: TraceUserContext, assignmentId: string, tags: st
     if (weights) {
         for (const [pattern, weight] of Object.entries(weights)) {
             if (weight === 0) {
+                const source = vetoSource(ctx.user, pattern);
                 for (const tag of tags) {
-                    if (matchesPattern(pattern, tag)) reasons.push({ kind: 'veto', tag, pattern });
+                    if (!matchesPattern(pattern, tag)) continue;
+                    reasons.push(source ? { kind: 'veto', tag, pattern, source } : { kind: 'veto', tag, pattern });
                 }
             }
         }

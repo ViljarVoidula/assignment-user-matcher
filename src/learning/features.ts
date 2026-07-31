@@ -28,9 +28,13 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 
 /**
  * Default feature extractor: tag matches, normalized skill weights,
- * tag-overlap ratio, and optional embedding similarity.
+ * tag-overlap ratio, optional embedding similarity, and SLA urgency.
  */
-export function extractMatchFeatures(user: User, assignment: LearningAssignmentContext): LearningFeatures {
+export function extractMatchFeatures(
+    user: User,
+    assignment: LearningAssignmentContext,
+    slaTightnessReferenceMs: number = 3600000,
+): LearningFeatures {
     const features: LearningFeatures = { bias: 1 };
     const userTags = new Set(user.tags || []);
     const assignmentTags = assignment.tags || [];
@@ -56,6 +60,16 @@ export function extractMatchFeatures(user: User, assignment: LearningAssignmentC
 
     if (Array.isArray(user.embedding) && Array.isArray(assignment.embedding)) {
         features['emb:sim'] = cosineSimilarity(user.embedding, assignment.embedding);
+    }
+
+    // SLA urgency: assignment-side only (user-invariant), so custom
+    // extractors and existing learned weights are unaffected.
+    const completeWithinMs = Number((assignment as Record<string, any>).sla?.completeWithinMs);
+    if (Number.isFinite(completeWithinMs) && completeWithinMs > 0) {
+        features['sla:hasDeadline'] = 1;
+        const reference =
+            Number.isFinite(slaTightnessReferenceMs) && slaTightnessReferenceMs > 0 ? slaTightnessReferenceMs : 3600000;
+        features['sla:tightness'] = 1 - Math.min(1, completeWithinMs / reference);
     }
 
     return features;

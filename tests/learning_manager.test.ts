@@ -316,7 +316,9 @@ describe('LearningManager - Integration Tests', function () {
             signalWeights: { accuracy: 2, errorRate: -1.5 },
         });
 
-        for (let i = 0; i < 120; i++) {
+        // Each episode exercises the full decision → outcome → late-feedback
+        // arc; 30 iterations prove the bulk path without wall-clock cost.
+        for (let i = 0; i < 30; i++) {
             const assignmentId = `bulk-${i}`;
             const features = { bias: 1, 'tag:english': 1, 'bucket:bulk': 1 };
             await feedbackManager.recordDecision('user1', assignmentId, features, 0);

@@ -1,6 +1,7 @@
 import Matcher from '../src/matcher.class';
 import { createClient } from 'redis';
 import { expect } from 'chai';
+import sinon from 'sinon';
 import type { AssignmentLifecycleEvent } from '../src/types/matcher';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -10,6 +11,7 @@ describe('Escalation policies (response deadlines)', function () {
     let matcher: Matcher;
     let redisClient: any;
     let events: AssignmentLifecycleEvent[] = [];
+    let clock: sinon.SinonFakeTimers;
     const prefix = 'escalation_test:';
 
     before(async function () {
@@ -29,6 +31,15 @@ describe('Escalation policies (response deadlines)', function () {
     beforeEach(async function () {
         await matcher.redisClient.flushAll();
         events = [];
+        // Deadlines are Date.now()-scored zsets: faking Date lets tests
+        // fast-forward past them instead of sleeping in real time. Timers
+        // stay real so Redis I/O and the maintenance interval are unaffected.
+        // Seeded with the real time so timestamps stay positive.
+        clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+    });
+
+    afterEach(function () {
+        clock.restore();
     });
 
     after(async function () {
@@ -47,7 +58,7 @@ describe('Escalation policies (response deadlines)', function () {
             expect(await matcher.getCurrentAssignmentsForUser('u1')).to.have.length(1);
 
             // Would still be pending under the 60s global default.
-            await sleep(200);
+            clock.tick(200);
             const swept = await matcher.processResponseDeadlines();
             expect(swept.expired).to.equal(1);
             expect(await matcher.getCurrentAssignmentsForUser('u1')).to.have.length(0);
@@ -58,7 +69,7 @@ describe('Escalation policies (response deadlines)', function () {
             await matcher.addAssignment({ id: 'a1', tags: ['t'] });
             await matcher.matchUsersAssignments();
 
-            await sleep(200);
+            clock.tick(200);
             const swept = await matcher.processResponseDeadlines();
             expect(swept.expired).to.equal(0);
             expect(await matcher.getCurrentAssignmentsForUser('u1')).to.have.length(1);
@@ -76,7 +87,7 @@ describe('Escalation policies (response deadlines)', function () {
             await matcher.matchUsersAssignments();
             expect(await matcher.getCurrentAssignmentsForUser('u1')).to.have.length(1);
 
-            await sleep(160);
+            clock.tick(160);
             await matcher.processResponseDeadlines();
 
             await matcher.matchUsersAssignments();
@@ -89,7 +100,7 @@ describe('Escalation policies (response deadlines)', function () {
             await matcher.addAssignment({ id: 'a1', tags: ['t'], escalation: { respondWithinMs: 100 } });
             await matcher.matchUsersAssignments();
 
-            await sleep(160);
+            clock.tick(160);
             await matcher.processResponseDeadlines();
             await matcher.matchUsersAssignments();
 
@@ -121,14 +132,14 @@ describe('Escalation policies (response deadlines)', function () {
             await matcher.matchUsersAssignments();
             expect(await matcher.getCurrentAssignmentsForUser('primary')).to.deep.equal(['incident-1']);
 
-            await sleep(160);
+            clock.tick(160);
             const first = await matcher.processResponseDeadlines();
             expect(first.escalations).to.equal(1);
             await matcher.matchUsersAssignments();
             expect(await matcher.getCurrentAssignmentsForUser('secondary')).to.deep.equal(['incident-1']);
             expect(await matcher.getEscalationLevel('incident-1')).to.equal(1);
 
-            await sleep(160);
+            clock.tick(160);
             await matcher.processResponseDeadlines();
             await matcher.matchUsersAssignments();
             expect(await matcher.getCurrentAssignmentsForUser('manager')).to.deep.equal(['incident-1']);
@@ -138,7 +149,7 @@ describe('Escalation policies (response deadlines)', function () {
         it('boosts priority on each hop and emits an escalated event', async function () {
             await matcher.addAssignment({ ...ladderAssignment });
             await matcher.matchUsersAssignments();
-            await sleep(160);
+            clock.tick(160);
             await matcher.processResponseDeadlines();
 
             const escalated = kinds('escalated');
@@ -153,11 +164,11 @@ describe('Escalation policies (response deadlines)', function () {
 
         it('preserves the wait clock across escalations', async function () {
             await matcher.addAssignment({ ...ladderAssignment });
-            await sleep(120);
+            clock.tick(120);
             const before = (await matcher.getQueueStats()).oldestWaitingMs!;
 
             await matcher.matchUsersAssignments();
-            await sleep(160);
+            clock.tick(160);
             await matcher.processResponseDeadlines();
 
             const after = (await matcher.getQueueStats()).oldestWaitingMs!;
@@ -171,7 +182,7 @@ describe('Escalation policies (response deadlines)', function () {
 
             for (let hop = 0; hop < 4; hop++) {
                 await matcher.matchUsersAssignments();
-                await sleep(160);
+                clock.tick(160);
                 await matcher.processResponseDeadlines();
             }
 
@@ -198,7 +209,7 @@ describe('Escalation policies (response deadlines)', function () {
             });
 
             await matcher.matchUsersAssignments();
-            await sleep(160);
+            clock.tick(160);
             const swept = await matcher.processResponseDeadlines();
             expect(swept.parked).to.equal(1);
 
@@ -223,7 +234,7 @@ describe('Escalation policies (response deadlines)', function () {
                 escalation: { respondWithinMs: 100, maxEscalations: 0, onExhausted: 'park' },
             });
             await matcher.matchUsersAssignments();
-            await sleep(160);
+            clock.tick(160);
             await matcher.processResponseDeadlines();
 
             expect(await matcher.unparkAssignment('a1', { resetEscalation: true })).to.equal(true);
@@ -243,13 +254,16 @@ describe('Escalation policies (response deadlines)', function () {
             });
             await matcher.matchUsersAssignments();
 
-            matcher.startMaintenance({ intervalMs: 50 });
+            // Past the deadline on the fake clock; the real maintenance
+            // interval just needs to fire once to sweep it.
+            clock.tick(160);
+            matcher.startMaintenance({ intervalMs: 20 });
             expect(matcher.isMaintenanceRunning()).to.equal(true);
 
             const deadline = Date.now() + 5000;
             while (Date.now() < deadline) {
                 if ((await matcher.getCurrentAssignmentsForUser('u1')).length === 0) break;
-                await sleep(50);
+                await sleep(10);
             }
             matcher.stopMaintenance();
 
@@ -265,7 +279,7 @@ describe('Escalation policies (response deadlines)', function () {
                 escalation: { respondWithinMs: 100, tiers: [['t'], ['t2']] },
             });
             await matcher.matchUsersAssignments();
-            await sleep(160);
+            clock.tick(160);
 
             const report = await matcher.runMaintenanceOnce();
             expect(report.expiredMatches).to.equal(1);
@@ -278,7 +292,7 @@ describe('Escalation policies (response deadlines)', function () {
             await matcher.addUser({ id: 'u1', tags: ['t'] });
             await matcher.addAssignment({ id: 'a1', tags: ['t'], escalation: { respondWithinMs: 100 } });
             await matcher.matchUsersAssignments();
-            await sleep(160);
+            clock.tick(160);
 
             const report = await matcher.runMaintenanceOnce({ responseDeadlines: false });
             expect(report.expiredMatches).to.equal(0);
@@ -291,7 +305,7 @@ describe('Escalation policies (response deadlines)', function () {
             await matcher.addUser({ id: 'u1', tags: ['t'] });
             await matcher.addAssignment({ id: 'a1', tags: ['t'], escalation: { respondWithinMs: 100 } });
             await matcher.matchUsersAssignments();
-            await sleep(160);
+            clock.tick(160);
 
             expect(await matcher.processExpiredMatches()).to.equal(1);
         });
@@ -304,7 +318,7 @@ describe('Escalation policies (response deadlines)', function () {
                 escalation: { respondWithinMs: 100, onNoResponse: 'block' },
             });
             await matcher.matchUsersAssignments();
-            await sleep(160);
+            clock.tick(160);
             await matcher.processResponseDeadlines();
 
             const order = events.map((e) => e.kind);

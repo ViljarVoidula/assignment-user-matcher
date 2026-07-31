@@ -52,6 +52,10 @@ describe('Escalation policy (pure)', function () {
             expect(responseDeadlineFromJson('not json', 60000)).to.equal(60000);
         });
 
+        it('falls back when the stored JSON is corrupt despite mentioning "escalation"', function () {
+            expect(responseDeadlineFromJson('{"escalation": {', 60000)).to.equal(60000);
+        });
+
         it('uses the per-assignment deadline when declared', function () {
             const assignment: Assignment = { id: 'a', tags: [], escalation: { respondWithinMs: 250 } };
             expect(responseDeadlineMs(assignment, 60000)).to.equal(250);
