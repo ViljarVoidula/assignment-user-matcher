@@ -389,7 +389,7 @@ Subscribe via `onAssignmentLifecycle` for `escalated` (`{ fromWorkerId, level, b
 
 ### SLA policies (`Assignment.sla`)
 
-Escalation owns the *response* side (how long a matched user has to accept). `SlaPolicy` owns everything after that: how long the accepting user has to finish, how many times the work may be refused before it is pulled from rotation, and an absolute freshness cutoff after which the work is moot.
+Escalation owns the _response_ side (how long a matched user has to accept). `SlaPolicy` owns everything after that: how long the accepting user has to finish, how many times the work may be refused before it is pulled from rotation, and an absolute freshness cutoff after which the work is moot.
 
 ```ts
 await matcher.addAssignment({
@@ -406,14 +406,14 @@ await matcher.addAssignment({
 matcher.startMaintenance(); // SLA clocks are swept by the maintenance tick
 ```
 
-| Field                | Meaning                                                                                                                                                          | Default   |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `completeWithinMs`   | Completion deadline, measured from `acceptAssignment()`. Swept by `processCompletionDeadlines()`                                                                 | none      |
-| `expireAfterMs`      | Absolute freshness cutoff from **first enqueue** — survives requeues and applies in every state (queued, pending, accepted). Swept by `processSlaExpiries()`     | none      |
-| `maxRejections`      | Refusal budget. Explicit `rejectAssignment()` calls **and** blocking no-response expiries (`escalation.onNoResponse: 'block'`) count; idle/operator releases don't | none      |
-| `onCompletionBreach` | `'notify'` (event only, worker keeps it) / `'requeue'` (take back, block breacher) / `'fail'` / `'park'`                                                          | `'notify'` |
-| `onMaxRejections`    | `'park'` / `'fail'` / `'keep'` (keep offering; budget becomes measurement-only)                                                                                  | `'park'`  |
-| `onExpire`           | `'drop'` (remove entirely) / `'park'` (retain for inspection)                                                                                                    | `'drop'`  |
+| Field                | Meaning                                                                                                                                                            | Default    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| `completeWithinMs`   | Completion deadline, measured from `acceptAssignment()`. Swept by `processCompletionDeadlines()`                                                                   | none       |
+| `expireAfterMs`      | Absolute freshness cutoff from **first enqueue** — survives requeues and applies in every state (queued, pending, accepted). Swept by `processSlaExpiries()`       | none       |
+| `maxRejections`      | Refusal budget. Explicit `rejectAssignment()` calls **and** blocking no-response expiries (`escalation.onNoResponse: 'block'`) count; idle/operator releases don't | none       |
+| `onCompletionBreach` | `'notify'` (event only, worker keeps it) / `'requeue'` (take back, block breacher) / `'fail'` / `'park'`                                                           | `'notify'` |
+| `onMaxRejections`    | `'park'` / `'fail'` / `'keep'` (keep offering; budget becomes measurement-only)                                                                                    | `'park'`   |
+| `onExpire`           | `'drop'` (remove entirely) / `'park'` (retain for inspection)                                                                                                      | `'drop'`   |
 
 Semantics worth knowing:
 
@@ -429,24 +429,67 @@ Lifecycle events: `completionBreached` (`{ workerId, action }`), `slaExpired` (`
 
 **Learning integration.** Breach outcomes flow into the contextual bandit as ordinary rewards (TTL expiry and completion breach → `expire`; completion breach with `'fail'` → `fail`), so per-user/per-tag stats and the automatic routing-weight vetoes pick up chronic breachers with no extra configuration. The default feature extractor also emits `sla:hasDeadline` and `sla:tightness` (normalized against `learningSlaTightnessReferenceMs`, default 1h) for assignments with a completion deadline, letting the model learn that tight-deadline work needs fast finishers. Custom feature extractors are unaffected.
 
+### Scheduled assignments (`Assignment.schedule`)
+
+Escalation owns the response clock and `SlaPolicy` owns the post-accept contract; `SchedulePolicy` owns the **offer window**: when the work becomes visible to matching at all (`notBefore`), and how long an offer may go un-accepted before it is pulled (`notAfter`). Acceptance ends the schedule's authority — completion pressure is `sla.completeWithinMs`'s job.
+
+```ts
+await matcher.addAssignment({
+    id: 'callback-42',
+    tags: ['callbacks'],
+    schedule: {
+        notBefore: Date.parse('2026-08-07T09:00:00Z'), // invisible to matching until 9:00
+        notAfter: Date.parse('2026-08-07T11:00:00Z'), // parked if nobody accepted by 11:00
+        onMiss: 'park', // or 'drop'
+    },
+});
+
+matcher.startMaintenance(); // schedule clocks are swept by the maintenance tick
+```
+
+| Field       | Meaning                                                                                                                                                               | Default  |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `notBefore` | Epoch ms. Held in a dedicated scheduled store — no matching, no workflow targeting, no wait clock — until the scheduled sweep enqueues it                             | none     |
+| `notAfter`  | Epoch ms. Absolute offer deadline; applies only while un-accepted (scheduled, queued, or pending). Valid without `notBefore`. Must be `> notBefore` when both are set | none     |
+| `onMiss`    | `'park'` (retain for inspection) / `'drop'` (remove entirely) when `notAfter` elapses un-accepted                                                                     | `'park'` |
+
+Semantics worth knowing:
+
+- **Clocks anchor at activation.** A held assignment has no wait clock and no SLA freshness stamp; both start when the sweep (or a forced early assign) enqueues it. `getQueueStats().oldestWaitingMs` never counts held work.
+- **Acceptance kills the offer clock.** Once accepted, a passing `notAfter` is a non-event — late completion is governed by `sla.completeWithinMs` alone.
+- **A miss beats activation.** When one sweep finds both timestamps in the past, the assignment parks/drops directly; it never transits the queue or emits `scheduleActivated`.
+- **The offer deadline never extends.** `notAfter` is absolute, so rejection requeues carry the same deadline — a re-offered assignment can still miss.
+- **Fire-once, replica-safe.** Sweep entries are claimed with a `ZREM` before acting, so concurrent replicas can run the sweep in parallel.
+- **Sweep granularity.** Schedule clocks fire on the maintenance tick (`processScheduledAssignments()`), not at the exact millisecond.
+- **Recurrence is out of scope.** Materialize each occurrence as its own assignment from your scheduler/shift tool; re-adding an existing id never resets its clocks, so materialization is idempotent.
+- **Operator override.** `assignToUser(id, userId)` refuses held assignments; `{ force: true }` early-activates (clocks anchor there). If the user then rejects and `notBefore` is still in the future, the assignment returns to the scheduled store.
+- **Unparking.** `unparkAssignment(id, { resetSchedule: true })` strips the schedule policy; without it a miss-parked assignment misses again on the next sweep.
+
+Lifecycle events: `scheduleActivated` (`{ taskId, at }`) and `scheduleMissed` (`{ ownerId, state, action, assignment }` — the snapshot is the last surviving copy on the `'drop'` path).
+
+**Introspection.** Held assignments are listed by `getScheduledAssignments()`, read as `_status: 'scheduled'` from `getAssignment()`, and counted separately in `getAssignmentCounts().scheduled` and `getQueueStats().scheduled` (excluded from `total` and pagination, like parked items). Misses bump the `scheduleMisses` counter in `getSlaStats(tag?)`.
+
+**Learning integration.** Misses feed the contextual bandit as `expire` outcomes — a pending-state miss penalizes the user who sat on the offer, so automatic routing-weight vetoes pick up chronic missers with no extra configuration.
+
 ### `startMaintenance(options?)` / `stopMaintenance()` / `runMaintenanceOnce(options?)`
 
 Deadlines are not self-firing — something has to sweep them. `startMaintenance()` runs every enabled sweep on one tick:
 
+- `scheduled` (default on) — schedule activations and offer-window misses (`schedule.notBefore` / `schedule.notAfter`). Runs first in the pass so a just-activated assignment's other clocks start from the same tick.
 - `responseDeadlines` (default on) — expiry, escalation, parking.
 - `completionDeadlines` (default on) — SLA completion deadlines (`sla.completeWithinMs`).
 - `slaExpiries` (default on) — SLA freshness TTLs (`sla.expireAfterMs`).
 - `workflowStepTimeouts` (default on when `enableWorkflows`) — the step-timeout index. **Note:** `startOrchestrator()` consumes the event stream but does not sweep step timeouts; without maintenance, `timeoutMs` on a workflow step never fires.
 - `idleUsers` (default on when `idleUserTimeoutMs` is set).
 
-`runMaintenanceOnce()` does one pass and returns a `MaintenanceReport` (`expiredMatches`, `escalations`, `parked`, `completionBreaches`, `slaExpiries`, `expiredSteps`, `releasedIdleUsers`, `tookMs`) — use it from a host that already owns a tick (a multi-tenant worker, a serverless schedule) instead of holding a timer per matcher. `startAutoReleaseInterval()` remains as a deprecated alias that sweeps response deadlines only.
+`runMaintenanceOnce()` does one pass and returns a `MaintenanceReport` (`expiredMatches`, `escalations`, `parked`, `completionBreaches`, `slaExpiries`, `scheduleActivations`, `scheduleMisses`, `expiredSteps`, `releasedIdleUsers`, `tookMs`) — use it from a host that already owns a tick (a multi-tenant worker, a serverless schedule) instead of holding a timer per matcher. `startAutoReleaseInterval()` remains as a deprecated alias that sweeps response deadlines only.
 
 ### `getQueueStats(): Promise<QueueStats>`
 
 Live operational snapshot for dashboards:
 
-- `queued` / `pending`: assignment counts by state.
-- `oldestWaitingMs`: age of the longest-waiting unaccepted assignment, or `null`. The wait clock starts at first enqueue and survives reject/expiry requeues; it stops when a user accepts the assignment or it is removed.
+- `queued` / `pending` / `scheduled`: assignment counts by state (`scheduled` = held by `schedule.notBefore`, not yet in the queue).
+- `oldestWaitingMs`: age of the longest-waiting unaccepted assignment, or `null`. The wait clock starts at first enqueue and survives reject/expiry requeues; it stops when a user accepts the assignment or it is removed. Held (scheduled) assignments have no wait clock yet.
 - `perUser`: every user's `backlog` depth, effective `maxBacklogSize` cap, and `paused` state.
 
 ### `removeUser(userId: string): Promise<void>`
@@ -758,6 +801,86 @@ const preview = await matcher.previewMatch(
 
 Use it for autosuggestion UIs: render the ranked best-fit workers with score
 breakdowns and blocked reasons before the operator commits the task.
+
+### Pre-flight checks (`lintAssignment` / `checkAssignmentReadiness`)
+
+The runtime is deliberately forgiving — an invalid schedule window or an
+unusable SLA object normalizes away silently, and an assignment whose tags no
+user carries just sits queued. The pre-flight helpers surface those problems
+_before_ `addAssignment()`:
+
+```typescript
+import { lintAssignment } from 'assignment-user-matcher';
+
+// Pure and Redis-free — run it host-side, in a form validator, anywhere:
+const issues = lintAssignment(assignment, { matchExpirationMs: 60000 });
+// [{ severity: 'error', code: 'schedule-window-inverted', message: '...' }, ...]
+
+// Live version: same lint plus checks against the current user pool:
+const report = await matcher.checkAssignmentReadiness(assignment);
+// {
+//   issues,             // lint + live findings, each { severity, code, message, tag? }
+//   eligibleUserCount,  // who could take it right now (same rules as previewMatch)
+//   uncoveredTags,      // tags no active (non-paused) user can serve
+//   evaluatedAt,
+// }
+```
+
+Static codes (from `lintAssignment`): `no-tags`, `schedule-window-inverted`,
+`schedule-ignored`, `schedule-window-elapsed`, `schedule-notbefore-past`,
+`offer-window-tight` (offer window shorter than one response deadline),
+`schedule-notafter-shadowed-by-sla-ttl` (the freshness TTL fires first, so
+`notAfter` never does), `sla-ignored`, `escalation-ignored`.
+
+Live codes (from `checkAssignmentReadiness`): `duplicate-id` (re-adding keeps
+the original wait/TTL clocks), `tag-uncovered` (per tag; paused users don't
+count as coverage), `no-eligible-users`.
+
+Tag coverage mirrors the matching semantics exactly: users with
+`routingWeights` cover a tag when the effective weight is positive (wildcards
+honored, weight `0` is a veto); users without them cover it via tag
+membership. `checkAssignmentReadiness()` is read-only and safe to call from
+dashboards or admission pipelines; it never claims or records anything.
+
+### Queue overlook (`auditQueue`)
+
+When work sits in the queue and nobody knows why, `auditQueue()` answers both
+of the usual questions at once — _who is blocked by what_ and _is anything
+sweeping the clocks_:
+
+```typescript
+const audit = await matcher.auditQueue({ minWaitingMs: 60_000 });
+// {
+//   scanned,          // queued assignments examined (longest-waiting first)
+//   entries: [{       // assignments nobody can take right now
+//     assignmentId, tags, waitingMs,
+//     eligibleUserCount,          // 0 for stuck work
+//     uncoveredTags,              // tags no active user can serve
+//     blockers,                   // reason -> blocked-user count, e.g.
+//   }],               //   { backlogFull: 3, paused: 1, rejectedPreviously: 1, noTagMatch: 4 }
+//   sweepBacklog: {   // past-due entries sitting unswept in each deadline index
+//     scheduleActivations, scheduleMisses,
+//     responseDeadlines, completionDeadlines, slaExpiries,
+//   },
+// }
+```
+
+- **`blockers`** tallies the hard-rule reasons across ineligible users, using
+  the same `MatchTraceReason` kinds as decision traces (`paused`,
+  `backlogFull`, `rejectedPreviously`, `assignmentVeto`, `cidrMismatch`,
+  `skillThreshold`, `geoDistance`, …). Users excluded by plain tag/weight
+  mismatch are counted as `noTagMatch`.
+- **`sweepBacklog`** counts deadline-index entries already in the past.
+  Values that stay nonzero across calls are the classic "assignments never
+  process" cause: no maintenance tick is running — start one with
+  `startMaintenance()` or call `runMaintenanceOnce()` from your own tick.
+- Note that with `enableDefaultMatching` on (the default), tag-mismatched
+  work is still routable through the injected `default` tag, so stuckness
+  then comes from paused users, full backlogs, vetoes, and rejections rather
+  than tag gaps.
+- Options: `limit` (default 100, longest-waiting first), `minWaitingMs`
+  (ignore fresh work), `includeHealthy` (also report matchable entries).
+  Read-only, O(scanned × users) — a diagnostic, not a hot path.
 
 ## Adaptive Matching with Reinforcement Learning
 

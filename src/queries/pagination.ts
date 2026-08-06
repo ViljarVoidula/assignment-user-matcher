@@ -25,7 +25,9 @@ export interface AssignmentCounts {
     accepted: number;
     /** Assignments held out of matching by an exhausted escalation ladder */
     parked: number;
-    /** queued + pending + accepted — parked items are counted separately */
+    /** Assignments held out of the queue by `schedule.notBefore` */
+    scheduled: number;
+    /** queued + pending + accepted — parked and scheduled items are counted separately */
     total: number;
 }
 
@@ -35,6 +37,8 @@ export interface AssignmentKeys {
     accepted: string;
     /** Optional parked store; omitted by callers that predate escalation policies */
     parked?: string;
+    /** Optional scheduled store; omitted by callers that predate schedule policies */
+    scheduled?: string;
 }
 
 /**
@@ -61,11 +65,12 @@ export async function getAssignmentCountsFromStores(
     redisClient: RedisClientType,
     keys: AssignmentKeys,
 ): Promise<AssignmentCounts> {
-    const [queued, pending, accepted, parked] = await Promise.all([
+    const [queued, pending, accepted, parked, scheduled] = await Promise.all([
         redisClient.hLen(keys.queued),
         redisClient.hLen(keys.pending),
         redisClient.hLen(keys.accepted),
         keys.parked ? redisClient.hLen(keys.parked) : Promise.resolve(0),
+        keys.scheduled ? redisClient.hLen(keys.scheduled) : Promise.resolve(0),
     ]);
 
     return {
@@ -73,6 +78,7 @@ export async function getAssignmentCountsFromStores(
         pending,
         accepted,
         parked,
+        scheduled,
         total: queued + pending + accepted,
     };
 }
@@ -107,8 +113,17 @@ export async function getAssignmentById(
         return assignment;
     }
 
-    // Parked items are out of the matching universe but must never read as
-    // "not found" — that would make an exhausted escalation look like data loss.
+    // Scheduled and parked items are out of the matching universe but must
+    // never read as "not found" — that would make a held assignment or an
+    // exhausted escalation look like data loss.
+    if (keys.scheduled) {
+        const scheduled = await redisClient.hGet(keys.scheduled, id);
+        if (scheduled) {
+            const assignment = JSON.parse(scheduled);
+            assignment._status = 'scheduled';
+            return assignment;
+        }
+    }
     if (keys.parked) {
         const parked = await redisClient.hGet(keys.parked, id);
         if (parked) {

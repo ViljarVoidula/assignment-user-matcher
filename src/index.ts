@@ -29,9 +29,20 @@ export type {
     SlaExpirySweepResult,
     SlaPolicy,
     SlaStats,
+    SchedulePolicy,
+    ScheduleSweepResult,
+    AssignmentLintIssue,
+    AssignmentLintContext,
+    AssignmentReadinessReport,
+    QueueAuditOptions,
+    QueueAuditEntry,
+    QueueAuditReport,
     MaintenanceOptions,
     MaintenanceReport,
 } from './matcher.class';
+
+// Pre-flight lint (pure, Redis-free) — usable host-side before addAssignment
+export { lintAssignment, userCoversTag } from './validation/assignment-lint';
 
 // Workflow type exports
 export type {

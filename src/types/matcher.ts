@@ -56,6 +56,8 @@ export type Assignment = {
     escalation?: EscalationPolicy;
     // Optional service-level agreement: completion deadline, TTL, rejection budget. See SlaPolicy.
     sla?: SlaPolicy;
+    // Optional offer window: hold until notBefore, expire un-accepted work at notAfter. See SchedulePolicy.
+    schedule?: SchedulePolicy;
     [key: string]: any;
 };
 
@@ -206,6 +208,64 @@ export interface SlaPolicy {
     onExpire?: 'drop' | 'park';
 }
 
+/**
+ * When an assignment may be offered at all.
+ *
+ * EscalationPolicy owns the response clock, SlaPolicy owns the post-accept
+ * contract; SchedulePolicy owns the offer window: when the work becomes
+ * visible to matching (`notBefore`) and how long an offer may go un-accepted
+ * (`notAfter`). Acceptance ends the schedule's authority — completion
+ * pressure is `sla.completeWithinMs`'s job.
+ *
+ * A held assignment lives in a dedicated scheduled store, invisible to every
+ * matching path (including workflow targeting) until the scheduled sweep
+ * activates it. The wait clock and the SLA freshness TTL both anchor at
+ * activation, not creation. Timers fire with sweep granularity (see
+ * `startMaintenance()` / `runMaintenanceOnce()` / `processScheduledAssignments()`).
+ *
+ * Recurrence is deliberately out of scope: hosts materialize each occurrence
+ * as its own assignment (re-adding an existing id is a no-op on the clocks,
+ * so materialization is idempotent).
+ *
+ * @example
+ * ```typescript
+ * await matcher.addAssignment({
+ *     id: 'callback-42',
+ *     tags: ['callbacks'],
+ *     schedule: {
+ *         notBefore: Date.parse('2026-08-07T09:00:00Z'), // hidden until 9:00
+ *         notAfter: Date.parse('2026-08-07T11:00:00Z'),  // parked if nobody accepted by 11:00
+ *     },
+ * });
+ * matcher.startMaintenance(); // schedule clocks are swept by the maintenance tick
+ * ```
+ */
+export interface SchedulePolicy {
+    /**
+     * Epoch milliseconds before which the assignment is held out of the
+     * queue entirely — no matching, no workflow targeting, no wait clock.
+     * The scheduled sweep enqueues it once the time arrives.
+     */
+    notBefore?: number;
+    /**
+     * Epoch milliseconds after which a still un-accepted assignment
+     * (scheduled, queued, or pending) is taken out of rotation by the
+     * scheduled sweep, applying `onMiss`. Acceptance kills this clock.
+     * Valid without `notBefore` (a pure absolute offer deadline). When both
+     * are present, `notAfter` must be greater than `notBefore` or the whole
+     * policy is ignored.
+     */
+    notAfter?: number;
+    /**
+     * What happens when `notAfter` elapses un-accepted.
+     * - `'park'` — move to the parked store for operator inspection;
+     *   retrievable via `getParkedAssignments()` / `unparkAssignment()`.
+     * - `'drop'` — remove the assignment entirely.
+     * @default 'park'
+     */
+    onMiss?: 'park' | 'drop';
+}
+
 /** Aggregate SLO attainment counters from `getSlaStats()`. */
 export interface SlaStats {
     /** Total assignments offered (pending) for the scope */
@@ -220,6 +280,8 @@ export interface SlaStats {
     ttlExpiries: number;
     /** Assignments parked because their rejection budget ran out */
     rejectionParked: number;
+    /** Assignments parked/dropped because their offer window (`schedule.notAfter`) closed */
+    scheduleMisses: number;
     /** Mean accept latency in ms (acceptedAt - matchedAt), 0 when no data */
     meanAcceptLatencyMs: number;
     /** Mean completion latency in ms (completedAt - acceptedAt), 0 when no data */
@@ -263,6 +325,8 @@ export type UserLoadInfo = {
 export type QueueStats = {
     queued: number;
     pending: number;
+    /** Assignments held by `schedule.notBefore`, not yet in the queue */
+    scheduled: number;
     /** Age in ms of the oldest not-yet-accepted assignment; null when none */
     oldestWaitingMs: number | null;
     perUser: UserLoadInfo[];
@@ -392,7 +456,7 @@ export interface MatchDecisionTrace {
  */
 export interface MatchExplanation {
     assignmentId: string;
-    status: 'queued' | 'pending' | 'accepted' | 'completed' | 'not_found';
+    status: 'queued' | 'pending' | 'accepted' | 'completed' | 'scheduled' | 'not_found';
     /**
      * Current owner for pending assignments and completer for completed ones.
      * `null` while queued and for accepted assignments (ownership metadata is
@@ -422,6 +486,103 @@ export interface MatchPreview {
     priority: number;
     evaluatedAt: number;
     candidates: MatchCandidateTrace[];
+}
+
+/**
+ * One finding from the pre-flight checks (`lintAssignment()` /
+ * `AssignmentMatcher.checkAssignmentReadiness()`). `error` means the
+ * assignment cannot be served as declared; `warning` means it will behave
+ * in a way that is probably not intended; `info` is worth knowing.
+ */
+export interface AssignmentLintIssue {
+    severity: 'error' | 'warning' | 'info';
+    code:
+        | 'no-tags'
+        | 'schedule-window-inverted'
+        | 'schedule-ignored'
+        | 'schedule-window-elapsed'
+        | 'schedule-notbefore-past'
+        | 'offer-window-tight'
+        | 'schedule-notafter-shadowed-by-sla-ttl'
+        | 'sla-ignored'
+        | 'escalation-ignored'
+        | 'duplicate-id'
+        | 'tag-uncovered'
+        | 'no-eligible-users';
+    /** Human-readable explanation, safe to surface to operators */
+    message: string;
+    /** The tag concerned, for tag-scoped issues */
+    tag?: string;
+}
+
+/** Context for the pure `lintAssignment()` checks. */
+export interface AssignmentLintContext {
+    /** Reference time in epoch ms (default: `Date.now()`) */
+    now?: number;
+    /** Fallback response deadline when no escalation policy declares one */
+    matchExpirationMs?: number;
+    /** Whether the matcher injects the `default` tag */
+    enableDefaultMatching?: boolean;
+}
+
+/** Output of `AssignmentMatcher.checkAssignmentReadiness()`. */
+export interface AssignmentReadinessReport {
+    /** Policy lint findings plus live findings (coverage, duplicates, eligibility) */
+    issues: AssignmentLintIssue[];
+    /** Users eligible for the assignment right now (same rules as `previewMatch()`) */
+    eligibleUserCount: number;
+    /** Assignment tags no active (non-paused) user can currently serve */
+    uncoveredTags: string[];
+    evaluatedAt: number;
+}
+
+/** Options for `AssignmentMatcher.auditQueue()`. */
+export interface QueueAuditOptions {
+    /** Examine at most this many queued assignments, longest-waiting first. @default 100 */
+    limit?: number;
+    /** Only examine assignments that have waited at least this long. @default 0 */
+    minWaitingMs?: number;
+    /** Also return entries that do have eligible users. @default false */
+    includeHealthy?: boolean;
+}
+
+/** One queued assignment's stuck-analysis from `auditQueue()`. */
+export interface QueueAuditEntry {
+    assignmentId: string;
+    tags: string[];
+    /** Ms since first enqueue; null when the wait-clock entry is missing */
+    waitingMs: number | null;
+    /** Users eligible right now under the full hard rules */
+    eligibleUserCount: number;
+    /** Assignment tags no active (non-paused) user can currently serve */
+    uncoveredTags: string[];
+    /**
+     * Why users are blocked: `MatchTraceReason` kind → how many users it
+     * blocks (e.g. `{ backlogFull: 3, paused: 1 }`). Users excluded purely
+     * by tag/weight mismatch are counted under `noTagMatch`.
+     */
+    blockers: Record<string, number>;
+}
+
+/** Output of `AssignmentMatcher.auditQueue()`: stuck work plus unswept clocks. */
+export interface QueueAuditReport {
+    evaluatedAt: number;
+    /** Queued assignments examined (after `limit` / `minWaitingMs`) */
+    scanned: number;
+    /** Assignments nobody can take right now (plus healthy ones when requested) */
+    entries: QueueAuditEntry[];
+    /**
+     * Past-due entries sitting in each deadline index. Nonzero values that
+     * persist across calls mean nothing is sweeping — check that
+     * `startMaintenance()` (or a `runMaintenanceOnce()` tick) is running.
+     */
+    sweepBacklog: {
+        scheduleActivations: number;
+        scheduleMisses: number;
+        responseDeadlines: number;
+        completionDeadlines: number;
+        slaExpiries: number;
+    };
 }
 
 /** Filters for `getDecisionTraces()`. */
@@ -497,15 +658,37 @@ export type AssignmentLifecycleEvent =
           /** The assignment as it stood when the budget ran out. See the note below. */
           assignment: Assignment;
           at: number;
+      }
+    /**
+     * A held assignment's `schedule.notBefore` arrived; the scheduled sweep
+     * enqueued it. The assignment is now fetchable in the queued store.
+     */
+    | { kind: 'scheduleActivated'; taskId: string; at: number }
+    /**
+     * The offer window (`schedule.notAfter`) elapsed while the assignment
+     * was still un-accepted. `state` is where it was caught; `action` is
+     * what the policy did about it.
+     */
+    | {
+          kind: 'scheduleMissed';
+          taskId: string;
+          /** Pending owner at miss time, null when scheduled or queued */
+          ownerId: string | null;
+          state: 'scheduled' | 'queued' | 'pending';
+          action: 'park' | 'drop';
+          /** The assignment as it stood when the window closed. See the note below. */
+          assignment: Assignment;
+          at: number;
       };
 
 /*
- * Why the three SLA events carry a full `assignment` and the others do not:
- * they are the only ones that can *destroy* the record. `onExpire: 'drop'`
- * removes the assignment outright, and by the time the handler runs there is
- * nothing left to read — a host that wants to archive the outcome would have
- * only an id. Every other event leaves the assignment somewhere the host can
- * still fetch it (queued, pending, accepted, parked, or the completed store).
+ * Why the three SLA events and `scheduleMissed` carry a full `assignment`
+ * and the others do not: they are the only ones that can *destroy* the
+ * record. `onExpire: 'drop'` / `onMiss: 'drop'` remove the assignment
+ * outright, and by the time the handler runs there is nothing left to read —
+ * a host that wants to archive the outcome would have only an id. Every
+ * other event leaves the assignment somewhere the host can still fetch it
+ * (queued, pending, accepted, parked, or the completed store).
  */
 
 /** Outcome of one `processResponseDeadlines()` sweep. */
@@ -530,6 +713,14 @@ export type SlaExpirySweepResult = {
     expired: number;
 };
 
+/** Outcome of one `processScheduledAssignments()` sweep. */
+export type ScheduleSweepResult = {
+    /** Held assignments whose `notBefore` arrived and were enqueued */
+    activated: number;
+    /** Un-accepted assignments whose `notAfter` elapsed (parked or dropped) */
+    missed: number;
+};
+
 /** One pass of `runMaintenanceOnce()`. Counts are per pass, not cumulative. */
 export type MaintenanceReport = {
     /** Pending assignments whose response deadline elapsed */
@@ -546,6 +737,10 @@ export type MaintenanceReport = {
     completionBreaches: number;
     /** Assignments whose freshness TTL elapsed (SLA) */
     slaExpiries: number;
+    /** Held assignments enqueued by the scheduled sweep */
+    scheduleActivations: number;
+    /** Assignments whose offer window (`schedule.notAfter`) elapsed */
+    scheduleMisses: number;
     /** Wall-clock duration of the pass */
     tookMs: number;
 };
@@ -560,6 +755,8 @@ export type MaintenanceOptions = {
     completionDeadlines?: boolean;
     /** Freshness TTL expiries (SLA `expireAfterMs`). @default true */
     slaExpiries?: boolean;
+    /** Scheduled-assignment activations and offer-window misses. @default true */
+    scheduled?: boolean;
     /** Workflow step timeouts. @default true when `enableWorkflows` */
     workflowStepTimeouts?: boolean;
     /** Idle-user release. @default true when `idleUserTimeoutMs` is set */

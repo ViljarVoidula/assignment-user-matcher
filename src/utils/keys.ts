@@ -45,6 +45,22 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         // `onExhausted: 'park'` — held out of matching until unparked.
         parkedAssignments: () => `${prefix}assignments:parked`,
 
+        // Schedule keys
+        // Assignments held by schedule.notBefore: raw JSON, invisible to
+        // every matching path until the scheduled sweep enqueues it. The
+        // ONLY pre-activation storage — no priority/tag/geo/veto side keys
+        // exist until activation.
+        scheduledAssignments: () => `${prefix}assignments:scheduled`,
+        // Activation index: id scored by schedule.notBefore epoch ms.
+        scheduledActivateAt: () => `${prefix}assignments:scheduled:activateAt`,
+        // Offer-window deadline index: id scored by schedule.notAfter epoch
+        // ms. Lives outside :scheduled because it follows the assignment
+        // through scheduled -> queued -> pending; cleared on accept (the
+        // offer clock dies there). Cannot share assignmentsSlaExpiry: a zset
+        // holds one score per member and an assignment can carry both
+        // sla.expireAfterMs and schedule.notAfter.
+        scheduleNotAfter: () => `${prefix}assignments:schedule:notAfter`,
+
         // SLA keys
         // Accepted assignments with a completion deadline (sla.completeWithinMs),
         // scored by deadline epoch ms. Only SLA-bearing assignments appear here.

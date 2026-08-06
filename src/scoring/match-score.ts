@@ -194,9 +194,7 @@ export function explainMatchScore(
                     if (matchesPattern(pattern, t)) {
                         const source = vetoSource(user, pattern);
                         reasons.push(
-                            source
-                                ? { kind: 'veto', tag: t, pattern, source }
-                                : { kind: 'veto', tag: t, pattern },
+                            source ? { kind: 'veto', tag: t, pattern, source } : { kind: 'veto', tag: t, pattern },
                         );
                         vetoed = true;
                     }

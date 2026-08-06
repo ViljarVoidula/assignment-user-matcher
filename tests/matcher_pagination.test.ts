@@ -82,7 +82,7 @@ describe('Assignment pagination and querying tests', () => {
     describe('getAssignmentCounts', () => {
         it('should return zero counts when no assignments exist', async () => {
             const counts = await matcher.getAssignmentCounts();
-            expect(counts).to.deep.equal({ queued: 0, pending: 0, accepted: 0, parked: 0, total: 0 });
+            expect(counts).to.deep.equal({ queued: 0, pending: 0, accepted: 0, parked: 0, scheduled: 0, total: 0 });
         });
 
         it('should return correct count for queued assignments', async () => {

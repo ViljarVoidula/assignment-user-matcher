@@ -10,6 +10,7 @@
 - [parked](AssignmentCounts.md#parked)
 - [pending](AssignmentCounts.md#pending)
 - [queued](AssignmentCounts.md#queued)
+- [scheduled](AssignmentCounts.md#scheduled)
 - [total](AssignmentCounts.md#total)
 
 ## Properties
@@ -20,7 +21,7 @@
 
 #### Defined in
 
-[src/queries/pagination.ts:25](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/queries/pagination.ts#L25)
+[src/queries/pagination.ts:25](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/queries/pagination.ts#L25)
 
 ___
 
@@ -32,7 +33,7 @@ Assignments held out of matching by an exhausted escalation ladder
 
 #### Defined in
 
-[src/queries/pagination.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/queries/pagination.ts#L27)
+[src/queries/pagination.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/queries/pagination.ts#L27)
 
 ___
 
@@ -42,7 +43,7 @@ ___
 
 #### Defined in
 
-[src/queries/pagination.ts:24](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/queries/pagination.ts#L24)
+[src/queries/pagination.ts:24](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/queries/pagination.ts#L24)
 
 ___
 
@@ -52,7 +53,19 @@ ___
 
 #### Defined in
 
-[src/queries/pagination.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/queries/pagination.ts#L23)
+[src/queries/pagination.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/queries/pagination.ts#L23)
+
+___
+
+### scheduled
+
+• **scheduled**: `number`
+
+Assignments held out of the queue by `schedule.notBefore`
+
+#### Defined in
+
+[src/queries/pagination.ts:29](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/queries/pagination.ts#L29)
 
 ___
 
@@ -60,8 +73,8 @@ ___
 
 • **total**: `number`
 
-queued + pending + accepted — parked items are counted separately
+queued + pending + accepted — parked and scheduled items are counted separately
 
 #### Defined in
 
-[src/queries/pagination.ts:29](https://github.com/ViljarVoidula/assignment-user-matcher/blob/74234b5233cf2b1ef022c426a022a6c52be974af/src/queries/pagination.ts#L29)
+[src/queries/pagination.ts:31](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/queries/pagination.ts#L31)

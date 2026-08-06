@@ -95,10 +95,7 @@ describe('Matcher Decision Traces & Explainability', function () {
 
             const explanation = await matcher.explainMatch('a1');
 
-            const aliceVetoes = reasonsOfKind(
-                explanation.candidates.find((c) => c.userId === 'alice')!.reasons,
-                'veto',
-            );
+            const aliceVetoes = reasonsOfKind(explanation.candidates.find((c) => c.userId === 'alice')!.reasons, 'veto');
             expect(aliceVetoes).to.have.length(1);
             expect((aliceVetoes[0] as any).source).to.equal(undefined);
 

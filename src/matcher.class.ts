@@ -37,6 +37,8 @@ import {
     slaFromJson,
     type NormalizedSlaPolicy,
 } from './sla/policy';
+import { isHeld, normalizeSchedulePolicy, type NormalizedSchedulePolicy } from './schedule/policy';
+import { lintAssignment, userCoversTag } from './validation/assignment-lint';
 import {
     TraceCollector,
     buildDecisionTraces,
@@ -98,10 +100,18 @@ import type {
     EscalationSweepResult,
     CompletionDeadlineSweepResult,
     SlaExpirySweepResult,
+    ScheduleSweepResult,
     MaintenanceOptions,
     MaintenanceReport,
     SlaPolicy,
     SlaStats,
+    SchedulePolicy,
+    AssignmentLintIssue,
+    AssignmentLintContext,
+    AssignmentReadinessReport,
+    QueueAuditOptions,
+    QueueAuditEntry,
+    QueueAuditReport,
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
@@ -135,10 +145,18 @@ export type {
     EscalationSweepResult,
     CompletionDeadlineSweepResult,
     SlaExpirySweepResult,
+    ScheduleSweepResult,
     MaintenanceOptions,
     MaintenanceReport,
     SlaPolicy,
     SlaStats,
+    SchedulePolicy,
+    AssignmentLintIssue,
+    AssignmentLintContext,
+    AssignmentReadinessReport,
+    QueueAuditOptions,
+    QueueAuditEntry,
+    QueueAuditReport,
 } from './types/matcher';
 
 export type {
@@ -216,6 +234,9 @@ export default class AssignmentMatcher implements WorkflowHost {
     acceptedAssignmentsKey: string;
     private acceptedAssignmentsExpiryKey: string;
     private assignmentsSlaExpiryKey: string;
+    private scheduledAssignmentsKey: string;
+    private scheduledActivateAtKey: string;
+    private scheduleNotAfterKey: string;
     private keys: KeyBuilders;
 
     // Workflow-related properties
@@ -283,6 +304,9 @@ export default class AssignmentMatcher implements WorkflowHost {
         this.acceptedAssignmentsKey = this.keys.acceptedAssignments();
         this.acceptedAssignmentsExpiryKey = this.keys.acceptedAssignmentsExpiry();
         this.assignmentsSlaExpiryKey = this.keys.assignmentsSlaExpiry();
+        this.scheduledAssignmentsKey = this.keys.scheduledAssignments();
+        this.scheduledActivateAtKey = this.keys.scheduledActivateAt();
+        this.scheduleNotAfterKey = this.keys.scheduleNotAfter();
         this.completedAssignmentsKey = this.keys.completedAssignments();
         this.calculatePriority = options?.prioritizationFunction ?? this.calculatePriority;
         this.usingDefaultMatchScore = !options?.matchingFunction;
@@ -468,6 +492,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             completionBreaches: num('completionBreaches'),
             ttlExpiries: num('ttlExpiries'),
             rejectionParked: num('rejectionParked'),
+            scheduleMisses: num('scheduleMisses'),
             meanAcceptLatencyMs: accepts > 0 ? num('acceptLatencyMsSum') / accepts : 0,
             meanCompleteLatencyMs: completes > 0 ? num('completeLatencyMsSum') / completes : 0,
         };
@@ -481,6 +506,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             accepted: this.acceptedAssignmentsKey,
             completed: this.completedAssignmentsKey,
             parked: this.keys.parkedAssignments(),
+            scheduled: this.scheduledAssignmentsKey,
         };
     }
 
@@ -1126,6 +1152,212 @@ export default class AssignmentMatcher implements WorkflowHost {
         return { tags: input.tags, priority: basePriority, evaluatedAt, candidates };
     }
 
+    /**
+     * Pre-flight check for an assignment before (or without) adding it:
+     * static policy lint (schedule conflicts, policies that would be silently
+     * ignored, missing tags) plus live findings against the current pool —
+     * tags no active user can serve, ids that already exist, and whether
+     * anyone is eligible right now under the same rules as `previewMatch()`.
+     * Read-only: never claims, writes, or records decisions.
+     */
+    async checkAssignmentReadiness(assignment: Assignment): Promise<AssignmentReadinessReport> {
+        await this.readyPromise;
+        const evaluatedAt = Date.now();
+        const tags = assignment.tags ?? [];
+
+        const issues = lintAssignment(assignment, {
+            now: evaluatedAt,
+            matchExpirationMs: this.matchExpirationMs,
+            enableDefaultMatching: this.enableDefaultMatching,
+        });
+
+        if (assignment.id) {
+            const existing = await this.getAssignment(assignment.id);
+            if (existing) {
+                issues.push({
+                    severity: 'warning',
+                    code: 'duplicate-id',
+                    message: `Assignment '${assignment.id}' already exists with status '${existing._status}' — re-adding keeps its original wait/TTL clocks.`,
+                });
+            }
+        }
+
+        const [preview, allUsers, pausedMembers] = await Promise.all([
+            this.previewMatch({
+                tags,
+                priority: assignment.priority,
+                skillThresholds: assignment.skillThresholds,
+                allowedCidrs: assignment.allowedCidrs,
+                vetoedUsers: assignment.vetoedUsers,
+                latitude: assignment.latitude,
+                longitude: assignment.longitude,
+                maxDistanceKm: assignment.maxDistanceKm,
+                requireGeo: assignment.requireGeo,
+            }),
+            this.redisClient.hGetAll(this.usersKey),
+            this.redisClient.sMembers(this.keys.pausedUsers()),
+        ]);
+
+        const eligibleUserCount = preview.candidates.filter((candidate) => candidate.eligible).length;
+
+        const paused = new Set<string>(pausedMembers);
+        const activeUsers: User[] = Object.values(allUsers)
+            .map((json) => JSON.parse(json as string) as User)
+            .filter((user) => !paused.has(user.id));
+
+        const uncoveredTags = tags.filter((tag) => !activeUsers.some((user) => userCoversTag(user, tag)));
+        for (const tag of uncoveredTags) {
+            issues.push({
+                severity: 'warning',
+                code: 'tag-uncovered',
+                tag,
+                message: `No active user can currently serve tag '${tag}'.`,
+            });
+        }
+
+        if (eligibleUserCount === 0) {
+            issues.push({
+                severity: 'error',
+                code: 'no-eligible-users',
+                message: 'No user is eligible for this assignment right now; it would sit queued until the pool changes.',
+            });
+        }
+
+        return { issues, eligibleUserCount, uncoveredTags, evaluatedAt };
+    }
+
+    /**
+     * Queue-wide overlook: why is queued work not moving? Examines the
+     * longest-waiting queued assignments against the current pool (same hard
+     * rules as matching) and reports, per stuck assignment, who is blocked by
+     * what — plus the past-due entries sitting unswept in every deadline
+     * index, which is the tell-tale of a missing or lagging maintenance tick.
+     * Read-only and O(scanned assignments × users): a diagnostic, not a hot
+     * path — cap with `limit` on very large queues.
+     */
+    async auditQueue(options?: QueueAuditOptions): Promise<QueueAuditReport> {
+        await this.readyPromise;
+        const evaluatedAt = Date.now();
+        const limit = options?.limit ?? 100;
+        const minWaitingMs = options?.minWaitingMs ?? 0;
+        const includeHealthy = options?.includeHealthy === true;
+
+        const [queuedAll, waitEntries, allUsersHash, pausedMembers] = await Promise.all([
+            this.redisClient.hGetAll(this.assignmentsRefKey),
+            this.redisClient.zRangeWithScores(this.keys.assignmentsQueuedAt(), 0, -1),
+            this.redisClient.hGetAll(this.usersKey),
+            this.redisClient.sMembers(this.keys.pausedUsers()),
+        ]);
+
+        // The wait clock also holds pending ids (it survives the claim), so
+        // membership in the queued store is what defines the audit universe.
+        const waitById = new Map<string, number>(waitEntries.map((entry: any) => [entry.value, Number(entry.score)]));
+        const candidatesToScan = Object.keys(queuedAll)
+            .map((id) => {
+                const queuedAtMs = waitById.get(id);
+                const waitingMs = queuedAtMs !== undefined ? Math.max(0, evaluatedAt - queuedAtMs) : null;
+                return { id, waitingMs };
+            })
+            .filter(({ waitingMs }) => waitingMs === null || waitingMs >= minWaitingMs)
+            .sort((a, b) => (b.waitingMs ?? Number.MAX_SAFE_INTEGER) - (a.waitingMs ?? Number.MAX_SAFE_INTEGER))
+            .slice(0, limit);
+
+        const paused = new Set<string>(pausedMembers);
+        const users: User[] = Object.values(allUsersHash).map((json) => JSON.parse(json as string));
+        const activeUsers = users.filter((user) => !paused.has(user.id));
+        const modelWeights = this.enableLearning ? await this.learning.getModel() : undefined;
+        const backlogs = new Map<string, number>(
+            await Promise.all(
+                users.map(
+                    async (user) =>
+                        [user.id, await this.redisClient.sCard(this.keys.userAssignments(user.id))] as [string, number],
+                ),
+            ),
+        );
+
+        // Score contributions and annotations — everything else in a
+        // candidate's reason list marks a blocker.
+        const nonBlockingKinds = new Set([
+            'tagWeight',
+            'defaultTag',
+            'tagOverlap',
+            'customScore',
+            'geoBoost',
+            'learningBoost',
+            'workflowTargeted',
+            'manualAssignment',
+        ]);
+
+        const entries: QueueAuditEntry[] = [];
+        for (const { id, waitingMs } of candidatesToScan) {
+            const assignment: Assignment = JSON.parse(queuedAll[id] as string);
+            const tags = assignment.tags ?? [];
+            const storedPriority = await this.redisClient.hGet(this.keys.assignmentPriority(id), 'priority');
+            const basePriority = Number(storedPriority ?? assignment.priority) || 0;
+            const tagsCsv = [...tags, ...(this.enableDefaultMatching ? ['default'] : [])].join(',');
+
+            const evaluations = await Promise.all(
+                users.map(async (user) => {
+                    const isRejected = await this.redisClient.sIsMember(this.keys.userRejected(user.id), id);
+                    return this.evaluateCandidateForAssignment(user, assignment, tagsCsv, basePriority, modelWeights, {
+                        assignmentId: id,
+                        ownerId: null,
+                        isRejected: Boolean(isRejected),
+                        backlog: backlogs.get(user.id) ?? 0,
+                        isPaused: paused.has(user.id),
+                    });
+                }),
+            );
+
+            const eligibleUserCount = evaluations.filter((candidate) => candidate.eligible).length;
+            if (eligibleUserCount > 0 && !includeHealthy) continue;
+
+            const blockers: Record<string, number> = {};
+            for (const candidate of evaluations) {
+                if (candidate.eligible) continue;
+                const kinds = new Set<string>(
+                    candidate.reasons
+                        .filter(
+                            (reason) =>
+                                !nonBlockingKinds.has(reason.kind) &&
+                                !(reason.kind === 'geoDistance' && reason.withinRange),
+                        )
+                        .map((reason) => reason.kind),
+                );
+                // A zero score with no named blocker is a plain tag/weight
+                // mismatch — the most common way to be stuck.
+                if (kinds.size === 0) kinds.add('noTagMatch');
+                for (const kind of kinds) blockers[kind] = (blockers[kind] ?? 0) + 1;
+            }
+
+            entries.push({
+                assignmentId: id,
+                tags,
+                waitingMs,
+                eligibleUserCount,
+                uncoveredTags: tags.filter((tag) => !activeUsers.some((user) => userCoversTag(user, tag))),
+                blockers,
+            });
+        }
+
+        const pastDue = (key: string) => this.redisClient.zCount(key, '-inf', evaluatedAt);
+        const [scheduleActivations, scheduleMisses, responseDeadlines, completionDeadlines, slaExpiries] =
+            await Promise.all([
+                pastDue(this.scheduledActivateAtKey),
+                pastDue(this.scheduleNotAfterKey),
+                pastDue(this.pendingAssignmentsExpiryKey),
+                pastDue(this.acceptedAssignmentsExpiryKey),
+                pastDue(this.assignmentsSlaExpiryKey),
+            ]);
+
+        return {
+            evaluatedAt,
+            scanned: candidatesToScan.length,
+            entries,
+            sweepBacklog: { scheduleActivations, scheduleMisses, responseDeadlines, completionDeadlines, slaExpiries },
+        };
+    }
+
     /** Build and record this pass's decision traces; failures never break matching. */
     private async recordPassTraces(
         collector: TraceCollector,
@@ -1510,6 +1742,28 @@ export default class AssignmentMatcher implements WorkflowHost {
     async addAssignment(assignment: Assignment) {
         await this.readyPromise;
 
+        // Offer window: a future notBefore keeps the assignment out of the
+        // queue entirely — raw JSON in the scheduled store, invisible to
+        // every matching path until the scheduled sweep re-adds it here.
+        // The wait clock and SLA freshness TTL therefore anchor at
+        // activation, not creation.
+        const schedulePolicy = normalizeSchedulePolicy(assignment.schedule);
+        if (schedulePolicy && isHeld(schedulePolicy, Date.now())) {
+            const multi = this.redisClient
+                .multi()
+                .hSet(this.scheduledAssignmentsKey, assignment.id, JSON.stringify(assignment))
+                .zAdd(this.scheduledActivateAtKey, { score: schedulePolicy.notBefore!, value: assignment.id });
+            if (schedulePolicy.notAfter !== undefined) {
+                multi.zAdd(this.scheduleNotAfterKey, { score: schedulePolicy.notAfter, value: assignment.id });
+            }
+            await multi.exec();
+            return assignment;
+        }
+
+        return this.enqueueAssignment(assignment, schedulePolicy);
+    }
+
+    private async enqueueAssignment(assignment: Assignment, schedulePolicy: NormalizedSchedulePolicy | null) {
         let { id, tags, priority, latitude, longitude } = assignment;
         if (!priority) priority = await this.calculatePriority(assignment);
 
@@ -1548,6 +1802,19 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         if (slaExpiry !== null) {
             multi.zAdd(this.assignmentsSlaExpiryKey, { score: slaExpiry, value: id });
+        }
+
+        if (schedulePolicy) {
+            // The offer deadline is absolute, so requeues re-add the same
+            // score — the notAfter clock is never extended.
+            if (schedulePolicy.notAfter !== undefined) {
+                multi.zAdd(this.scheduleNotAfterKey, { score: schedulePolicy.notAfter, value: id });
+            }
+            // Atomic hand-off out of the scheduled store (no-ops when the
+            // assignment was never held); also self-heals an activation
+            // that crashed between the sweep's claim and this enqueue.
+            multi.hDel(this.scheduledAssignmentsKey, id);
+            multi.zRem(this.scheduledActivateAtKey, id);
         }
 
         if (isValidLatitude(latitude) && isValidLongitude(longitude)) {
@@ -1633,6 +1900,11 @@ export default class AssignmentMatcher implements WorkflowHost {
         // 4. Clear SLA indexes (no-ops for non-SLA assignments)
         multi.zRem(this.acceptedAssignmentsExpiryKey, id);
         multi.zRem(this.assignmentsSlaExpiryKey, id);
+
+        // 5. Clear schedule store and indexes (no-ops for unscheduled assignments)
+        multi.hDel(this.scheduledAssignmentsKey, id);
+        multi.zRem(this.scheduledActivateAtKey, id);
+        multi.zRem(this.scheduleNotAfterKey, id);
 
         await multi.exec();
         return id;
@@ -1831,6 +2103,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         return {
             queued: counts.queued,
             pending: counts.pending,
+            scheduled: counts.scheduled,
             oldestWaitingMs: oldestEntries.length > 0 ? Date.now() - Number(oldestEntries[0].score) : null,
             perUser,
         };
@@ -2877,13 +3150,37 @@ export default class AssignmentMatcher implements WorkflowHost {
         if (!userJson) throw new Error(`User not found: ${userId}`);
         const user: User = JSON.parse(userJson);
 
-        const [queuedJson, previousOwnerId] = await Promise.all([
+        let [queuedJson, previousOwnerId] = await Promise.all([
             this.redisClient.hGet(this.assignmentsRefKey, assignmentId),
             this.redisClient.hGet(this.assignmentOwnerKey, assignmentId),
         ]);
         if (previousOwnerId === userId) return { previousOwnerId: userId };
         if (!queuedJson && !previousOwnerId) {
-            throw new Error(`Assignment not found in queued or pending state: ${assignmentId}`);
+            // Held by schedule.notBefore? Operators may early-activate with
+            // force; without it the hold is honored like any other rule.
+            const scheduledJson = await this.redisClient.hGet(this.scheduledAssignmentsKey, assignmentId);
+            if (!scheduledJson) {
+                throw new Error(`Assignment not found in queued or pending state: ${assignmentId}`);
+            }
+            const held: Assignment = JSON.parse(scheduledJson);
+            const heldPolicy = normalizeSchedulePolicy(held.schedule);
+            if (!force) {
+                const eligibleAt =
+                    heldPolicy?.notBefore !== undefined ? new Date(heldPolicy.notBefore).toISOString() : 'activation';
+                throw new Error(`Assignment is scheduled and not eligible until ${eligibleAt}: ${assignmentId}`);
+            }
+            // Claim the held copy first; losing the HDEL means a concurrent
+            // sweep or operator just took it.
+            const claimedHeld = await this.redisClient.hDel(this.scheduledAssignmentsKey, assignmentId);
+            if (!claimedHeld) {
+                throw new Error(`Assignment not found in queued or pending state: ${assignmentId}`);
+            }
+            // Early activation: enqueue past the hold guard (this also clears
+            // the activation index), then continue into the normal queued
+            // claim below. Wait clock and SLA TTL anchor here, and a later
+            // rejection re-holds the assignment (notBefore is still future).
+            await this.enqueueAssignment(held, heldPolicy);
+            queuedJson = await this.redisClient.hGet(this.assignmentsRefKey, assignmentId);
         }
 
         if (!force) {
@@ -3011,6 +3308,12 @@ export default class AssignmentMatcher implements WorkflowHost {
         multi.hDel(this.assignmentOwnerKey, assignmentId);
         // The wait clock stops when a user takes the work
         multi.zRem(this.keys.assignmentsQueuedAt(), assignmentId);
+        // Acceptance ends the offer window: the notAfter clock dies here, so
+        // no post-accept path ever needs to clear it. One indexOf keeps
+        // schedule-less assignments free of any extra cost.
+        if (json && json.indexOf('"schedule"') !== -1) {
+            multi.zRem(this.scheduleNotAfterKey, assignmentId);
+        }
 
         // Store in accepted assignments. SLA-bearing assignments are stamped
         // with the accept timestamp/owner and registered on the completion-
@@ -3141,11 +3444,12 @@ export default class AssignmentMatcher implements WorkflowHost {
         const action = policy.onMaxRejections === 'fail' ? ('fail' as const) : ('park' as const);
         const now = Date.now();
 
-        // The assignment leaves the queued/pending universe: stop both clocks.
+        // The assignment leaves the queued/pending universe: stop every clock.
         const multi = this.redisClient
             .multi()
             .zRem(this.keys.assignmentsQueuedAt(), assignment.id)
-            .zRem(this.assignmentsSlaExpiryKey, assignment.id);
+            .zRem(this.assignmentsSlaExpiryKey, assignment.id)
+            .zRem(this.scheduleNotAfterKey, assignment.id);
 
         if (action === 'park') {
             multi.hSet(this.keys.parkedAssignments(), assignment.id, JSON.stringify(assignment));
@@ -3626,6 +3930,7 @@ export default class AssignmentMatcher implements WorkflowHost {
                         .multi()
                         .hSet(this.keys.parkedAssignments(), id, JSON.stringify(assignment))
                         .zRem(this.keys.assignmentsQueuedAt(), id)
+                        .zRem(this.scheduleNotAfterKey, id)
                         .exec();
                     parked++;
                     continue;
@@ -3814,6 +4119,7 @@ export default class AssignmentMatcher implements WorkflowHost {
                 multi.zRem(this.pendingAssignmentsExpiryKey, id);
                 multi.hDel(this.assignmentOwnerKey, id);
                 multi.zRem(this.assignmentsSlaExpiryKey, id);
+                multi.zRem(this.scheduleNotAfterKey, id);
                 // Leaving the queued/pending universe: the wait clock stops.
                 multi.zRem(this.keys.assignmentsQueuedAt(), id);
                 await multi.exec();
@@ -3851,12 +4157,126 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     /**
+     * Sweep the schedule clocks: close offer windows (`schedule.notAfter`)
+     * that elapsed while un-accepted, then enqueue held assignments whose
+     * `notBefore` arrived. Misses run first so an assignment whose whole
+     * window is already past parks/drops directly instead of transiting the
+     * queue. Each zset entry fires once: the zRem claim makes concurrent
+     * replicas skip entries another sweep already took.
+     */
+    async processScheduledAssignments(): Promise<ScheduleSweepResult> {
+        await this.readyPromise;
+        const now = Date.now();
+        let activated = 0;
+        let missed = 0;
+
+        const missedIds = await this.redisClient.zRangeByScore(this.scheduleNotAfterKey, '-inf', now);
+        for (const id of missedIds) {
+            const claimed = await this.redisClient.zRem(this.scheduleNotAfterKey, id);
+            if (!claimed) continue;
+
+            // Locate the un-accepted store the assignment occupies. Anything
+            // else (accepted, parked, completed, removed) means the offer
+            // clock is dead and the claim above was the whole cleanup.
+            const [scheduledJson, queuedJson, pendingJson] = await Promise.all([
+                this.redisClient.hGet(this.scheduledAssignmentsKey, id),
+                this.redisClient.hGet(this.assignmentsRefKey, id),
+                this.redisClient.hGet(this.pendingAssignmentsKey, id),
+            ]);
+            const json = scheduledJson ?? queuedJson ?? pendingJson;
+            if (!json) continue;
+
+            const assignment: Assignment = JSON.parse(json);
+            const policy = normalizeSchedulePolicy(assignment.schedule);
+            if (!policy || policy.notAfter === undefined) continue;
+
+            const state: 'scheduled' | 'queued' | 'pending' = scheduledJson
+                ? 'scheduled'
+                : queuedJson
+                  ? 'queued'
+                  : 'pending';
+            const ownerId = pendingJson ? ((await this.redisClient.hGet(this.assignmentOwnerKey, id)) ?? null) : null;
+            const action = policy.onMiss;
+            missed++;
+
+            if (action === 'park') {
+                await this.redisClient.hSet(this.keys.parkedAssignments(), id, JSON.stringify(assignment));
+            }
+
+            if (scheduledJson) {
+                await this.redisClient
+                    .multi()
+                    .hDel(this.scheduledAssignmentsKey, id)
+                    .zRem(this.scheduledActivateAtKey, id)
+                    .exec();
+            } else if (pendingJson) {
+                const multi = this.redisClient.multi();
+                if (ownerId) multi.sRem(this.keys.userAssignments(ownerId), `assignment:${id}`);
+                multi.hDel(this.pendingAssignmentsKey, id);
+                multi.zRem(this.pendingAssignmentsExpiryKey, id);
+                multi.hDel(this.assignmentOwnerKey, id);
+                multi.zRem(this.assignmentsSlaExpiryKey, id);
+                // Leaving the queued/pending universe: the wait clock stops.
+                multi.zRem(this.keys.assignmentsQueuedAt(), id);
+                await multi.exec();
+            } else {
+                // Queued: full index cleanup via removeAssignment.
+                await this.removeAssignment(id);
+            }
+
+            this.emitAssignmentLifecycle({
+                kind: 'scheduleMissed',
+                taskId: id,
+                ownerId,
+                state,
+                action,
+                // Emitted after the removal above, so this snapshot is the only
+                // remaining copy on the 'drop' path.
+                assignment,
+                at: now,
+            });
+            await this.bumpSlaStats(assignment.tags, { scheduleMisses: 1 });
+
+            if (this.enableLearning) {
+                await this.learning.applyOutcome(id, 'expire');
+            }
+        }
+
+        const dueIds = await this.redisClient.zRangeByScore(this.scheduledActivateAtKey, '-inf', now);
+        for (const id of dueIds) {
+            const claimed = await this.redisClient.zRem(this.scheduledActivateAtKey, id);
+            if (!claimed) continue;
+            const json = await this.redisClient.hGet(this.scheduledAssignmentsKey, id);
+            // Force-assigned or removed since the range read.
+            if (!json) continue;
+            // A due notBefore falls straight through addAssignment's hold
+            // guard into the normal enqueue, which also clears the scheduled
+            // hash atomically with the queued write.
+            await this.addAssignment(JSON.parse(json));
+            activated++;
+            this.emitAssignmentLifecycle({ kind: 'scheduleActivated', taskId: id, at: now });
+        }
+
+        return { activated, missed };
+    }
+
+    /**
      * Assignments held out of matching because their escalation ladder was
      * exhausted under `onExhausted: 'park'` — nobody answered, all the way up.
      */
     async getParkedAssignments(): Promise<Assignment[]> {
         await this.readyPromise;
         const all = await this.redisClient.hGetAll(this.keys.parkedAssignments());
+        return Object.values(all).map((json) => JSON.parse(json as string));
+    }
+
+    /**
+     * Assignments held out of the queue by `schedule.notBefore`, waiting for
+     * the scheduled sweep to activate them.
+     */
+    async getScheduledAssignments(): Promise<Assignment[]> {
+        await this.readyPromise;
+        const all = await this.redisClient.hGetAll(this.scheduledAssignmentsKey);
         return Object.values(all).map((json) => JSON.parse(json as string));
     }
 
@@ -3868,9 +4288,16 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Without it an unparked assignment whose freshness TTL already elapsed
      * will simply expire again on the next TTL sweep.
      *
+     * `resetSchedule` strips the schedule policy. Without it an assignment
+     * parked by a missed offer window (`schedule.notAfter`) will simply
+     * miss again on the next scheduled sweep.
+     *
      * @returns false when the id was not parked
      */
-    async unparkAssignment(id: string, opts?: { resetEscalation?: boolean; resetSla?: boolean }): Promise<boolean> {
+    async unparkAssignment(
+        id: string,
+        opts?: { resetEscalation?: boolean; resetSla?: boolean; resetSchedule?: boolean },
+    ): Promise<boolean> {
         await this.readyPromise;
         const json = await this.redisClient.hGet(this.keys.parkedAssignments(), id);
         if (!json) return false;
@@ -3878,6 +4305,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         const assignment: Assignment = JSON.parse(json);
         const record = assignment as Record<string, any>;
         if (opts?.resetEscalation) delete record._escalationLevel;
+        if (opts?.resetSchedule) delete record.schedule;
         if (opts?.resetSla) {
             delete record[SLA_ENQUEUED_AT_FIELD];
             delete record[SLA_REJECTION_COUNT_FIELD];
@@ -3927,7 +4355,16 @@ export default class AssignmentMatcher implements WorkflowHost {
         let releasedIdleUsers = 0;
         let completionBreaches = 0;
         let slaExpiries = 0;
+        let scheduleActivations = 0;
+        let scheduleMisses = 0;
 
+        // Schedule first: a just-activated assignment's response/SLA clocks
+        // then start from this same tick's state.
+        if (opts.scheduled) {
+            const result = await this.processScheduledAssignments();
+            scheduleActivations = result.activated;
+            scheduleMisses = result.missed;
+        }
         if (opts.responseDeadlines) {
             const result = await this.processResponseDeadlines();
             expiredMatches = result.expired;
@@ -3955,6 +4392,8 @@ export default class AssignmentMatcher implements WorkflowHost {
             releasedIdleUsers,
             completionBreaches,
             slaExpiries,
+            scheduleActivations,
+            scheduleMisses,
             tookMs: Date.now() - startedAt,
         };
     }
@@ -4002,6 +4441,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             responseDeadlines: options?.responseDeadlines ?? true,
             completionDeadlines: options?.completionDeadlines ?? true,
             slaExpiries: options?.slaExpiries ?? true,
+            scheduled: options?.scheduled ?? true,
             workflowStepTimeouts: options?.workflowStepTimeouts ?? this.enableWorkflows,
             idleUsers: options?.idleUsers ?? this.idleUserTimeoutMs !== null,
         };

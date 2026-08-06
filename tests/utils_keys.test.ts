@@ -24,6 +24,9 @@ describe('Redis key builders (public naming contract)', function () {
         expect(keys.slaTagStats('billing')).to.equal('app:sla:tag:billing:stats');
         expect(keys.assignmentsQueuedAt()).to.equal('app:assignments:queuedAt');
         expect(keys.parkedAssignments()).to.equal('app:assignments:parked');
+        expect(keys.scheduledAssignments()).to.equal('app:assignments:scheduled');
+        expect(keys.scheduledActivateAt()).to.equal('app:assignments:scheduled:activateAt');
+        expect(keys.scheduleNotAfter()).to.equal('app:assignments:schedule:notAfter');
         expect(keys.eventStreamDeadLetter()).to.equal('app:events:deadletter');
         expect(keys.reliabilityMetrics()).to.equal('app:reliability:metrics');
     });
