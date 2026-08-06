@@ -52,7 +52,7 @@ runs out the completion-deadline sweep applies `onCompletionBreach`.
 
 #### Defined in
 
-[src/types/matcher.ts:163](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L163)
+[src/types/matcher.ts:163](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L163)
 
 ___
 
@@ -68,7 +68,7 @@ regardless of who holds it.
 
 #### Defined in
 
-[src/types/matcher.ts:171](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L171)
+[src/types/matcher.ts:171](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L171)
 
 ___
 
@@ -84,7 +84,7 @@ do not.
 
 #### Defined in
 
-[src/types/matcher.ts:179](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L179)
+[src/types/matcher.ts:179](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L179)
 
 ___
 
@@ -108,7 +108,7 @@ What happens when the completion deadline (`completeWithinMs`) elapses.
 
 #### Defined in
 
-[src/types/matcher.ts:190](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L190)
+[src/types/matcher.ts:190](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L190)
 
 ___
 
@@ -129,7 +129,7 @@ What happens when the freshness cutoff (`expireAfterMs`) elapses.
 
 #### Defined in
 
-[src/types/matcher.ts:208](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L208)
+[src/types/matcher.ts:208](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L208)
 
 ___
 
@@ -152,4 +152,4 @@ What happens when the rejection budget (`maxRejections`) is exhausted.
 
 #### Defined in
 
-[src/types/matcher.ts:200](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L200)
+[src/types/matcher.ts:200](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L200)

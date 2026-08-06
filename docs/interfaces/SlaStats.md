@@ -28,7 +28,7 @@ Pending assignments whose response deadline elapsed (all, not only SLA-bearing)
 
 #### Defined in
 
-[src/types/matcher.ts:276](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L276)
+[src/types/matcher.ts:276](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L276)
 
 ___
 
@@ -40,7 +40,7 @@ Assignments accepted before their response deadline
 
 #### Defined in
 
-[src/types/matcher.ts:274](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L274)
+[src/types/matcher.ts:274](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L274)
 
 ___
 
@@ -52,7 +52,7 @@ Accepted assignments whose completion deadline elapsed
 
 #### Defined in
 
-[src/types/matcher.ts:278](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L278)
+[src/types/matcher.ts:278](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L278)
 
 ___
 
@@ -64,7 +64,7 @@ Mean accept latency in ms (acceptedAt - matchedAt), 0 when no data
 
 #### Defined in
 
-[src/types/matcher.ts:286](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L286)
+[src/types/matcher.ts:286](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L286)
 
 ___
 
@@ -76,7 +76,7 @@ Mean completion latency in ms (completedAt - acceptedAt), 0 when no data
 
 #### Defined in
 
-[src/types/matcher.ts:288](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L288)
+[src/types/matcher.ts:288](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L288)
 
 ___
 
@@ -88,7 +88,7 @@ Total assignments offered (pending) for the scope
 
 #### Defined in
 
-[src/types/matcher.ts:272](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L272)
+[src/types/matcher.ts:272](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L272)
 
 ___
 
@@ -100,7 +100,7 @@ Assignments parked because their rejection budget ran out
 
 #### Defined in
 
-[src/types/matcher.ts:282](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L282)
+[src/types/matcher.ts:282](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L282)
 
 ___
 
@@ -112,7 +112,7 @@ Assignments parked/dropped because their offer window (`schedule.notAfter`) clos
 
 #### Defined in
 
-[src/types/matcher.ts:284](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L284)
+[src/types/matcher.ts:284](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L284)
 
 ___
 
@@ -124,4 +124,4 @@ Assignments removed/parked by the freshness TTL
 
 #### Defined in
 
-[src/types/matcher.ts:280](https://github.com/ViljarVoidula/assignment-user-matcher/blob/8600cd216fc8e6c0c58c15d71b6fd72a034fd374/src/types/matcher.ts#L280)
+[src/types/matcher.ts:280](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L280)
