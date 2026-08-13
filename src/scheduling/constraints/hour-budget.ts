@@ -18,8 +18,12 @@ export function hourBudget(): SchedulingConstraint {
             const inst = state.ctx.instanceById.get(pair.shiftInstanceId);
             if (!employee || !inst) return 0;
             if (employee.maxHoursForPeriod === undefined) return 0;
+            // Working minutes, not elapsed: `minutesByEmployee` accumulates
+            // working time, and the budget is documented as *worked* hours, so
+            // the candidate must contribute in the same unit — an unpaid break
+            // or a fractional duty must not be double-counted against it.
             const current = state.minutesByEmployee.get(pair.employeeId) ?? 0;
-            return current + inst.durationMinutes > employee.maxHoursForPeriod * 60 ? 1 : 0;
+            return current + inst.workingMinutes > employee.maxHoursForPeriod * 60 ? 1 : 0;
         },
         explain(state, pair) {
             const employee = state.ctx.employeeById.get(pair.employeeId);

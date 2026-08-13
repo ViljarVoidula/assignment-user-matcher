@@ -3,6 +3,7 @@ import { buildModel } from '../../src/scheduling/model';
 import { assign, createState } from '../../src/scheduling/engine/state';
 import { minHourViolations } from '../../src/scheduling/constraints/hour-budget';
 import { staffingViolations } from '../../src/scheduling/constraints/min-staffing';
+import { ScheduleValidationError } from '../../src/scheduling/types';
 import type { Employee, ModelContext, ScheduleInput, ShiftTemplate, WorkingTimeRules } from '../../src/scheduling';
 
 /**
@@ -706,34 +707,29 @@ describe('scheduling constraint branch coverage', function () {
             expect(v.message).to.contain('AT cap');
         });
 
-        it('makes window caps inert when the applied override has no weekly baseline', function () {
-            const dates = [0, 1, 2, 3, 4, 5].map(day);
-            const ctx = ctxFor({
-                rules: { overtime: { ordinaryPerDayMinutes: 8 * H } },
-                employees: [
-                    {
-                        id: 'e1',
-                        tags: [],
-                        timeOff: [],
-                        // A per-person override is not re-validated, so a window cap
-                        // without any weekly baseline simply cannot bite.
-                        rules: {
-                            overtime: {
-                                ordinaryPerDayMinutes: 8 * H,
-                                maxOvertimeInWindow: [{ maxMinutes: 0, windowDays: 7 }],
+        it('rejects a per-person override whose window caps have no weekly baseline', function () {
+            // An override replaces the whole family, so it must satisfy the same
+            // invariants as the global rule — a window cap that could never bite
+            // is a configuration error, not a silent no-op.
+            expect(() =>
+                ctxFor({
+                    rules: { overtime: { ordinaryPerDayMinutes: 8 * H } },
+                    employees: [
+                        {
+                            id: 'e1',
+                            tags: [],
+                            timeOff: [],
+                            rules: {
+                                overtime: {
+                                    ordinaryPerDayMinutes: 8 * H,
+                                    maxOvertimeInWindow: [{ maxMinutes: 0, windowDays: 7 }],
+                                },
                             },
                         },
-                    },
-                ],
-                shifts: [shift('d', '08:00', '16:00', dates)],
-            });
-            const state = stateWith(
-                ctx,
-                dates.slice(0, 5).map((d) => ['e1', `d@${d}`] as [string, string]),
-            );
-            expect(
-                constraint(ctx, 'overtime').verdict!(state, { employeeId: 'e1', shiftInstanceId: `d@${day(5)}` }).pass,
-            ).to.equal(true);
+                    ],
+                    shifts: [shift('d', '08:00', '16:00', [day(0)])],
+                }),
+            ).to.throw(ScheduleValidationError, /employee "e1".*ordinaryPerWeekMinutes/);
         });
 
         it('exempts a person whose override removes the overtime family', function () {

@@ -128,6 +128,13 @@ function noticeShortfall(
  *
  * Computed against the published roster rather than the new one, because the
  * liability attaches to what the worker was told to expect.
+ *
+ * `cancellationDeadlineMinutes` bounds the protected window before the shift's
+ * start: a cancellation inside it owes compensation, one before it does not.
+ * The cancellation instant is the run's `asOf`; without one the engine cannot
+ * know when the change was made, so every cancellation is treated as late —
+ * the conservative reading, since under-stating a wage liability is the error
+ * that matters.
  */
 export function cancellationLedger(state: SearchState, rule: NoticeRule | undefined) {
     if (!rule?.cancellationCompensationMinutes) return [];
@@ -136,6 +143,14 @@ export function cancellationLedger(state: SearchState, rule: NoticeRule | undefi
         const [employeeId, instanceId] = key.split('|');
         if (state.assignments.get(instanceId)?.has(employeeId)) continue;
         const inst = state.ctx.instanceById.get(instanceId);
+        if (
+            rule.cancellationDeadlineMinutes !== undefined &&
+            state.ctx.asOfMinute !== undefined &&
+            inst !== undefined &&
+            inst.startMinute - state.ctx.asOfMinute >= rule.cancellationDeadlineMinutes
+        ) {
+            continue; // cancelled with the deadline still ahead — no liability
+        }
         out.push({
             kind: 'lateCancellationPay' as const,
             employeeId,

@@ -17,11 +17,11 @@
  * outruns the contract.
  */
 
-import type { RuleVerdict, SchedulingConstraint } from '../types';
+import type { ConstraintViolation, RuleVerdict, SchedulingConstraint } from '../types';
 import { fail, fromVerdict, h, instanceOf, pass, timelineFor, MINUTES_PER_DAY } from './support';
 
 export function contractLimits(): SchedulingConstraint {
-    return fromVerdict({
+    const constraint = fromVerdict({
         id: 'contract',
         hardness: 'hard',
         weight: 1,
@@ -94,4 +94,29 @@ export function contractLimits(): SchedulingConstraint {
             });
         },
     });
+
+    // A minimum is only judgeable on the finished roster: every partial roster
+    // is below it by construction, so it cannot be a per-pair rule without
+    // blocking the very assignments that would satisfy it.
+    constraint.evaluate = (state): ConstraintViolation[] => {
+        const out: ConstraintViolation[] = [];
+        for (const employee of state.ctx.employees) {
+            const contract = employee.contract;
+            if (!contract || contract.kind === 'days' || contract.minPeriodMinutes === undefined) continue;
+            const worked = state.minutesByEmployee.get(employee.id) ?? 0;
+            if (worked >= contract.minPeriodMinutes) continue;
+            out.push({
+                constraintId: 'contract',
+                severity: 'hard',
+                employeeId: employee.id,
+                message: `employee "${employee.id}" is rostered ${h(worked)}, below their ${h(contract.minPeriodMinutes)} contract minimum`,
+                actual: worked,
+                required: contract.minPeriodMinutes,
+                unit: 'minutes',
+            });
+        }
+        return out;
+    };
+
+    return constraint;
 }

@@ -53,6 +53,8 @@ export class PersonTimeline {
     private entries: TimelineEntry[] = [];
     /** `prefix[i]` = total working minutes of entries `[0, i)`. */
     private prefix: number[] = [0];
+    /** `prefixMaxEnd[i]` = latest end among entries `[0, i)`; nondecreasing. */
+    private prefixMaxEnd: number[] = [-Infinity];
     private dirty = false;
 
     constructor(history: TimelineEntry[] = []) {
@@ -107,7 +109,7 @@ export class PersonTimeline {
         this.ensureClean();
         if (window.end <= window.start || this.entries.length === 0) return 0;
 
-        const first = firstOverlapping(this.entries, window.start);
+        const first = this.firstOverlapping(window.start);
         let total = 0;
         for (let i = first; i < this.entries.length; i++) {
             const entry = this.entries[i];
@@ -177,7 +179,7 @@ export class PersonTimeline {
     entriesIn(window: MinuteRange): TimelineEntry[] {
         this.ensureClean();
         const out: TimelineEntry[] = [];
-        for (let i = firstOverlapping(this.entries, window.start); i < this.entries.length; i++) {
+        for (let i = this.firstOverlapping(window.start); i < this.entries.length; i++) {
             const entry = this.entries[i];
             if (entry.start >= window.end) break;
             if (entry.end > window.start) out.push(entry);
@@ -313,6 +315,27 @@ export class PersonTimeline {
         return longest;
     }
 
+    /**
+     * First index that may overlap a window starting at `windowStart`.
+     *
+     * Entries are sorted by start but may be *nested* — a long stand-by span can
+     * fully contain a later-starting shift — so walking back from the lower
+     * bound while only the immediately preceding entry reaches past the window
+     * start misses the outer span. The running maximum of entry ends is
+     * nondecreasing, so the first index whose prefix max-end exceeds the window
+     * start is exactly where iteration must begin, found by binary search.
+     */
+    private firstOverlapping(windowStart: number): number {
+        let low = 0;
+        let high = this.entries.length;
+        while (low < high) {
+            const mid = (low + high) >> 1;
+            if (this.prefixMaxEnd[mid + 1] > windowStart) high = mid;
+            else low = mid + 1;
+        }
+        return low;
+    }
+
     private ensureClean(): void {
         if (this.dirty) this.rebuild();
     }
@@ -320,8 +343,11 @@ export class PersonTimeline {
     private rebuild(): void {
         this.prefix = new Array(this.entries.length + 1);
         this.prefix[0] = 0;
+        this.prefixMaxEnd = new Array(this.entries.length + 1);
+        this.prefixMaxEnd[0] = -Infinity;
         for (let i = 0; i < this.entries.length; i++) {
             this.prefix[i + 1] = this.prefix[i] + this.entries[i].workingMinutes;
+            this.prefixMaxEnd[i + 1] = Math.max(this.prefixMaxEnd[i], this.entries[i].end);
         }
         this.dirty = false;
     }
@@ -380,20 +406,6 @@ function lowerBound(entries: TimelineEntry[], start: number): number {
         else high = mid;
     }
     return low;
-}
-
-/**
- * First index that may overlap a window starting at `windowStart`.
- *
- * Entries are sorted by start but may be nested, so stepping back from the
- * lower bound is not sufficient in general; walking back while the previous
- * entry still reaches past the window start is. Timelines are short, so the
- * walk is bounded in practice.
- */
-function firstOverlapping(entries: TimelineEntry[], windowStart: number): number {
-    let index = lowerBound(entries, windowStart);
-    while (index > 0 && entries[index - 1].end > windowStart) index--;
-    return index;
 }
 
 /**

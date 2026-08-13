@@ -65,15 +65,19 @@ export function rollingHours(limits: WorkingTimeLimits): SchedulingConstraint {
 
                 for (const average of limits.rollingAverages ?? []) {
                     const span = average.windowDays * MINUTES_PER_DAY;
-                    const worst = t.maxWorkingMinutesInAnyWindow(span, windowFor(range, span));
-                    const allowance = allowanceFor(state, pair.employeeId, average.maxMinutes, average.windowDays, limits);
-                    if (worst > allowance) {
+                    const breach = worstAverageBreach(state, t, pair.employeeId, average.maxMinutes, span, range, limits);
+                    if (breach !== null) {
                         const label = average.label ?? `${h(average.maxMinutes)}/${average.windowDays}d`;
                         return fail(
                             'rolling-hours',
                             'hard',
-                            `employee "${pair.employeeId}" would work ${h(worst)} in some ${average.windowDays}-day window, over the ${label} limit of ${h(allowance)}`,
-                            { actual: worst, required: allowance, unit: 'minutes', citation: WEEKLY_LIMIT_CITATION },
+                            `employee "${pair.employeeId}" would work ${h(breach.worked)} in some ${average.windowDays}-day window, over the ${label} limit of ${h(breach.allowance)}`,
+                            {
+                                actual: breach.worked,
+                                required: breach.allowance,
+                                unit: 'minutes',
+                                citation: WEEKLY_LIMIT_CITATION,
+                            },
                         );
                     }
                 }
@@ -117,29 +121,60 @@ function dayAverageHolds(timeline: ReturnType<typeof timelineFor>, limits: Worki
 }
 
 /**
- * The window's allowance, reduced for neutralised absence.
+ * Worst breach of a rolling average across the windows the new shift can worsen,
+ * with the allowance reduced *per window* for neutralised absence.
  *
  * Art 16(b) makes paid leave and sick leave neutral in the average. Treating
  * them as zero-hour days would let a fortnight off buy a 96-hour week, so the
- * days are removed from the window rather than counted empty.
+ * absent time is removed from each window's allowance — but only the absence
+ * that actually falls inside that window: sick leave in March must not shrink a
+ * January week's budget.
+ *
+ * Worked minutes and neutral minutes are both piecewise-linear in the window's
+ * start, with breakpoints at entry and absence boundaries, so the extreme lies
+ * on a window whose edge touches one of those boundaries (or the probe bounds).
  */
-function allowanceFor(
+function worstAverageBreach(
     state: SearchState,
+    timeline: ReturnType<typeof timelineFor>,
     employeeId: string,
     maxMinutes: number,
-    windowDays: number,
+    span: number,
+    range: MinuteRange,
     limits: WorkingTimeLimits,
-): number {
+): { worked: number; allowance: number } | null {
+    const bounds = windowFor(range, span);
     const kinds = limits.neutraliseAbsenceKinds;
-    if (!kinds?.length) return maxMinutes;
+    const neutral = kinds?.length
+        ? (state.ctx.absences.get(employeeId) ?? []).filter((a) => a.kind !== undefined && kinds.includes(a.kind))
+        : [];
 
-    const absences = state.ctx.absences.get(employeeId) ?? [];
-    const neutralMinutes = absences
-        .filter((a) => a.kind !== undefined && kinds.includes(a.kind))
-        .reduce((sum, a) => sum + Math.max(0, a.end - a.start), 0);
-    if (neutralMinutes === 0) return maxMinutes;
+    if (neutral.length === 0) {
+        const worked = timeline.maxWorkingMinutesInAnyWindow(span, bounds);
+        return worked > maxMinutes ? { worked, allowance: maxMinutes } : null;
+    }
 
-    const windowMinutes = windowDays * MINUTES_PER_DAY;
-    const neutralFraction = Math.min(1, neutralMinutes / windowMinutes);
-    return maxMinutes * (1 - neutralFraction);
+    const starts = new Set<number>([bounds.start, bounds.end - span]);
+    for (const entry of timeline.entriesIn({ start: bounds.start - span, end: bounds.end + span })) {
+        starts.add(entry.start);
+        starts.add(entry.end - span);
+    }
+    for (const a of neutral) {
+        starts.add(a.start);
+        starts.add(a.end - span);
+    }
+
+    let worst: { worked: number; allowance: number; excess: number } | null = null;
+    for (const start of starts) {
+        const window = { start, end: start + span };
+        const worked = timeline.workingMinutesIn(window);
+        const neutralMinutes = neutral.reduce(
+            (sum, a) => sum + Math.max(0, Math.min(a.end, window.end) - Math.max(a.start, window.start)),
+            0,
+        );
+        const allowance = maxMinutes * (1 - Math.min(1, neutralMinutes / span));
+        const excess = worked - allowance;
+        if (excess > 0 && (worst === null || excess > worst.excess)) worst = { worked, allowance, excess };
+    }
+    return worst === null ? null : { worked: worst.worked, allowance: worst.allowance };
 }

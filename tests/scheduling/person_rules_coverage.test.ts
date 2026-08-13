@@ -173,23 +173,28 @@ describe('person-level rules coverage', function () {
             expect(violations[0].message).to.contain('holidays spread');
         });
 
-        it('balances a tag dimension and labels it with the tag', function () {
+        it('balances a tag dimension on the shift type and labels it with the tag', function () {
             const ctx = ctxFor({
-                rules: { fairness: [{ dimension: 'tag', tag: 'senior', hardMaxSpread: 1 }] },
-                employees: [emp('a', { tags: ['senior'] }), emp('b')],
-                shifts: [shift('d', '08:00', '16:00', ['2026-01-05', '2026-01-07'])],
+                rules: { fairness: [{ dimension: 'tag', tag: 'oncall', hardMaxSpread: 1 }] },
+                employees: [emp('a'), emp('b')],
+                shifts: [
+                    shift('oc', '08:00', '16:00', ['2026-01-05', '2026-01-07'], { shiftTypeTag: 'oncall' }),
+                    shift('d', '08:00', '16:00', ['2026-01-06']),
+                ],
             });
-            // b works too, but untagged shifts contribute nothing to this dimension.
+            // a takes both oncall shifts; b works too, but a plain day shift
+            // contributes nothing to this dimension — the load being equalised
+            // is shifts *of the tagged type*, not tagged people's totals.
             const state = stateWith(ctx, [
-                ['a', 'd@2026-01-05'],
-                ['a', 'd@2026-01-07'],
-                ['b', 'd@2026-01-05'],
+                ['a', 'oc@2026-01-05'],
+                ['a', 'oc@2026-01-07'],
+                ['b', 'd@2026-01-06'],
             ]);
             const violations = constraint(ctx, 'fairness').evaluate!(state);
             expect(violations).to.have.length(1);
             expect(violations[0].employeeId).to.equal('a');
             expect(violations[0].actual).to.equal(2);
-            expect(violations[0].message).to.contain('"senior" shift spread');
+            expect(violations[0].message).to.contain('"oncall" shift spread');
         });
 
         it('lets carriedFairness from a previous period neutralise this period\'s imbalance', function () {

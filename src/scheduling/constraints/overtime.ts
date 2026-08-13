@@ -32,18 +32,27 @@ import { entryIdOf, fail, fromVerdict, h, instanceOf, pass, rangeOf, rulesFor, t
 
 export const OVERTIME_CITATION = 'National overtime law (e.g. EE Töölepingu seadus §44, DE ArbZG §3)';
 
-export function overtime(rule: OvertimeRule): SchedulingConstraint {
+/**
+ * Assert an overtime rule can actually be evaluated. Applied to the global rule
+ * at registration and to each per-person override in `buildModel` — an override
+ * replaces the whole family, so it must stand on its own.
+ */
+export function assertValidOvertimeRule(rule: OvertimeRule, owner = 'rules'): void {
     if (rule.ordinaryPerDayMinutes === undefined && rule.ordinaryPerWeekMinutes === undefined) {
         throw new ScheduleValidationError(
-            'overtime rule needs an ordinary baseline: set ordinaryPerDayMinutes and/or ordinaryPerWeekMinutes',
+            `${owner}: overtime rule needs an ordinary baseline: set ordinaryPerDayMinutes and/or ordinaryPerWeekMinutes`,
         );
     }
     if (rule.maxOvertimePerDayMinutes !== undefined && rule.ordinaryPerDayMinutes === undefined) {
-        throw new ScheduleValidationError('overtime.maxOvertimePerDayMinutes requires ordinaryPerDayMinutes');
+        throw new ScheduleValidationError(`${owner}: overtime.maxOvertimePerDayMinutes requires ordinaryPerDayMinutes`);
     }
     if (rule.maxOvertimeInWindow?.length && rule.ordinaryPerWeekMinutes === undefined) {
-        throw new ScheduleValidationError('overtime.maxOvertimeInWindow requires ordinaryPerWeekMinutes');
+        throw new ScheduleValidationError(`${owner}: overtime.maxOvertimeInWindow requires ordinaryPerWeekMinutes`);
     }
+}
+
+export function overtime(rule: OvertimeRule): SchedulingConstraint {
+    assertValidOvertimeRule(rule);
 
     return fromVerdict({
         id: 'overtime',

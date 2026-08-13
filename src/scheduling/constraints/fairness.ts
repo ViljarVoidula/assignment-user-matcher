@@ -97,14 +97,14 @@ function loadsFor(state: SearchState, rule: FairnessRule): Map<string, number> {
         let load = employee.carriedFairness?.[key] ?? 0;
         for (const instanceId of state.byEmployee.get(employee.id) ?? []) {
             const inst = state.ctx.instanceById.get(instanceId);
-            if (inst) load += contribution(state, rule, inst, employee.id);
+            if (inst) load += contribution(rule, inst);
         }
         loads.set(employee.id, load);
     }
     return loads;
 }
 
-function contribution(state: SearchState, rule: FairnessRule, inst: ShiftInstance, employeeId: string): number {
+function contribution(rule: FairnessRule, inst: ShiftInstance): number {
     switch (rule.dimension) {
         case 'minutes':
             return inst.workingMinutes;
@@ -117,7 +117,11 @@ function contribution(state: SearchState, rule: FairnessRule, inst: ShiftInstanc
         case 'holidays':
             return inst.isPublicHoliday ? 1 : 0;
         case 'tag':
-            return rule.tag && state.ctx.employeeTags.get(employeeId)?.has(rule.tag) ? 1 : 0;
+            // The load being equalised is shifts *of this type* — matched on the
+            // instance's shiftTypeTag, like every other tag-shaped rule. Counting
+            // the employee's own tag would just re-count tagged people's totals
+            // and pin untagged people at a constant zero.
+            return rule.tag !== undefined && inst.shiftTypeTag === rule.tag ? 1 : 0;
         default:
             return 0;
     }

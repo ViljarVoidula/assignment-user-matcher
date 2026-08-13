@@ -41,6 +41,7 @@ import type {
 import { ScheduleValidationError } from './types';
 import { createDefaultConstraints } from './constraints/constraint';
 import { DEFAULT_MIN_REST_MINUTES } from './constraints/min-rest';
+import { assertValidOvertimeRule } from './constraints/overtime';
 import type { TimelineEntry } from './engine/timeline';
 import { PeriodClock, MINUTES_PER_DAY, addDays, assertIsoDate, daysBetween, isoWeekday, parseTimeOfDay } from './time';
 
@@ -104,6 +105,11 @@ export function expandTemplate(
         if (unpaidBreak < 0 || unpaidBreak >= durationMinutes) {
             throw new ScheduleValidationError(`Shift template "${template.id}" has invalid unpaidBreakMinutes`);
         }
+        const paidBreak = template.paidBreakMinutes ?? 0;
+        if (paidBreak < 0 || unpaidBreak + paidBreak >= durationMinutes) {
+            throw new ScheduleValidationError(`Shift template "${template.id}" has invalid paidBreakMinutes`);
+        }
+        // A paid break counts as working time, so only the unpaid one is deducted.
         const workingMinutes = workingMinutesFor(durationMinutes - unpaidBreak, template);
 
         const range = { start: startMinute, end: endMinute };
@@ -119,6 +125,7 @@ export function expandTemplate(
             endMinute,
             durationMinutes,
             workingMinutes,
+            paidBreakMinutes: paidBreak,
             minEmployees: template.minEmployees ?? 1,
             maxEmployees: template.maxEmployees,
             tagRequirements: template.tagRequirements ?? {},
@@ -329,6 +336,9 @@ export function buildModel(input: ScheduleInput): ModelContext {
         employeeById.set(employee.id, employee);
         employeeTags.set(employee.id, new Set(employee.tags ?? []));
         employeeBlockedIntervals.set(employee.id, blockedIntervalsFor(employee, clock, periodDays, instanceById));
+        // Per-person rule overrides replace whole families, so an override must
+        // satisfy the same invariants the global rule was validated against.
+        if (employee.rules?.overtime) assertValidOvertimeRule(employee.rules.overtime, `employee "${employee.id}"`);
         rulesByEmployee.set(employee.id, mergeRules(rules, employee.rules));
 
         const personId = employee.personId ?? employee.id;
@@ -358,6 +368,13 @@ export function buildModel(input: ScheduleInput): ModelContext {
         publishedAtMinute = clock.toPeriodMinutes(datePart, (timePart ?? '00:00').slice(0, 5), 'published.publishedAt');
     }
 
+    let asOfMinute: number | undefined;
+    if (input.asOf) {
+        const [datePart, timePart] = input.asOf.split('T');
+        assertIsoDate(datePart, 'asOf');
+        asOfMinute = clock.toPeriodMinutes(datePart, (timePart ?? '00:00').slice(0, 5), 'asOf');
+    }
+
     return {
         periodStartDate: input.period.startDate,
         periodDays,
@@ -380,6 +397,7 @@ export function buildModel(input: ScheduleInput): ModelContext {
         pinned,
         publishedAtMinute,
         publishedPairs,
+        asOfMinute,
     };
 }
 

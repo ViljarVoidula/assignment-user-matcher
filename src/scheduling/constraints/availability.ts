@@ -16,7 +16,7 @@
  * directives, and it can only be traded off if it is scored rather than binary.
  */
 
-import type { AvailabilityRule, RuleVerdict, SchedulingConstraint, ShiftInstance } from '../types';
+import type { AvailabilityRule, RuleVerdict, SchedulingConstraint, SearchState, ShiftInstance } from '../types';
 import { availabilityApplies } from '../model';
 import { fail, fromVerdict, instanceOf, pass } from './support';
 
@@ -42,9 +42,9 @@ export function availability(): SchedulingConstraint {
                 }
             }
 
-            // An allow-list only binds when the person declared one for a day
-            // this shift could fall on; otherwise every worker with a Monday
-            // window would be barred from Tuesdays they never spoke about.
+            // Declaring any 'available' window inverts the default: everything
+            // outside every declared window is ineligible, including days no
+            // window mentions — a Monday-only declaration bars Tuesdays too.
             const allowLists = employee.availability.filter((r) => r.kind === 'available');
             if (allowLists.length > 0) {
                 const covered = matching
@@ -70,13 +70,12 @@ export function availability(): SchedulingConstraint {
             const preferred = matching.find((r) => r.kind === 'preferred' && overlapsRule(clock, range, r) > 0);
             return pass('availability', preferred ? `matches a preferred window` : 'no availability objection');
         },
-        // Soft avoidance scales by its declared weight so a strong objection
-        // outranks a mild one instead of every preference costing the same.
-        magnitude: (v) => (v.severity === 'soft' ? (v.actual ?? 1) : 1),
     });
 
-    // A soft breach must not make the pair ineligible, so the level is decided
-    // per verdict rather than fixed on the constraint.
+    // A soft breach must not make the pair ineligible, and it must not leak
+    // into the hard score bucket (the SPI levels by constraint, not by
+    // verdict), so `delta` reports hard breaches only. The soft half is scored
+    // by `preferencePenalty`, which the objective adds at the soft level.
     const innerDelta = constraint.delta;
     constraint.delta = (state, pair) => {
         const v = constraint.verdict!(state, pair);
@@ -112,6 +111,26 @@ function overlapsRule(
 ): number {
     if (rule.from === undefined || rule.to === undefined) return range.end - range.start;
     return clock.minutesInClockRange(range, { from: rule.from, to: rule.to });
+}
+
+/**
+ * Weighted preference term over the whole roster, for the soft objective:
+ * every assigned pair contributes its `avoid` weights and is credited its
+ * `preferred` weights. This is what makes `preferred`/`avoid` *scored* rather
+ * than advisory — without it, the solver would treat a roster of avoided
+ * shifts and a roster of preferred ones as equal.
+ */
+export function preferencePenalty(state: SearchState): number {
+    let penalty = 0;
+    for (const [instanceId, employees] of state.assignments) {
+        const inst = state.ctx.instanceById.get(instanceId);
+        if (!inst) continue;
+        for (const employeeId of employees) {
+            const rules = state.ctx.employeeById.get(employeeId)?.availability;
+            if (rules?.length) penalty += preferenceScore(state.ctx.clock, rules, inst);
+        }
+    }
+    return penalty;
 }
 
 /** Soft preference score for a pair: negative is better. Used by candidate ranking. */

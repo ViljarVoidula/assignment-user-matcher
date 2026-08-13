@@ -551,16 +551,18 @@ describe('Scheduling engine coverage', function () {
             expect(state.timelines.for('anna').has('b@@d@2026-01-05')).to.equal(false);
         });
 
-        it('tolerates employees unknown to the model without corrupting bookkeeping', function () {
+        it('treats employees unknown to the model as a no-op, never a partial write', function () {
             const ctx = twoDayCtx();
             const state = createState(ctx);
             assign(state, 'ghost', 'd@2026-01-05', []);
-            expect(state.assignments.get('d@2026-01-05')!.has('ghost')).to.equal(true);
-            expect(state.minutesByEmployee.get('ghost')).to.equal(8 * H);
-            expect(state.timelines.for('ghost').has('ghost@@d@2026-01-05')).to.equal(true);
-            unassign(state, 'ghost', 'd@2026-01-05');
-            expect(state.minutesByEmployee.get('ghost')).to.equal(0);
+            // Nothing is booked anywhere: minutes for an unknown employee would
+            // corrupt the fairness and cost sums.
             expect(state.assignments.get('d@2026-01-05')!.size).to.equal(0);
+            expect(state.minutesByEmployee.has('ghost')).to.equal(false);
+            expect(state.timelines.for('ghost').all()).to.have.length(0);
+            // Unassigning an unknown employee is equally inert.
+            unassign(state, 'ghost', 'd@2026-01-05');
+            expect(state.minutesByEmployee.has('ghost')).to.equal(false);
             expect(state.minutesByEmployee.get('a')).to.equal(0);
         });
 

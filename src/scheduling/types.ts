@@ -399,9 +399,11 @@ export interface BreakRule {
     /** Working minutes after which the break is owed. */
     afterMinutes: number;
     minMinutes: number;
-    splittable?: boolean;
-    minBlockMinutes?: number;
-    /** Paid breaks count as working time; unpaid ones do not. */
+    /**
+     * The entitlement is to a *paid* break, so only `ShiftTemplate.paidBreakMinutes`
+     * discharges it — an unpaid break costs the worker wages and does not.
+     * Unset, any declared break (paid or unpaid) counts.
+     */
     paid?: boolean;
     /**
      * A break the worker must stay reachable through. C-107/19 holds such a
@@ -459,7 +461,10 @@ export interface NoticeRule {
 /** A dimension to equalise across the team. */
 export interface FairnessRule {
     dimension: 'minutes' | 'shifts' | 'nights' | 'weekends' | 'holidays' | 'tag';
-    /** Required when `dimension` is `'tag'`. */
+    /**
+     * Required when `dimension` is `'tag'`: shifts whose `shiftTypeTag` equals
+     * this are the load being equalised (e.g. spread the `'oncall'` shifts).
+     */
     tag?: string;
     weight?: number;
     /**
@@ -511,6 +516,11 @@ export interface ShiftTemplate {
      * hours budget — not 9h.
      */
     unpaidBreakMinutes?: number;
+    /**
+     * Paid break minutes inside the span. They count as working time (no
+     * deduction), and they are what discharges a `BreakRule` with `paid: true`.
+     */
+    paidBreakMinutes?: number;
     /**
      * How this duty counts as working time.
      *
@@ -598,6 +608,15 @@ export interface ScheduleInput {
     history?: HistoricalAssignment[];
     /** A published roster, which anchors the notice clock and the perturbation objective. */
     published?: { roster: ScheduledAssignment[]; publishedAt?: string };
+    /**
+     * The instant this solve or compliance run represents, as an ISO date or
+     * date-time. It anchors deadline arithmetic that needs a "now" — notably
+     * whether cancelling a published assignment fell inside
+     * `notice.cancellationDeadlineMinutes` of the shift's start. Omitted, every
+     * cancellation is treated as late (the conservative reading). Caller-supplied
+     * so runs stay deterministic and replayable.
+     */
+    asOf?: string;
     /** Pairs the solver may not move. */
     pinned?: AssignmentPair[];
     /** Absences that block assignment and may be neutral in rolling averages. */
@@ -778,6 +797,8 @@ export interface ShiftInstance {
      * clock without counting as work.
      */
     workingMinutes: number;
+    /** Paid break minutes declared by the template. Count as working time. */
+    paidBreakMinutes: number;
     maxEmployees?: number;
     tagMaximums: Record<string, number>;
     requiredTags: string[];
@@ -827,6 +848,8 @@ export interface ModelContext {
     /** Period minutes the roster was published, when a published roster was supplied. */
     publishedAtMinute?: number;
     publishedPairs: Set<string>;
+    /** Period minutes of `ScheduleInput.asOf`, when supplied. */
+    asOfMinute?: number;
 }
 
 /** A candidate (employee, shiftInstance) pair under evaluation. */

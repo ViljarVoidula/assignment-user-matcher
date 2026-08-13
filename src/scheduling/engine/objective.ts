@@ -27,6 +27,7 @@
 
 import type { FairnessRule, ModelContext, SearchState } from '../types';
 import { fairnessPenalty } from '../constraints/fairness';
+import { preferencePenalty } from '../constraints/availability';
 
 export const UNFILLED_WEIGHT = 10_000;
 export const TAG_SHORTFALL_WEIGHT = 5_000;
@@ -146,6 +147,9 @@ export function scoreLex(
 
     totals.soft += minHoursShortfalls(ctx, state) * (minHoursWeight || MIN_HOURS_WEIGHT);
     totals.soft += fairnessPenalty(state, fairnessRules ?? ctx.rules?.fairness);
+    // Preferred/avoid availability windows are scored, not advisory: avoided
+    // assignments cost, preferred ones credit, weighted per rule.
+    totals.soft += preferencePenalty(state);
     if (objective === 'balanced') totals.soft += hoursVariance(ctx, state) / 60; // hours-scale variance term
 
     return totals;

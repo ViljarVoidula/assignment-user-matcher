@@ -31,8 +31,15 @@ export function inShiftBreaks(rules: BreakRule[]): SchedulingConstraint {
     const shortfall = (inst: ShiftInstance): { rule: BreakRule; provided: number } | null => {
         const applicable = ordered.find((r) => inst.workingMinutes > r.afterMinutes);
         if (!applicable) return null;
-        // An interruptible break provides nothing towards the entitlement.
-        const provided = applicable.interruptible ? 0 : inst.durationMinutes - inst.workingMinutes;
+        // An interruptible break provides nothing towards the entitlement
+        // (C-107/19). A `paid: true` entitlement is discharged only by declared
+        // paid break minutes — an unpaid break costs the worker wages, which is
+        // exactly what the paid entitlement exists to prevent.
+        const provided = applicable.interruptible
+            ? 0
+            : applicable.paid
+              ? inst.paidBreakMinutes
+              : inst.durationMinutes - inst.workingMinutes + inst.paidBreakMinutes;
         if (provided >= applicable.minMinutes) return null;
         return { rule: applicable, provided };
     };
