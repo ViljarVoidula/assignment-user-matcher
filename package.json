@@ -29,6 +29,7 @@
         "test": "nyc mocha tests/ --recursive --extension .ts --exit",
         "benchmark:learning": "ts-node benchmark-learning.ts",
         "benchmark:weights": "ts-node benchmark-weights.ts",
+        "benchmark:scheduling": "ts-node benchmark-scheduling.ts",
         "build:docs": "npx typedoc --plugin typedoc-plugin-markdown",
         "prettier": "prettier --write .",
         "build": "rimraf dist && tsc && mkdir -p dist/lua && cp src/lua/*.lua dist/lua/",

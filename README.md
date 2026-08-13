@@ -459,7 +459,7 @@ Semantics worth knowing:
 - **The offer deadline never extends.** `notAfter` is absolute, so rejection requeues carry the same deadline — a re-offered assignment can still miss.
 - **Fire-once, replica-safe.** Sweep entries are claimed with a `ZREM` before acting, so concurrent replicas can run the sweep in parallel.
 - **Sweep granularity.** Schedule clocks fire on the maintenance tick (`processScheduledAssignments()`), not at the exact millisecond.
-- **Recurrence is out of scope.** Materialize each occurrence as its own assignment from your scheduler/shift tool; re-adding an existing id never resets its clocks, so materialization is idempotent.
+- **Recurrence is out of scope.** Materialize each occurrence as its own assignment from your scheduler/shift tool; re-adding an existing id never resets its clocks, so materialization is idempotent. The [`scheduling` module](#shift-scheduling-scheduling-module) is that shift tool if you need one — it produces dated occurrences you can feed straight in.
 - **Operator override.** `assignToUser(id, userId)` refuses held assignments; `{ force: true }` early-activates (clocks anchor there). If the user then rejects and `notBefore` is still in the future, the assignment returns to the scheduled store.
 - **Unparking.** `unparkAssignment(id, { resetSchedule: true })` strips the schedule policy; without it a miss-parked assignment misses again on the next sweep.
 
@@ -1490,6 +1490,96 @@ Performance test finished.
 ```
 
 This demonstrates the library's impressive performance even with large numbers of assignments and shows how subsequent matching operations can be even faster after initial assignment distribution.
+
+## Shift Scheduling (`scheduling` module)
+
+A companion engine for **rostering**: generating fair, constraint-compliant timetables that assign employees to shifts over a period. Unlike the matcher, this module is **pure and Redis-free** — `solveSchedule(input)` is a synchronous in-process function; wrap it in your own queue if you need one.
+
+```ts
+import { solveSchedule } from 'assignment-user-matcher';
+
+const result = solveSchedule({
+    period: { startDate: '2026-01-05', endDate: '2026-01-11' },
+    employees: [
+        { id: 'alice', tags: ['nurse'], timeOff: [{ date: '2026-01-07' }], maxHoursForPeriod: 40 },
+        { id: 'bob', tags: ['nurse', 'lead'], timeOff: [] },
+    ],
+    shifts: [
+        { id: 'day', name: 'Day', startTime: '08:00', endTime: '16:00', minEmployees: 1, tagRequirements: { nurse: 1 } },
+        { id: 'night', name: 'Night', startTime: '22:00', endTime: '06:00', minEmployees: 1 }, // overnight
+    ],
+    objective: 'balanced', // or 'standard'
+    seed: 42, // reproducible runs
+    timeBudgetMs: 10_000, // improvement-loop wall clock
+});
+
+// result.status: 'optimal' | 'feasible' | 'partial'
+// result.assignments: [{ shiftInstanceId: 'day@2026-01-05', employeeId, date, reasons }]
+// result.violations: structured report of unfilled slots, tag shortfalls, soft min-hours misses
+```
+
+Modeling rules: every shift occurrence gets a unique **shift-instance id** (`<templateId>@<date>`), overnight shifts (`endTime <= startTime`) roll into the next day explicitly, and durations are resolved through a **DST-correct clock** — pass `period.timeZone` and a 22:00–06:00 shift is 7h on the spring transition and 9h on the autumn one, not 8h. Working time is the span less `unpaidBreakMinutes`, scaled by any duty classification, so hour budgets see 8h15 for a 9h shift with a 45-minute break.
+
+Constraints are self-contained TypeScript classes behind a common interface. Override hardness/weights or register customs via `constraints: { overrides, custom }`.
+
+### Working-time rules
+
+The `rules` field is the labour-law layer. Every field is optional and **every value is caller-supplied** — the library ships the *shapes* EU working-time law takes, never a jurisdiction's numbers, because those differ per member state, per sector and per collective agreement, and change without notice. This is plain JSON, so a template or an LLM can produce it and the same payload can back a public API.
+
+```ts
+const result = solveSchedule({
+    period: { startDate: '2026-01-05', endDate: '2026-02-01', timeZone: 'Europe/Berlin' },
+    employees, shifts,
+    rules: {
+        dailyRest: { minMinutes: 660 },                                  // Art 3 floor; ES/RO use 720
+        weeklyRest: { minMinutes: 2100, windowDays: 7 },                 // 35h; EE uses 2880
+        workingTime: {
+            maxPerDayMinutes: 600,                                       // DE ArbZG §3
+            rollingAverages: [{ maxMinutes: 2880, windowDays: 7 }],      // 48h in ANY 7 days
+        },
+        nightWork: { window: { from: '23:00', to: '06:00' }, maxShiftMinutes: 480 },
+        breaks: [{ afterMinutes: 360, minMinutes: 30 }, { afterMinutes: 540, minMinutes: 45 }],
+        consecutive: { maxWorkingDays: 6, forbiddenSuccessions: [{ fromTag: 'night', toTag: 'early' }] },
+        fairness: [{ dimension: 'nights', weight: 2 }, { dimension: 'weekends', weight: 1 }],
+    },
+    history,   // previous-period tail, so the 1st of the month is not non-compliant by construction
+});
+```
+
+Rules cover: daily rest (rolling window, reduction allowances, clock-band containment), weekly rest (two-level floor plus average), rolling working-time averages with absence neutralisation, overtime (ordinary-vs-overtime split, consent, per-day and per-window caps, time-off-in-lieu), duty-type volume quotas, night work (configurable band, per-shift cap, averaging, hazardous absolute cap, volume quotas, prohibited bands), in-shift breaks, consecutive days and nights, forbidden shift successions, minimum start interval, Sunday and holiday rules, minimum engagement, publication and change notice, availability and preferences, date-valid qualifications, group composition, statutory protections, contract limits, and fairness.
+
+`Employee.rules` overrides the global set per person — that is how age classes, individual opt-outs and hazardous-work status are expressed. `Employee.personId` aggregates several contracts onto one natural person, which rest and window rules require.
+
+**Overtime** is regulated separately from total working time where national law does so. `rules.overtime` defines the ordinary baseline (`ordinaryPerDayMinutes` / `ordinaryPerWeekMinutes`; a person's `contract.weeklyMinutes` overrides the weekly figure, so a part-timer's overtime starts at their agreed hours), caps the overtime portion per rolling 24h or per rolling window, and with `requiresConsent` makes any overtime conditional on the employee's recorded `overtimeConsent`. With `compensation: 'timeOff'`, each employee's period overtime accrues a `timeOffInLieu` entry in `result.ledger`.
+
+**Duty-type quotas** (`rules.dutyQuotas`) cap how much of one duty type a person may hold over a rolling window, matched on `shiftTypeTag` — e.g. "at most 30 hours of stand-by in any 28 days". `maxMinutes` counts *elapsed* duty minutes (a stand-by cap limits clock occupation, which is exactly the time a duty classification keeps out of the working-time budget); `maxCount` caps occurrences.
+
+### Labour cost
+
+`Employee.cost` prices the roster: hourly rate, premium bands (`night` / `sunday` / `holiday`, stacked additively or by maximum), an overtime step (`overtimeAfterMinutes` + `overtimeMultiplier`), and a `standbyRateFraction` paying the non-working remainder of a duty-classified span (e.g. stand-by owed at 1/10 of the wage). When any employee carries a cost model, `result.cost` reports `{ totalCents, byEmployee }`.
+
+Cost joins the *solve* objective only when asked: `objectives: { costWeightPerEuro: n }` adds a soft term of `n` points per euro, so the solver prefers cheaper rosters among otherwise-equal ones — and can never trade a legal breach or an unfilled slot for a saving, because score levels are lexicographic. The same arithmetic drives `repairSchedule`'s per-candidate `marginalCostCents` (which accounts for the overtime step, so the same shift is dearer in the hands of someone already at their threshold). Objective weights are hashed into `provenance.rulesHash` alongside the rules.
+
+### Operational APIs
+
+```ts
+checkCompliance(input, roster)        // validate a hand-edited or externally-produced roster
+explainCandidate(input, who, shift)   // every rule's verdict, with numbers
+repairSchedule(input, disruption, published)  // minimal-perturbation re-plan + ranked candidates
+diagnoseInfeasibility(input)          // why it cannot be solved, before solving
+```
+
+`repairSchedule` is the call-in path: everything untouched is pinned, so you get a **diff** rather than an unrecognisable new roster, plus a ranked list of who can lawfully cover, each with compliance verdicts, marginal cost and a rationale. All four share the solver's constraint set — there is deliberately no second validation path.
+
+### Compliance boundary
+
+Ranking uses declared qualifications, contractual availability, legal limits, cost, and fairness debt computed from **realised** assignment counts. It never consumes reliability scores, no-show prediction, acceptance history or learned per-worker behaviour, and the module is not wired to the matcher's learning layer. Under AI Act Annex III point 4(b), allocating on individual behaviour or traits is high-risk, and the Art 6(3) narrow-task filter has an absolute carve-back for profiling — so that boundary is what keeps this a constraint solver. `result.provenance` records `{ engineVersion, seed, rulesHash, profilingFree }` for audit.
+
+Infeasibility is never silent: understaffed periods return a best-effort partial schedule with `status: 'partial'`, an `unfilledSlots` count, and per-slot violations; slots with zero eligible employees are reported before the search runs. Violations carry `actual`, `required`, `unit` and `citation`. Malformed input throws `ScheduleValidationError`.
+
+`'optimal'` means _no known improvement_, not a proof of optimality.
+
+Scale (500 employees × 31 days × 3 shifts/day, full EU rule set — `pnpm benchmark:scheduling`): first feasible ~0.4s, converged within the time budget, compliance re-check ~0.1s, repair ~0.15s.
 
 ## Important Considerations (Disclaimer)
 
