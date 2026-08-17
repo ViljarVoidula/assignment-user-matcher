@@ -3600,6 +3600,18 @@ export default class AssignmentMatcher implements WorkflowHost {
             });
         }
 
+        // Every other terminal transition emits one; this one did not, so a
+        // worker-reported failure was invisible to lifecycle observers (and
+        // therefore to the platform's webhooks, sockets and push) even though
+        // the workflow stream above heard about it.
+        this.emitAssignmentLifecycle({
+            kind: 'failed',
+            taskId: assignmentId,
+            workerId: userId,
+            reason,
+            failedAt: now,
+        });
+
         return true;
     }
 

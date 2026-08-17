@@ -25,9 +25,9 @@ actually happened, use decision traces instead.
 
 #### Defined in
 
-[src/types/matcher.ts:458](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L458)
+[src/types/matcher.ts:458](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L458)
 
-___
+---
 
 ### candidates
 
@@ -35,9 +35,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:467](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L467)
+[src/types/matcher.ts:467](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L467)
 
-___
+---
 
 ### evaluatedAt
 
@@ -45,13 +45,13 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:466](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L466)
+[src/types/matcher.ts:466](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L466)
 
-___
+---
 
 ### ownerId
 
-• **ownerId**: ``null`` \| `string`
+• **ownerId**: `null` \| `string`
 
 Current owner for pending assignments and completer for completed ones.
 `null` while queued and for accepted assignments (ownership metadata is
@@ -59,14 +59,14 @@ released on acceptance — consult decision traces for the full history).
 
 #### Defined in
 
-[src/types/matcher.ts:465](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L465)
+[src/types/matcher.ts:465](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L465)
 
-___
+---
 
 ### status
 
-• **status**: ``"queued"`` \| ``"pending"`` \| ``"accepted"`` \| ``"completed"`` \| ``"scheduled"`` \| ``"not_found"``
+• **status**: `"queued"` \| `"pending"` \| `"accepted"` \| `"completed"` \| `"scheduled"` \| `"not_found"`
 
 #### Defined in
 
-[src/types/matcher.ts:459](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L459)
+[src/types/matcher.ts:459](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L459)

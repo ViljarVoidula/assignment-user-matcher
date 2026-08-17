@@ -385,6 +385,12 @@ The wait clock always survives an escalation: requeues go through `addAssignment
 
 Subscribe via `onAssignmentLifecycle` for `escalated` (`{ fromWorkerId, level, blockedPreviousOwner }`) and `escalationExhausted` (`{ level, parked }`) events; `expired` is still emitted first, so existing consumers are unaffected. Parked assignments are reachable with `getParkedAssignments()`, returned to the queue with `unparkAssignment(id, { resetEscalation? })`, and report `_status: 'parked'` from `getAssignment()` — they never read as "not found". `getEscalationLevel(id)` reports how far an assignment has climbed.
 
+#### `failed` — the worker-reported outcome
+
+`failAssignment(userId, assignmentId, reason?)` now emits `{ kind: 'failed', taskId, workerId, reason?, failedAt }`. It previously emitted nothing at all, so an explicit failure was the one terminal transition invisible to `onAssignmentLifecycle` (the workflow event stream did hear it). It is deliberately distinct from `completionBreached` with `action: 'fail'`: that is a deadline a policy acted on, this is a person reporting that the work could not be done. No `assignment` snapshot rides along — the record stays in the completed store carrying `_failedBy` / `_failureReason`, so `getAssignment()` can still answer for it.
+
+A host that `switch`es exhaustively over `AssignmentLifecycleEvent` will see a new `kind` here; the union is additive and every existing branch keeps its shape.
+
 ### SLA policies (`Assignment.sla`)
 
 Escalation owns the _response_ side (how long a matched user has to accept). `SlaPolicy` owns everything after that: how long the accepting user has to finish, how many times the work may be refused before it is pulled from rotation, and an absolute freshness cutoff after which the work is moot.

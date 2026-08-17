@@ -22,9 +22,9 @@ Whether the matcher injects the `default` tag
 
 #### Defined in
 
-[src/types/matcher.ts:525](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L525)
+[src/types/matcher.ts:525](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L525)
 
-___
+---
 
 ### matchExpirationMs
 
@@ -34,9 +34,9 @@ Fallback response deadline when no escalation policy declares one
 
 #### Defined in
 
-[src/types/matcher.ts:523](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L523)
+[src/types/matcher.ts:523](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L523)
 
-___
+---
 
 ### now
 
@@ -46,4 +46,4 @@ Reference time in epoch ms (default: `Date.now()`)
 
 #### Defined in
 
-[src/types/matcher.ts:521](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L521)
+[src/types/matcher.ts:521](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L521)

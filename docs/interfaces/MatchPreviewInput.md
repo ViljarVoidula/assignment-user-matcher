@@ -26,9 +26,9 @@ Input for `AssignmentMatcher.previewMatch()`: describe a hypothetical assignment
 
 #### Defined in
 
-[src/types/matcher.ts:475](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L475)
+[src/types/matcher.ts:475](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L475)
 
-___
+---
 
 ### latitude
 
@@ -36,9 +36,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:477](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L477)
+[src/types/matcher.ts:477](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L477)
 
-___
+---
 
 ### longitude
 
@@ -46,9 +46,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:478](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L478)
+[src/types/matcher.ts:478](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L478)
 
-___
+---
 
 ### maxDistanceKm
 
@@ -56,9 +56,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:479](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L479)
+[src/types/matcher.ts:479](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L479)
 
-___
+---
 
 ### priority
 
@@ -66,9 +66,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:473](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L473)
+[src/types/matcher.ts:473](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L473)
 
-___
+---
 
 ### requireGeo
 
@@ -76,9 +76,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:480](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L480)
+[src/types/matcher.ts:480](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L480)
 
-___
+---
 
 ### skillThresholds
 
@@ -86,9 +86,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:474](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L474)
+[src/types/matcher.ts:474](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L474)
 
-___
+---
 
 ### tags
 
@@ -96,9 +96,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:472](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L472)
+[src/types/matcher.ts:472](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L472)
 
-___
+---
 
 ### vetoedUsers
 
@@ -106,4 +106,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:476](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L476)
+[src/types/matcher.ts:476](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L476)

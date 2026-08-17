@@ -28,7 +28,7 @@ await matcher.addAssignment({
     tags: ['callbacks'],
     schedule: {
         notBefore: Date.parse('2026-08-07T09:00:00Z'), // hidden until 9:00
-        notAfter: Date.parse('2026-08-07T11:00:00Z'),  // parked if nobody accepted by 11:00
+        notAfter: Date.parse('2026-08-07T11:00:00Z'), // parked if nobody accepted by 11:00
     },
 });
 matcher.startMaintenance(); // schedule clocks are swept by the maintenance tick
@@ -57,9 +57,9 @@ policy is ignored.
 
 #### Defined in
 
-[src/types/matcher.ts:258](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L258)
+[src/types/matcher.ts:258](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L258)
 
-___
+---
 
 ### notBefore
 
@@ -71,15 +71,16 @@ The scheduled sweep enqueues it once the time arrives.
 
 #### Defined in
 
-[src/types/matcher.ts:249](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L249)
+[src/types/matcher.ts:249](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L249)
 
-___
+---
 
 ### onMiss
 
-• `Optional` **onMiss**: ``"park"`` \| ``"drop"``
+• `Optional` **onMiss**: `"park"` \| `"drop"`
 
 What happens when `notAfter` elapses un-accepted.
+
 - `'park'` — move to the parked store for operator inspection;
   retrievable via `getParkedAssignments()` / `unparkAssignment()`.
 - `'drop'` — remove the assignment entirely.
@@ -87,9 +88,9 @@ What happens when `notAfter` elapses un-accepted.
 **`Default`**
 
 ```ts
-'park'
+'park';
 ```
 
 #### Defined in
 
-[src/types/matcher.ts:266](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L266)
+[src/types/matcher.ts:266](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L266)

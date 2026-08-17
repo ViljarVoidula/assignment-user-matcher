@@ -280,6 +280,78 @@ describe('Matcher Lifecycle Tests', async function () {
         expect(events[0].reason).to.equal('operator');
     });
 
+    it('Should emit failed lifecycle event when a worker reports failure', async function () {
+        const events: any[] = [];
+        matcher = new Matcher(redisClient, {
+            maxUserBacklogSize: 5,
+            relevantBatchSize: 10,
+            matchExpirationMs: 1000,
+            onAssignmentLifecycle: (event) => events.push(event),
+        });
+
+        await matcher.addUser({ id: 'u1', tags: ['tag1'] });
+        await matcher.addAssignment({ id: 'a1', tags: ['tag1'], priority: 10 });
+        await matcher.matchUsersAssignments('u1');
+        await matcher.acceptAssignment('u1', 'a1');
+        events.length = 0;
+
+        await matcher.failAssignment('u1', 'a1', 'part out of stock');
+
+        expect(events).to.have.lengthOf(1);
+        expect(events[0].kind).to.equal('failed');
+        expect(events[0].taskId).to.equal('a1');
+        expect(events[0].workerId).to.equal('u1');
+        expect(events[0].reason).to.equal('part out of stock');
+        expect(events[0].failedAt).to.be.a('number');
+    });
+
+    it('Should emit failed with no reason when none was given', async function () {
+        const events: any[] = [];
+        matcher = new Matcher(redisClient, {
+            maxUserBacklogSize: 5,
+            relevantBatchSize: 10,
+            matchExpirationMs: 1000,
+            onAssignmentLifecycle: (event) => events.push(event),
+        });
+
+        await matcher.addUser({ id: 'u1', tags: ['tag1'] });
+        await matcher.addAssignment({ id: 'a1', tags: ['tag1'], priority: 10 });
+        await matcher.matchUsersAssignments('u1');
+        await matcher.acceptAssignment('u1', 'a1');
+        events.length = 0;
+
+        await matcher.failAssignment('u1', 'a1');
+
+        expect(events).to.have.lengthOf(1);
+        expect(events[0].kind).to.equal('failed');
+        expect(events[0].reason).to.equal(undefined);
+    });
+
+    it('Should not emit failed when the assignment was never accepted', async function () {
+        const events: any[] = [];
+        matcher = new Matcher(redisClient, {
+            maxUserBacklogSize: 5,
+            relevantBatchSize: 10,
+            matchExpirationMs: 1000,
+            onAssignmentLifecycle: (event) => events.push(event),
+        });
+
+        await matcher.addUser({ id: 'u1', tags: ['tag1'] });
+        await matcher.addAssignment({ id: 'a1', tags: ['tag1'], priority: 10 });
+        await matcher.matchUsersAssignments('u1');
+        events.length = 0;
+
+        // failAssignment throws for anything not in the accepted store, and the
+        // event must not fire ahead of the write that justifies it.
+        try {
+            await matcher.failAssignment('u1', 'a1', 'nope');
+            expect.fail('expected failAssignment to throw');
+        } catch {
+            // expected
+        }
+        expect(events.filter((e) => e.kind === 'failed')).to.have.lengthOf(0);
+    });
+
     it('Should emit pending lifecycle event on manual assignment transfer', async function () {
         const events: any[] = [];
         matcher = new Matcher(redisClient, {

@@ -25,9 +25,9 @@ Event published to Redis Streams for workflow orchestration
 
 #### Defined in
 
-[src/types/matcher.ts:1117](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L1117)
+[src/types/matcher.ts:1126](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1126)
 
-___
+---
 
 ### eventId
 
@@ -35,9 +35,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1114](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L1114)
+[src/types/matcher.ts:1123](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1123)
 
-___
+---
 
 ### payload
 
@@ -45,9 +45,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1121](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L1121)
+[src/types/matcher.ts:1130](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1130)
 
-___
+---
 
 ### stepId
 
@@ -55,9 +55,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L1119)
+[src/types/matcher.ts:1128](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1128)
 
-___
+---
 
 ### timestamp
 
@@ -65,9 +65,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1120](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L1120)
+[src/types/matcher.ts:1129](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1129)
 
-___
+---
 
 ### type
 
@@ -75,9 +75,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1115](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L1115)
+[src/types/matcher.ts:1124](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1124)
 
-___
+---
 
 ### userId
 
@@ -85,9 +85,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1116](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L1116)
+[src/types/matcher.ts:1125](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1125)
 
-___
+---
 
 ### workflowInstanceId
 
@@ -95,4 +95,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1118](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L1118)
+[src/types/matcher.ts:1127](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1127)

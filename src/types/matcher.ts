@@ -603,6 +603,15 @@ export type AssignmentLifecycleEvent =
     | { kind: 'rejected'; taskId: string; workerId: string; rejectedAt: number }
     | { kind: 'completed'; taskId: string; workerId: string; completedAt: number }
     /**
+     * The accepting user reported the work could not be done
+     * (`failAssignment`). The counterpart to `completed`, and distinct from
+     * `completionBreached` with `action: 'fail'`: that one is a deadline the
+     * policy acted on, this one is a person saying so. The record stays in the
+     * completed store carrying `_failedBy` / `_failureReason`, so no snapshot
+     * is needed.
+     */
+    | { kind: 'failed'; taskId: string; workerId: string; reason?: string; failedAt: number }
+    /**
      * An `EscalationPolicy` moved an unanswered assignment on. Always follows
      * the `expired` event for the same assignment — `expired` says the deadline
      * elapsed, `escalated` says what the policy did about it.

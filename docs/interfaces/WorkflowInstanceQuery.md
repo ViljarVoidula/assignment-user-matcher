@@ -23,9 +23,9 @@ Opaque pagination cursor from a previous page's `nextCursor`
 
 #### Defined in
 
-[src/types/matcher.ts:1240](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L1240)
+[src/types/matcher.ts:1249](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1249)
 
-___
+---
 
 ### limit
 
@@ -35,9 +35,9 @@ Maximum instances returned (default 50), newest-created first
 
 #### Defined in
 
-[src/types/matcher.ts:1238](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L1238)
+[src/types/matcher.ts:1247](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1247)
 
-___
+---
 
 ### status
 
@@ -47,9 +47,9 @@ Only instances in this status
 
 #### Defined in
 
-[src/types/matcher.ts:1236](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L1236)
+[src/types/matcher.ts:1245](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1245)
 
-___
+---
 
 ### workflowDefinitionId
 
@@ -59,4 +59,4 @@ Only instances of this workflow definition
 
 #### Defined in
 
-[src/types/matcher.ts:1234](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L1234)
+[src/types/matcher.ts:1243](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1243)

@@ -23,14 +23,14 @@ Builder for workflow definitions.
 
 ### \_addStep
 
-▸ **_addStep**(`step`): `void`
+▸ **\_addStep**(`step`): `void`
 
 Internal method to add a step from the step builder.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name   | Type                                            |
+| :----- | :---------------------------------------------- |
 | `step` | [`WorkflowStep`](../interfaces/WorkflowStep.md) |
 
 #### Returns
@@ -39,9 +39,9 @@ Internal method to add a step from the step builder.
 
 #### Defined in
 
-[src/workflow-builder.ts:307](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/workflow-builder.ts#L307)
+[src/workflow-builder.ts:307](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L307)
 
-___
+---
 
 ### addStep
 
@@ -51,8 +51,8 @@ Add a pre-built step to the workflow.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name   | Type                                            |
+| :----- | :---------------------------------------------- |
 | `step` | [`WorkflowStep`](../interfaces/WorkflowStep.md) |
 
 #### Returns
@@ -61,9 +61,9 @@ Add a pre-built step to the workflow.
 
 #### Defined in
 
-[src/workflow-builder.ts:299](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/workflow-builder.ts#L299)
+[src/workflow-builder.ts:299](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L299)
 
-___
+---
 
 ### build
 
@@ -81,9 +81,9 @@ Error if the workflow is invalid
 
 #### Defined in
 
-[src/workflow-builder.ts:323](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/workflow-builder.ts#L323)
+[src/workflow-builder.ts:323](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L323)
 
-___
+---
 
 ### defaultTimeout
 
@@ -93,8 +93,8 @@ Set the default timeout for all steps (in milliseconds).
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name | Type     |
+| :--- | :------- |
 | `ms` | `number` |
 
 #### Returns
@@ -103,9 +103,9 @@ Set the default timeout for all steps (in milliseconds).
 
 #### Defined in
 
-[src/workflow-builder.ts:274](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/workflow-builder.ts#L274)
+[src/workflow-builder.ts:274](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L274)
 
-___
+---
 
 ### initialStep
 
@@ -115,8 +115,8 @@ Set the initial (entry point) step ID.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name     | Type     |
+| :------- | :------- |
 | `stepId` | `string` |
 
 #### Returns
@@ -125,9 +125,9 @@ Set the initial (entry point) step ID.
 
 #### Defined in
 
-[src/workflow-builder.ts:314](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/workflow-builder.ts#L314)
+[src/workflow-builder.ts:314](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L314)
 
-___
+---
 
 ### maxEscalationDepth
 
@@ -138,8 +138,8 @@ falling back to the ordinary failure path (default 10).
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name    | Type     |
+| :------ | :------- |
 | `depth` | `number` |
 
 #### Returns
@@ -148,9 +148,9 @@ falling back to the ordinary failure path (default 10).
 
 #### Defined in
 
-[src/workflow-builder.ts:283](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/workflow-builder.ts#L283)
+[src/workflow-builder.ts:283](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L283)
 
-___
+---
 
 ### metadata
 
@@ -160,8 +160,8 @@ Set workflow metadata.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name       | Type                        |
+| :--------- | :-------------------------- |
 | `metadata` | `Record`\<`string`, `any`\> |
 
 #### Returns
@@ -170,9 +170,9 @@ Set workflow metadata.
 
 #### Defined in
 
-[src/workflow-builder.ts:266](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/workflow-builder.ts#L266)
+[src/workflow-builder.ts:266](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L266)
 
-___
+---
 
 ### step
 
@@ -182,8 +182,8 @@ Start building a new step.
 
 #### Parameters
 
-| Name | Type | Description |
-| :------ | :------ | :------ |
+| Name | Type     | Description                                         |
+| :--- | :------- | :-------------------------------------------------- |
 | `id` | `string` | Unique identifier for the step within this workflow |
 
 #### Returns
@@ -192,9 +192,9 @@ Start building a new step.
 
 #### Defined in
 
-[src/workflow-builder.ts:292](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/workflow-builder.ts#L292)
+[src/workflow-builder.ts:292](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L292)
 
-___
+---
 
 ### version
 
@@ -204,8 +204,8 @@ Set the workflow version.
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name      | Type     |
+| :-------- | :------- |
 | `version` | `number` |
 
 #### Returns
@@ -214,9 +214,9 @@ Set the workflow version.
 
 #### Defined in
 
-[src/workflow-builder.ts:258](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/workflow-builder.ts#L258)
+[src/workflow-builder.ts:258](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L258)
 
-___
+---
 
 ### create
 
@@ -226,10 +226,10 @@ Create a new workflow builder.
 
 #### Parameters
 
-| Name | Type | Description |
-| :------ | :------ | :------ |
-| `id` | `string` | Unique identifier for the workflow |
-| `name` | `string` | Human-readable name |
+| Name   | Type     | Description                        |
+| :----- | :------- | :--------------------------------- |
+| `id`   | `string` | Unique identifier for the workflow |
+| `name` | `string` | Human-readable name                |
 
 #### Returns
 
@@ -237,4 +237,4 @@ Create a new workflow builder.
 
 #### Defined in
 
-[src/workflow-builder.ts:251](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/workflow-builder.ts#L251)
+[src/workflow-builder.ts:251](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L251)

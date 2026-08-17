@@ -29,9 +29,9 @@ back to their auto-derived behavior.
 
 #### Defined in
 
-[src/types/matcher.ts:360](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L360)
+[src/types/matcher.ts:360](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L360)
 
-___
+---
 
 ### fairness
 
@@ -39,9 +39,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:359](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L359)
+[src/types/matcher.ts:359](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L359)
 
-___
+---
 
 ### fairnessLoadPenalty
 
@@ -49,9 +49,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:361](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L361)
+[src/types/matcher.ts:361](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L361)
 
-___
+---
 
 ### fairnessMaxPerWindow
 
@@ -59,9 +59,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:363](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L363)
+[src/types/matcher.ts:363](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L363)
 
-___
+---
 
 ### fairnessTieBand
 
@@ -69,9 +69,9 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:362](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L362)
+[src/types/matcher.ts:362](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L362)
 
-___
+---
 
 ### fairnessWindowMs
 
@@ -79,4 +79,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:364](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L364)
+[src/types/matcher.ts:364](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L364)

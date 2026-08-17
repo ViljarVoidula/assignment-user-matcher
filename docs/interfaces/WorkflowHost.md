@@ -24,8 +24,8 @@
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name         | Type                                     |
+| :----------- | :--------------------------------------- |
 | `assignment` | [`Assignment`](../modules.md#assignment) |
 
 #### Returns
@@ -34,9 +34,9 @@
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:28](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/managers/WorkflowManager.ts#L28)
+[src/managers/WorkflowManager.ts:28](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/managers/WorkflowManager.ts#L28)
 
-___
+---
 
 ### executeMachineTask
 
@@ -44,12 +44,12 @@ ___
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
-| `args` | `Object` |
+| Name              | Type                                          |
+| :---------------- | :-------------------------------------------- |
+| `args`            | `Object`                                      |
 | `args.definition` | [`WorkflowDefinition`](WorkflowDefinition.md) |
-| `args.instance` | [`WorkflowInstance`](WorkflowInstance.md) |
-| `args.step` | [`WorkflowStep`](WorkflowStep.md) |
+| `args.instance`   | [`WorkflowInstance`](WorkflowInstance.md)     |
+| `args.step`       | [`WorkflowStep`](WorkflowStep.md)             |
 
 #### Returns
 
@@ -57,9 +57,9 @@ ___
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:30](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/managers/WorkflowManager.ts#L30)
+[src/managers/WorkflowManager.ts:30](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/managers/WorkflowManager.ts#L30)
 
-___
+---
 
 ### matchUsersAssignments
 
@@ -67,8 +67,8 @@ ___
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name     | Type     |
+| :------- | :------- |
 | `userId` | `string` |
 
 #### Returns
@@ -77,9 +77,9 @@ ___
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:29](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/managers/WorkflowManager.ts#L29)
+[src/managers/WorkflowManager.ts:29](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/managers/WorkflowManager.ts#L29)
 
-___
+---
 
 ### removeAssignment
 
@@ -89,8 +89,8 @@ Used by cancelWorkflow to clean up a run's outstanding queued/pending assignment
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name           | Type     |
+| :------------- | :------- |
 | `assignmentId` | `string` |
 
 #### Returns
@@ -99,9 +99,9 @@ Used by cancelWorkflow to clean up a run's outstanding queued/pending assignment
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:38](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/managers/WorkflowManager.ts#L38)
+[src/managers/WorkflowManager.ts:38](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/managers/WorkflowManager.ts#L38)
 
-___
+---
 
 ### userExists
 
@@ -111,8 +111,8 @@ Checked at run start when a step targets 'initiator' (the default target). Skipp
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
+| Name     | Type     |
+| :------- | :------- |
 | `userId` | `string` |
 
 #### Returns
@@ -121,4 +121,4 @@ Checked at run start when a step targets 'initiator' (the default target). Skipp
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:36](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/managers/WorkflowManager.ts#L36)
+[src/managers/WorkflowManager.ts:36](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/managers/WorkflowManager.ts#L36)

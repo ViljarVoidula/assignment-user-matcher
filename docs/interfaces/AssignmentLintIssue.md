@@ -20,13 +20,13 @@ in a way that is probably not intended; `info` is worth knowing.
 
 ### code
 
-• **code**: ``"no-tags"`` \| ``"schedule-window-inverted"`` \| ``"schedule-ignored"`` \| ``"schedule-window-elapsed"`` \| ``"schedule-notbefore-past"`` \| ``"offer-window-tight"`` \| ``"schedule-notafter-shadowed-by-sla-ttl"`` \| ``"sla-ignored"`` \| ``"escalation-ignored"`` \| ``"duplicate-id"`` \| ``"tag-uncovered"`` \| ``"no-eligible-users"``
+• **code**: `"no-tags"` \| `"schedule-window-inverted"` \| `"schedule-ignored"` \| `"schedule-window-elapsed"` \| `"schedule-notbefore-past"` \| `"offer-window-tight"` \| `"schedule-notafter-shadowed-by-sla-ttl"` \| `"sla-ignored"` \| `"escalation-ignored"` \| `"duplicate-id"` \| `"tag-uncovered"` \| `"no-eligible-users"`
 
 #### Defined in
 
-[src/types/matcher.ts:499](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L499)
+[src/types/matcher.ts:499](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L499)
 
-___
+---
 
 ### message
 
@@ -36,19 +36,19 @@ Human-readable explanation, safe to surface to operators
 
 #### Defined in
 
-[src/types/matcher.ts:513](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L513)
+[src/types/matcher.ts:513](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L513)
 
-___
+---
 
 ### severity
 
-• **severity**: ``"info"`` \| ``"error"`` \| ``"warning"``
+• **severity**: `"info"` \| `"error"` \| `"warning"`
 
 #### Defined in
 
-[src/types/matcher.ts:498](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L498)
+[src/types/matcher.ts:498](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L498)
 
-___
+---
 
 ### tag
 
@@ -58,4 +58,4 @@ The tag concerned, for tag-scoped issues
 
 #### Defined in
 
-[src/types/matcher.ts:515](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5181f900e2ab0885e710caebe1b33a28ad244920/src/types/matcher.ts#L515)
+[src/types/matcher.ts:515](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L515)
