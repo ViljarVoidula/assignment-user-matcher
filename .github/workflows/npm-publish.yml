@@ -88,5 +88,24 @@ jobs:
             # pnpm's provenance support shells out to npm internally and
             # forwards pnpm-only flags like --no-git-checks along with it,
             # which newer npm (EUNKNOWNCONFIG) rejects as an unknown flag.
+            - name: 'Guard: tag/version match, publish only if new'
+              id: version
+              run: |
+                  NAME=$(node -p "require('./package.json').name")
+                  VERSION=$(node -p "require('./package.json').version")
+                  TAG_VERSION="${GITHUB_REF_NAME#v}"
+                  if [ "$TAG_VERSION" != "$VERSION" ]; then
+                    echo "::error::Tag $GITHUB_REF_NAME points at a commit whose package.json says $VERSION. Version bumps must be committed BEFORE tagging: bump package.json, commit, delete + re-create the tag, push."
+                    exit 1
+                  fi
+                  if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+                    echo "exists=true" >> "$GITHUB_OUTPUT"
+                    echo "::notice::$NAME@$VERSION is already on npm — publish skipped (tag re-push or replayed run)"
+                  else
+                    echo "exists=false" >> "$GITHUB_OUTPUT"
+                    echo "Publishing $NAME@$VERSION"
+                  fi
+
             - name: Publish to NPM
+              if: steps.version.outputs.exists != 'true'
               run: npm publish --provenance
