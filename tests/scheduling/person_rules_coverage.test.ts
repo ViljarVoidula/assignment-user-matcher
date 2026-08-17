@@ -197,7 +197,7 @@ describe('person-level rules coverage', function () {
             expect(violations[0].message).to.contain('"oncall" shift spread');
         });
 
-        it('lets carriedFairness from a previous period neutralise this period\'s imbalance', function () {
+        it("lets carriedFairness from a previous period neutralise this period's imbalance", function () {
             const employees = [emp('e1'), emp('e2', { carriedFairness: { minutes: 480 } })];
             const ctx = ctxFor({
                 rules: { fairness: [{ dimension: 'minutes', hardMaxSpread: 0 }] },
@@ -493,9 +493,11 @@ describe('person-level rules coverage', function () {
                 employees: [
                     emp('e1', { qualifications: [{ tag: 'crane', validFrom: '2026-01-07', validUntil: '2026-01-09' }] }),
                 ],
-                shifts: [shift('d', '08:00', '16:00', ['2026-01-06', '2026-01-07', '2026-01-09', '2026-01-12'], {
-                    requiredTags: ['crane'],
-                })],
+                shifts: [
+                    shift('d', '08:00', '16:00', ['2026-01-06', '2026-01-07', '2026-01-09', '2026-01-12'], {
+                        requiredTags: ['crane'],
+                    }),
+                ],
             });
             const c = constraint(ctx, 'qualification');
             const state = createState(ctx);
@@ -562,11 +564,7 @@ describe('person-level rules coverage', function () {
                 ['ghost', new Set(['q@2026-01-05'])],
             ]);
             constraint(ctx, 'qualification').prune!(ctx, eligibility);
-            expect([...eligibility.get('e1')!].sort()).to.deep.equal([
-                'free@2026-01-05',
-                'ghost-shift',
-                'q@2026-01-05',
-            ]);
+            expect([...eligibility.get('e1')!].sort()).to.deep.equal(['free@2026-01-05', 'ghost-shift', 'q@2026-01-05']);
             // An eligibility row for an unknown employee is left untouched.
             expect(eligibility.get('ghost')!.has('q@2026-01-05')).to.equal(true);
         });

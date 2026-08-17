@@ -71,9 +71,7 @@ describe('labour cost', function () {
             const inst = ctx.instanceById.get('sb@2026-01-05')!;
             // 12h span, 3h counts as work, 9h stand-by remainder at 1/10 rate.
             expect(inst.workingMinutes).to.equal(3 * H);
-            expect(shiftCostCents(inst, { hourlyRateCents: 1200, standbyRateFraction: 0.1 })).to.equal(
-                3 * 1200 + 9 * 120,
-            );
+            expect(shiftCostCents(inst, { hourlyRateCents: 1200, standbyRateFraction: 0.1 })).to.equal(3 * 1200 + 9 * 120);
             // Without the fraction the remainder is unpaid.
             expect(shiftCostCents(inst, { hourlyRateCents: 1200 })).to.equal(3 * 1200);
         });
@@ -157,10 +155,7 @@ describe('labour cost', function () {
         it('never buys coverage or a hard breach with a cost saving', function () {
             // The cheap employee is blocked on one day, so the dear one must
             // still be rostered there despite tripling the bill.
-            const blocked: Employee[] = [
-                { ...employees[0], timeOff: [{ date: '2026-01-06' }] },
-                employees[1],
-            ];
+            const blocked: Employee[] = [{ ...employees[0], timeOff: [{ date: '2026-01-06' }] }, employees[1]];
             const result = solveSchedule({
                 period: PERIOD,
                 employees: blocked,
@@ -175,9 +170,7 @@ describe('labour cost', function () {
         });
 
         it('feeds the same marginal number to the repair ranking', function () {
-            const roster = [
-                { shiftInstanceId: 'd@2026-01-05', employeeId: 'cheap', date: '2026-01-05', reasons: [] },
-            ];
+            const roster = [{ shiftInstanceId: 'd@2026-01-05', employeeId: 'cheap', date: '2026-01-05', reasons: [] }];
             const input: ScheduleInput = { period: PERIOD, employees, shifts };
             const candidates = rankCandidates(input, 'd@2026-01-06', roster);
             const cheap = candidates.find((c) => c.employeeId === 'cheap')!;

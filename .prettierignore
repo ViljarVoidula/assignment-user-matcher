@@ -1,1 +1,29 @@
 package.lock.json
+pnpm-lock.yaml
+
+# ── Generated output. None of it is hand-edited, so formatting it is at best
+# wasted work and at worst a rewrite of an artifact something else owns.
+#
+# `dist/` is what ships to npm (the package publishes only `dist/`), so a
+# `--write` pass run after `pnpm build` rewrites the published artifact rather
+# than the source it came from.
+dist/
+# Typedoc output, and it is *committed* (87 tracked files) — reformatting it
+# produces a real diff that looks like an authored change.
+docs/
+# nyc / coverage reporters. Gitignored, which makes a rewrite invisible to git
+# rather than harmless.
+coverage/
+.nyc_output/
+.kilo_cov/
+
+# ── `example/` is a git submodule: its own repository
+# (github.com/fivexer/assignment-matcher-site), its own toolchain, and no
+# prettier config of its own. Formatting it from here applied *this* repo's
+# style to 54 source files in a repo this one does not own — plus walking its
+# 14MB Vite build and its gitignored vendored mermaid bundle, which together
+# made `pnpm prettier` take over two minutes.
+#
+# If the demo site should be prettier-formatted, that is a decision to make
+# inside that repo with its own config, not a side effect of formatting this one.
+example/

@@ -1530,25 +1530,32 @@ Constraints are self-contained TypeScript classes behind a common interface. Ove
 
 ### Working-time rules
 
-The `rules` field is the labour-law layer. Every field is optional and **every value is caller-supplied** — the library ships the *shapes* EU working-time law takes, never a jurisdiction's numbers, because those differ per member state, per sector and per collective agreement, and change without notice. This is plain JSON, so a template or an LLM can produce it and the same payload can back a public API.
+The `rules` field is the labour-law layer. Every field is optional and **every value is caller-supplied** — the library ships the _shapes_ EU working-time law takes, never a jurisdiction's numbers, because those differ per member state, per sector and per collective agreement, and change without notice. This is plain JSON, so a template or an LLM can produce it and the same payload can back a public API.
 
 ```ts
 const result = solveSchedule({
     period: { startDate: '2026-01-05', endDate: '2026-02-01', timeZone: 'Europe/Berlin' },
-    employees, shifts,
+    employees,
+    shifts,
     rules: {
-        dailyRest: { minMinutes: 660 },                                  // Art 3 floor; ES/RO use 720
-        weeklyRest: { minMinutes: 2100, windowDays: 7 },                 // 35h; EE uses 2880
+        dailyRest: { minMinutes: 660 }, // Art 3 floor; ES/RO use 720
+        weeklyRest: { minMinutes: 2100, windowDays: 7 }, // 35h; EE uses 2880
         workingTime: {
-            maxPerDayMinutes: 600,                                       // DE ArbZG §3
-            rollingAverages: [{ maxMinutes: 2880, windowDays: 7 }],      // 48h in ANY 7 days
+            maxPerDayMinutes: 600, // DE ArbZG §3
+            rollingAverages: [{ maxMinutes: 2880, windowDays: 7 }], // 48h in ANY 7 days
         },
         nightWork: { window: { from: '23:00', to: '06:00' }, maxShiftMinutes: 480 },
-        breaks: [{ afterMinutes: 360, minMinutes: 30 }, { afterMinutes: 540, minMinutes: 45 }],
+        breaks: [
+            { afterMinutes: 360, minMinutes: 30 },
+            { afterMinutes: 540, minMinutes: 45 },
+        ],
         consecutive: { maxWorkingDays: 6, forbiddenSuccessions: [{ fromTag: 'night', toTag: 'early' }] },
-        fairness: [{ dimension: 'nights', weight: 2 }, { dimension: 'weekends', weight: 1 }],
+        fairness: [
+            { dimension: 'nights', weight: 2 },
+            { dimension: 'weekends', weight: 1 },
+        ],
     },
-    history,   // previous-period tail, so the 1st of the month is not non-compliant by construction
+    history, // previous-period tail, so the 1st of the month is not non-compliant by construction
 });
 ```
 
@@ -1560,21 +1567,21 @@ Break entitlements are checked against shift design: `unpaidBreakMinutes` (deduc
 
 **Overtime** is regulated separately from total working time where national law does so. `rules.overtime` defines the ordinary baseline (`ordinaryPerDayMinutes` / `ordinaryPerWeekMinutes`; a person's `contract.weeklyMinutes` overrides the weekly figure, so a part-timer's overtime starts at their agreed hours), caps the overtime portion per rolling 24h or per rolling window, and with `requiresConsent` makes any overtime conditional on the employee's recorded `overtimeConsent`. With `compensation: 'timeOff'`, each employee's period overtime accrues a `timeOffInLieu` entry in `result.ledger`.
 
-**Duty-type quotas** (`rules.dutyQuotas`) cap how much of one duty type a person may hold over a rolling window, matched on `shiftTypeTag` — e.g. "at most 30 hours of stand-by in any 28 days". `maxMinutes` counts *elapsed* duty minutes (a stand-by cap limits clock occupation, which is exactly the time a duty classification keeps out of the working-time budget); `maxCount` caps occurrences.
+**Duty-type quotas** (`rules.dutyQuotas`) cap how much of one duty type a person may hold over a rolling window, matched on `shiftTypeTag` — e.g. "at most 30 hours of stand-by in any 28 days". `maxMinutes` counts _elapsed_ duty minutes (a stand-by cap limits clock occupation, which is exactly the time a duty classification keeps out of the working-time budget); `maxCount` caps occurrences.
 
 ### Labour cost
 
 `Employee.cost` prices the roster: hourly rate, premium bands (`night` / `sunday` / `holiday`, stacked additively or by maximum), an overtime step (`overtimeAfterMinutes` + `overtimeMultiplier`), and a `standbyRateFraction` paying the non-working remainder of a duty-classified span (e.g. stand-by owed at 1/10 of the wage). When any employee carries a cost model, `result.cost` reports `{ totalCents, byEmployee }`.
 
-Cost joins the *solve* objective only when asked: `objectives: { costWeightPerEuro: n }` adds a soft term of `n` points per euro, so the solver prefers cheaper rosters among otherwise-equal ones — and can never trade a legal breach or an unfilled slot for a saving, because score levels are lexicographic. The same arithmetic drives `repairSchedule`'s per-candidate `marginalCostCents` (which accounts for the overtime step, so the same shift is dearer in the hands of someone already at their threshold). Objective weights are hashed into `provenance.rulesHash` alongside the rules.
+Cost joins the _solve_ objective only when asked: `objectives: { costWeightPerEuro: n }` adds a soft term of `n` points per euro, so the solver prefers cheaper rosters among otherwise-equal ones — and can never trade a legal breach or an unfilled slot for a saving, because score levels are lexicographic. The same arithmetic drives `repairSchedule`'s per-candidate `marginalCostCents` (which accounts for the overtime step, so the same shift is dearer in the hands of someone already at their threshold). Objective weights are hashed into `provenance.rulesHash` alongside the rules.
 
 ### Operational APIs
 
 ```ts
-checkCompliance(input, roster)        // validate a hand-edited or externally-produced roster
-explainCandidate(input, who, shift)   // every rule's verdict, with numbers
-repairSchedule(input, disruption, published)  // minimal-perturbation re-plan + ranked candidates
-diagnoseInfeasibility(input)          // why it cannot be solved, before solving
+checkCompliance(input, roster); // validate a hand-edited or externally-produced roster
+explainCandidate(input, who, shift); // every rule's verdict, with numbers
+repairSchedule(input, disruption, published); // minimal-perturbation re-plan + ranked candidates
+diagnoseInfeasibility(input); // why it cannot be solved, before solving
 ```
 
 `repairSchedule` is the call-in path: everything untouched is pinned, so you get a **diff** rather than an unrecognisable new roster, plus a ranked list of who can lawfully cover, each with compliance verdicts, marginal cost and a rationale. All four share the solver's constraint set — there is deliberately no second validation path.

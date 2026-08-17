@@ -18,16 +18,18 @@ jobs:
                     - 6379:6379
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Install pnpm action
-              uses: pnpm/action-setup@v4
+              uses: pnpm/action-setup@v6
               with:
-                  version: 9
+                  # No `version` here on purpose: `packageManager` in
+                  # package.json is the single source of truth, and pinning both
+                  # fails with ERR_PNPM_BAD_PM_VERSION.
                   run_install: false
 
             - name: Set up Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v7
               with:
                   node-version: 24
                   cache: 'pnpm'
@@ -55,16 +57,18 @@ jobs:
             contents: read
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Install pnpm action
-              uses: pnpm/action-setup@v4
+              uses: pnpm/action-setup@v6
               with:
-                  version: 9
+                  # No `version` here on purpose: `packageManager` in
+                  # package.json is the single source of truth, and pinning both
+                  # fails with ERR_PNPM_BAD_PM_VERSION.
                   run_install: false
 
             - name: Set up Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v7
               with:
                   node-version: 24
                   cache: 'pnpm'

@@ -19,7 +19,18 @@ import type { DutyQuota, RuleVerdict, SchedulingConstraint } from '../types';
 import type { MinuteRange } from '../time';
 import { overlapMinutes } from '../time';
 import type { PersonTimeline, TimelineEntry } from '../engine/timeline';
-import { entryIdOf, fail, fromVerdict, h, instanceOf, pass, rangeOf, rulesFor, timelineFor, MINUTES_PER_DAY } from './support';
+import {
+    entryIdOf,
+    fail,
+    fromVerdict,
+    h,
+    instanceOf,
+    pass,
+    rangeOf,
+    rulesFor,
+    timelineFor,
+    MINUTES_PER_DAY,
+} from './support';
 
 export const DUTY_QUOTA_CITATION = 'National duty-volume law (e.g. EE Töölepingu seadus §48)';
 

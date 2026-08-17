@@ -28,7 +28,18 @@
 import type { Employee, LedgerEntry, OvertimeRule, RuleVerdict, SchedulingConstraint, SearchState } from '../types';
 import { ScheduleValidationError } from '../types';
 import type { MinuteRange } from '../time';
-import { entryIdOf, fail, fromVerdict, h, instanceOf, pass, rangeOf, rulesFor, timelineFor, MINUTES_PER_DAY } from './support';
+import {
+    entryIdOf,
+    fail,
+    fromVerdict,
+    h,
+    instanceOf,
+    pass,
+    rangeOf,
+    rulesFor,
+    timelineFor,
+    MINUTES_PER_DAY,
+} from './support';
 
 export const OVERTIME_CITATION = 'National overtime law (e.g. EE Töölepingu seadus §44, DE ArbZG §3)';
 

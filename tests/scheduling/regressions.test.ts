@@ -118,7 +118,10 @@ describe('coverage-sweep regressions', function () {
         const rules: WorkingTimeRules = { breaks: [{ afterMinutes: 6 * H, minMinutes: 30, paid: true }] };
 
         it('is not discharged by an unpaid break', function () {
-            const ctx = ctxFor({ rules, shifts: [shift('d', '08:00', '17:00', ['2026-01-05'], { unpaidBreakMinutes: 45 })] });
+            const ctx = ctxFor({
+                rules,
+                shifts: [shift('d', '08:00', '17:00', ['2026-01-05'], { unpaidBreakMinutes: 45 })],
+            });
             const v = constraint(ctx, 'in-shift-breaks').verdict!(createState(ctx), {
                 employeeId: 'e1',
                 shiftInstanceId: 'd@2026-01-05',
@@ -162,7 +165,10 @@ describe('coverage-sweep regressions', function () {
                 ctx,
                 week.slice(0, 3).map((d) => ['e1', `d@${d}`] as [string, string]),
             );
-            const v = constraint(ctx, 'rolling-hours').verdict!(state, { employeeId: 'e1', shiftInstanceId: 'd@2026-01-08' });
+            const v = constraint(ctx, 'rolling-hours').verdict!(state, {
+                employeeId: 'e1',
+                shiftInstanceId: 'd@2026-01-08',
+            });
             expect(v.pass).to.equal(true); // 44h < 45h; late-January sick leave is irrelevant here
         });
 
@@ -179,7 +185,10 @@ describe('coverage-sweep regressions', function () {
             // The worst 7-day window holds all four shifts (44h) plus 2⅓ days of
             // the sick span (a bare `to` date runs to end of day), cutting the
             // 45h allowance by a third to 30h.
-            const v = constraint(ctx, 'rolling-hours').verdict!(state, { employeeId: 'e1', shiftInstanceId: 'd@2026-01-08' });
+            const v = constraint(ctx, 'rolling-hours').verdict!(state, {
+                employeeId: 'e1',
+                shiftInstanceId: 'd@2026-01-08',
+            });
             expect(v.pass).to.equal(false);
             expect(v.actual).to.equal(44 * H);
             expect(v.required).to.be.closeTo(30 * H, 1);

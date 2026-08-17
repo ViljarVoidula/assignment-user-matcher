@@ -43,10 +43,9 @@ describe('overtime rule', function () {
 
     it('rejects a rule with no ordinary baseline, and caps without their baseline', function () {
         expect(() => ctxFor({ rules: { overtime: {} } })).to.throw(ScheduleValidationError, /ordinary baseline/);
-        expect(() => ctxFor({ rules: { overtime: { ordinaryPerWeekMinutes: 40 * H, maxOvertimePerDayMinutes: 2 * H } } })).to.throw(
-            ScheduleValidationError,
-            /ordinaryPerDayMinutes/,
-        );
+        expect(() =>
+            ctxFor({ rules: { overtime: { ordinaryPerWeekMinutes: 40 * H, maxOvertimePerDayMinutes: 2 * H } } }),
+        ).to.throw(ScheduleValidationError, /ordinaryPerDayMinutes/);
         expect(() =>
             ctxFor({
                 rules: {
@@ -68,7 +67,10 @@ describe('overtime rule', function () {
             });
             const state = createState(ctx);
 
-            const long = constraint(ctx, 'overtime').verdict!(state, { employeeId: 'e1', shiftInstanceId: 'long@2026-01-05' });
+            const long = constraint(ctx, 'overtime').verdict!(state, {
+                employeeId: 'e1',
+                shiftInstanceId: 'long@2026-01-05',
+            });
             expect(long.pass).to.equal(false);
             expect(long.actual).to.equal(4 * H); // 12h day = 4h overtime
             expect(long.required).to.equal(2 * H);
@@ -106,7 +108,10 @@ describe('overtime rule', function () {
                 ctx,
                 week.slice(0, 5).map((d) => ['e1', `d@${d}`] as [string, string]),
             );
-            const sixth = constraint(ctx, 'overtime').verdict!(sixDays, { employeeId: 'e1', shiftInstanceId: 'd@2026-01-10' });
+            const sixth = constraint(ctx, 'overtime').verdict!(sixDays, {
+                employeeId: 'e1',
+                shiftInstanceId: 'd@2026-01-10',
+            });
             expect(sixth.pass).to.equal(true);
 
             // A further 4h pushes the window to 52h: 12h overtime, over the cap.
@@ -156,7 +161,9 @@ describe('overtime rule', function () {
             expect(v.message).to.contain('has not agreed');
             expect(v.actual).to.equal(1 * H);
             // No overtime, no consent needed.
-            expect(constraint(ctx, 'overtime').verdict!(state, { employeeId: 'e1', shiftInstanceId: 'eight@2026-01-06' }).pass).to.equal(true);
+            expect(
+                constraint(ctx, 'overtime').verdict!(state, { employeeId: 'e1', shiftInstanceId: 'eight@2026-01-06' }).pass,
+            ).to.equal(true);
         });
 
         it('permits the same shift once consent is recorded', function () {
@@ -206,7 +213,11 @@ describe('overtime rule', function () {
             );
             expect(overtimeLedger(paidState)).to.have.length(0);
 
-            const light = ctxFor({ period: weekPeriod, rules, shifts: [shift('d', '08:00', '16:00', sixDays.slice(0, 5))] });
+            const light = ctxFor({
+                period: weekPeriod,
+                rules,
+                shifts: [shift('d', '08:00', '16:00', sixDays.slice(0, 5))],
+            });
             const lightState = stateWith(
                 light,
                 sixDays.slice(0, 5).map((d) => ['e1', `d@${d}`] as [string, string]),

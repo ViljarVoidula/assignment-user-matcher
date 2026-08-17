@@ -1,7 +1,13 @@
 import { expect } from 'chai';
 import { buildModel } from '../../src/scheduling/model';
 import { assign, createState } from '../../src/scheduling/engine/state';
-import type { DutyClassification, ModelContext, ScheduleInput, ShiftTemplate, WorkingTimeRules } from '../../src/scheduling';
+import type {
+    DutyClassification,
+    ModelContext,
+    ScheduleInput,
+    ShiftTemplate,
+    WorkingTimeRules,
+} from '../../src/scheduling';
 
 const H = 60;
 const PERIOD = { startDate: '2026-01-05', endDate: '2026-02-01' }; // Mon 5 Jan, 4 weeks
@@ -134,7 +140,13 @@ describe('duty-quota rule', function () {
             dates: ['2026-01-06'],
             shiftTypeTag: 'night',
         };
-        const plain: ShiftTemplate = { id: 'p', name: 'PLAIN', startTime: '08:00', endTime: '16:00', dates: ['2026-01-08'] };
+        const plain: ShiftTemplate = {
+            id: 'p',
+            name: 'PLAIN',
+            startTime: '08:00',
+            endTime: '16:00',
+            dates: ['2026-01-08'],
+        };
         const ctx = ctxFor({ rules, shifts: [standby(['2026-01-05']), night, plain] });
         const state = stateWith(ctx, [['e1', 'sb@2026-01-05']]); // quota already exhausted
 
