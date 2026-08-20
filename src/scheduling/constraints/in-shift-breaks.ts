@@ -34,12 +34,14 @@ export function inShiftBreaks(rules: BreakRule[]): SchedulingConstraint {
         // An interruptible break provides nothing towards the entitlement
         // (C-107/19). A `paid: true` entitlement is discharged only by declared
         // paid break minutes — an unpaid break costs the worker wages, which is
-        // exactly what the paid entitlement exists to prevent.
+        // exactly what the paid entitlement exists to prevent. Declared break
+        // minutes, never span − working: on a duty-scaled shift the difference
+        // is duty occupation, not rest.
         const provided = applicable.interruptible
             ? 0
             : applicable.paid
               ? inst.paidBreakMinutes
-              : inst.durationMinutes - inst.workingMinutes + inst.paidBreakMinutes;
+              : inst.unpaidBreakMinutes + inst.paidBreakMinutes;
         if (provided >= applicable.minMinutes) return null;
         return { rule: applicable, provided };
     };

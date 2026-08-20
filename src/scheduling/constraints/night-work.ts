@@ -189,8 +189,23 @@ function worstNightCount(
         return entry.end > threshold;
     };
 
+    // Candidate window starts anchored on qualifying-entry boundaries, never a
+    // day grid (a grid silently misses straddling breaches — see CLAUDE.md).
+    // The count is piecewise constant in the window start: it drops when the
+    // left edge passes an entry's end (start = e.end) and gains when the right
+    // edge passes an entry's start (start = e.start - span + 1, integer
+    // minutes), so those are the only starts that need probing.
+    const bounds = { start: around.start - span, end: around.end };
+    const starts = new Set<number>([bounds.start, bounds.end]);
+    for (const entry of timeline.entriesIn({ start: bounds.start, end: bounds.end + span })) {
+        if (!qualifies(entry)) continue;
+        for (const s of [entry.end, entry.start - span + 1]) {
+            if (s >= bounds.start && s <= bounds.end) starts.add(s);
+        }
+    }
+
     let worst = 0;
-    for (let start = around.start - span; start <= around.end; start += MINUTES_PER_DAY) {
+    for (const start of starts) {
         const count = timeline.countIn({ start, end: start + span }, qualifies);
         if (count > worst) worst = count;
     }

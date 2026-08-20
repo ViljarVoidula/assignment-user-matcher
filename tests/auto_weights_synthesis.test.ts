@@ -43,8 +43,8 @@ describe('synthesizeRoutingWeights (v2 policies)', function () {
     });
 
     describe('confidence policy', function () {
-        it('vetoes only when the lower confidence bound is below threshold', function () {
-            // Low variance, mean just above threshold: LCB stays above -0.5, no veto.
+        it('vetoes only when the whole confidence interval sits below threshold', function () {
+            // Low variance, mean just above threshold: no veto.
             const weights = synthesizeRoutingWeights([stat('stable', 10, -4, 1.6, 0)], {
                 policy: 'confidence',
                 minSamples: 5,
@@ -54,7 +54,20 @@ describe('synthesizeRoutingWeights (v2 policies)', function () {
             expect(weights.stable).to.be.greaterThan(0);
         });
 
-        it('vetoes a low-variance bad tag via the LCB', function () {
+        it('never vetoes on uncertainty alone: a high-variance tag with an acceptable mean keeps a weight', function () {
+            // mean -0.2 (above the -0.5 threshold) but se 0.25: the LCB dips to
+            // -0.69. A "conservative" veto must not fire — only a UCB below
+            // the threshold proves the tag is bad.
+            const weights = synthesizeRoutingWeights([stat('noisy', 10, -2, 4, 0.25)], {
+                policy: 'confidence',
+                minSamples: 5,
+                vetoThreshold: -0.5,
+                confidenceZ: 1.96,
+            });
+            expect(weights.noisy).to.be.greaterThan(0);
+        });
+
+        it('vetoes a low-variance bad tag', function () {
             const weights = synthesizeRoutingWeights([stat('bad', 50, -45, 45, 0.05)], {
                 policy: 'confidence',
                 minSamples: 5,
@@ -99,6 +112,21 @@ describe('synthesizeRoutingWeights (v2 policies)', function () {
                 rng: seededRng(1),
             });
             expect(weights.bad).to.equal(0);
+        });
+
+        it('never vetoes a neutral tag on an unlucky draw — the veto gate judges the mean, not the sample', function () {
+            // mean 0, se 0.3: an rng near 0 pulls the sample to ≈ -1, far
+            // below the threshold. The weight may drop, but a hard veto (0)
+            // must not fire from randomness.
+            for (const draw of [0.0001, 0.01, 0.5, 0.99]) {
+                const weights = synthesizeRoutingWeights([stat('neutral', 30, 0, 3, 0.3)], {
+                    policy: 'thompson',
+                    minSamples: 5,
+                    vetoThreshold: -0.5,
+                    rng: () => draw,
+                });
+                expect(weights.neutral, `draw ${draw}`).to.be.greaterThan(0);
+            }
         });
 
         it('stays sane on extreme rng draws near the distribution tails', function () {

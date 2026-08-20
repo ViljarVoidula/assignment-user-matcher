@@ -5,11 +5,14 @@
  *
  * - 'ucb1' (default): mean reward plus an exploration bonus that shrinks as
  *   the tag is sampled more.
- * - 'confidence': upper-confidence-bound for the weight, lower-confidence-bound
- *   for the veto decision, so vetoes are conservative and weights reflect
- *   uncertainty.
+ * - 'confidence': upper-confidence-bound for the weight AND for the veto
+ *   decision — a tag is hard-vetoed only when the whole confidence interval
+ *   sits below the threshold, so vetoes are conservative: uncertainty alone
+ *   never vetoes.
  * - 'thompson': sample from the per-tag posterior (Gaussian approximation)
- *   when mapping to a weight.
+ *   when mapping to a weight. The veto decision uses the deterministic mean,
+ *   never the draw — a random sample must not flicker good tags into hard
+ *   vetoes.
  *
  * Scores map onto the conventional 0-100 routing-weight scale:
  *
@@ -75,7 +78,6 @@ function canVeto(
     policy: AutoRoutingWeightsPolicy,
     stat: LearningTagStat,
     vetoScore: number,
-    lcb: number,
     opts: ReturnType<typeof resolveOptions>,
     existingWeights?: Record<string, number>,
 ): boolean {
@@ -83,9 +85,6 @@ function canVeto(
     const effectiveMinSamples = manual ? opts.minSamplesForVeto : opts.minSamples;
     if (stat.count < effectiveMinSamples) return false;
 
-    if (policy === 'confidence') {
-        return lcb <= opts.vetoThreshold;
-    }
     return vetoScore <= opts.vetoThreshold;
 }
 
@@ -214,9 +213,13 @@ export function synthesizeRoutingWeights(
 
         const { ucb, lcb, sample } = tagScore(opts.policy, stat, totalCount, opts);
         const weightScore = opts.policy === 'thompson' ? sample : ucb;
-        const vetoScore = opts.policy === 'confidence' ? lcb : opts.policy === 'thompson' ? sample : stat.meanReward;
+        // Veto decisions are deterministic and conservative: 'confidence'
+        // requires the WHOLE interval below the threshold (ucb), 'thompson'
+        // and 'ucb1' judge the raw mean — never a random draw, never an
+        // uncertainty-widened lower bound.
+        const vetoScore = opts.policy === 'confidence' ? ucb : stat.meanReward;
 
-        if (canVeto(opts.policy, stat, vetoScore, lcb, opts, existingWeights)) {
+        if (canVeto(opts.policy, stat, vetoScore, opts, existingWeights)) {
             weights[stat.tag] = 0;
             continue;
         }

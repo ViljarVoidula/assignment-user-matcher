@@ -315,6 +315,24 @@ describe('Priority management tests', async function () {
         expect(assignment3).to.not.be.undefined;
         expect(assignment3!.priority).to.equal(15);
     });
+
+    it('Setting priority by tags never resurrects a pending assignment into the matching indexes', async function () {
+        // routingWeights pin this user to tagP so earlier tests' leftover
+        // assignments (shared describe state) can't match via 'default'.
+        await matcher.addUser({ id: 'prio-user', tags: ['tagP'], maxBacklogSize: 1, routingWeights: { tagP: 1 } });
+        await matcher.addAssignment({ id: 'prio-pending', tags: ['tagP'], priority: 10 });
+        await matcher.addAssignment({ id: 'prio-queued', tags: ['tagP'], priority: 5 });
+        await matcher.matchUsersAssignments('prio-user');
+        expect(await matcher.getCurrentAssignmentsForUser('prio-user')).to.deep.equal(['prio-pending']);
+
+        await matcher.setAssignmentPriorityByTags(['tagP'], 50);
+
+        // The claimed assignment must not reappear in the per-tag or global zsets.
+        expect(await matcher.redisClient.zScore('tag:tagP:assignments', 'prio-pending')).to.equal(null);
+        expect(await matcher.redisClient.zScore('assignments', 'prio-pending')).to.equal(null);
+        // The still-queued one gets the new priority as before.
+        expect(await matcher.redisClient.zScore('tag:tagP:assignments', 'prio-queued')).to.equal(50);
+    });
 });
 
 describe('Parallel matching tests', async function () {

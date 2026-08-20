@@ -104,6 +104,31 @@ describe('Auto Routing Weights v2 - Matcher Integration', function () {
             expect(decayed[0].count).to.be.lessThan(1.1);
             expect(decayed[0].count).to.be.greaterThan(0.4);
         });
+
+        it('a fresh outcome outweighs long-decayed history instead of resurrecting it', async function () {
+            const matcher = createMatcher({
+                autoRoutingWeights: { minSamples: 1, decayHalfLifeMs: 50 },
+                enableDefaultMatching: false,
+            });
+            await matcher.addUser({ id: 'user1', tags: ['billing'] });
+            // Build a strongly negative history: three rejections.
+            for (let i = 0; i < 3; i++) {
+                await runLifecycle(matcher, 'user1', `r${i}`, ['billing'], 'reject');
+            }
+            const before = await matcher.getLearnedTagStats('user1');
+            expect(before[0].meanReward).to.be.lessThan(0);
+
+            // Wait many half-lives, then record one positive lifecycle.
+            await new Promise((r) => setTimeout(r, 500));
+            await runLifecycle(matcher, 'user1', 'fresh1', ['billing'], 'complete');
+
+            // The write rescaled the old mass (~2^-10 of it left), so the
+            // stats now reflect the fresh accept+complete, not the
+            // resurrected rejection history.
+            const after = await matcher.getLearnedTagStats('user1');
+            expect(after[0].meanReward).to.be.greaterThan(0.5);
+            expect(after[0].count).to.be.closeTo(2, 0.1);
+        });
     });
 
     describe('sync guardrails', function () {
@@ -190,6 +215,45 @@ describe('Auto Routing Weights v2 - Matcher Integration', function () {
             expect(afterRevert.routingWeights).to.deep.equal({ good: 10, manual: 77 });
             expect(afterRevert.routingWeightsSnapshot).to.be.undefined;
             expect(afterRevert.learnedRoutingWeights).to.be.undefined;
+        });
+
+        it('keeps a declared-but-unobserved tag matchable after a sync', async function () {
+            const matcher = createMatcher({
+                autoRoutingWeights: { minSamples: 1 },
+                enableDefaultMatching: false,
+            });
+            // 'billing' is declared but has no recorded outcomes. Installing a
+            // routingWeights map that omits it would silently end the user's
+            // billing eligibility — it must get the exploration prior instead.
+            await matcher.addUser({ id: 'user1', tags: ['english', 'billing'] });
+            await runLifecycle(matcher, 'user1', 'a1', ['english'], 'complete');
+
+            const applied = await matcher.syncLearnedRoutingWeights('user1');
+            expect(applied.user1.english).to.be.greaterThan(0);
+            expect(applied.user1.billing, 'declared tag kept eligible').to.be.greaterThan(0);
+
+            await matcher.addAssignment({ id: 'b1', tags: ['billing'], priority: 10 });
+            await matcher.matchUsersAssignments('user1');
+            expect(await matcher.getCurrentAssignmentsForUser('user1')).to.include('b1');
+        });
+
+        it('revert restores a previously weightless user to tag-based matching', async function () {
+            const matcher = createMatcher({
+                autoRoutingWeights: { minSamples: 1 },
+                enableDefaultMatching: false,
+            });
+            await matcher.addUser({ id: 'user1', tags: ['good'] }); // no routingWeights
+            await runLifecycle(matcher, 'user1', 'a1', ['good'], 'complete');
+
+            const applied = await matcher.syncLearnedRoutingWeights('user1');
+            expect(applied.user1).to.be.an('object');
+
+            const reverted = await matcher.revertLearnedRoutingWeights('user1');
+            expect(reverted).to.deep.equal(['user1']);
+
+            const afterRevert = JSON.parse(await redisClient.hGet('test-awv2:users', 'user1'));
+            expect(afterRevert.routingWeights, 'tag-based matching restored').to.be.undefined;
+            expect(afterRevert.routingWeightsSnapshot).to.be.undefined;
         });
 
         it('revert with no user id reverts all users with snapshots', async function () {

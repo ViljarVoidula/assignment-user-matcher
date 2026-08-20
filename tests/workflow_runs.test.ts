@@ -1158,4 +1158,251 @@ describe('Workflow Runs (platform-facing surface)', function () {
             expect(updated!.status).to.equal('failed');
         });
     });
+
+    describe('audit-sweep regressions (workflow engine)', function () {
+        const twoStep: WorkflowDefinition = {
+            id: 'audit-two-step',
+            name: 'Audit Two Step',
+            version: 1,
+            initialStepId: 's1',
+            steps: [
+                {
+                    id: 's1',
+                    name: 'S1',
+                    assignmentTemplate: { tags: ['t1'] },
+                    targetUser: 'initiator',
+                    defaultNextStepId: 's2',
+                },
+                {
+                    id: 's2',
+                    name: 'S2',
+                    assignmentTemplate: { tags: ['t1'] },
+                    targetUser: 'initiator',
+                    defaultNextStepId: null,
+                },
+            ],
+        };
+
+        it('ignores a stale EXPIRED consumed after the step completed on time', async function () {
+            const host = makeAssignmentTrackingHost();
+            const mgr = makeManager(host);
+            await mgr.registerWorkflow(twoStep);
+            const run = await mgr.startWorkflow(twoStep.id, 'u1');
+            const firstAssignment = host.created[0].id;
+
+            // The user completed 1ms before the deadline: COMPLETED is on the
+            // stream, but the timeout sweep already published EXPIRED for the
+            // same step before the consumer drained it.
+            await mgr.publishWorkflowEvent({
+                eventId: 'audit-c1',
+                type: 'COMPLETED',
+                userId: 'u1',
+                assignmentId: firstAssignment,
+                workflowInstanceId: run.id,
+                stepId: 's1',
+                timestamp: Date.now(),
+            });
+            await mgr.publishWorkflowEvent({
+                eventId: 'audit-x1',
+                type: 'EXPIRED',
+                userId: '',
+                assignmentId: firstAssignment,
+                workflowInstanceId: run.id,
+                stepId: 's1',
+                timestamp: Date.now(),
+            });
+            await mgr.processWorkflowEvents(10);
+
+            const after = await mgr.getWorkflowInstance(run.id);
+            expect(after!.status).to.equal('active');
+            expect(after!.currentStepId).to.equal('s2');
+        });
+
+        it('does not double-apply a replayed COMPLETED whose idempotency marker was lost', async function () {
+            const host = makeAssignmentTrackingHost();
+            const mgr = makeManager(host);
+            await mgr.registerWorkflow(twoStep);
+            const run = await mgr.startWorkflow(twoStep.id, 'u1');
+
+            await mgr.publishWorkflowEvent({
+                eventId: 'audit-c2',
+                type: 'COMPLETED',
+                userId: 'u1',
+                assignmentId: host.created[0].id,
+                workflowInstanceId: run.id,
+                stepId: 's1',
+                timestamp: Date.now(),
+            });
+            await mgr.processWorkflowEvents(10);
+
+            // Simulate the crash window: the marker is gone and the same event
+            // is delivered again.
+            await redisClient.del(keys.processedEvent('audit-c2'));
+            await mgr.publishWorkflowEvent({
+                eventId: 'audit-c2',
+                type: 'COMPLETED',
+                userId: 'u1',
+                assignmentId: host.created[0].id,
+                workflowInstanceId: run.id,
+                stepId: 's1',
+                timestamp: Date.now(),
+            });
+            await mgr.processWorkflowEvents(10);
+
+            const after = await mgr.getWorkflowInstance(run.id);
+            expect(after!.history.filter((h) => h.stepId === 's1')).to.have.length(1);
+            // s1's assignment plus exactly one s2 assignment — no duplicate.
+            expect(host.created).to.have.length(2);
+            expect(after!.currentStepId).to.equal('s2');
+        });
+
+        it('removes the superseded assignment when a step retries after failure', async function () {
+            const host = makeAssignmentTrackingHost();
+            const mgr = makeManager(host);
+            await mgr.registerWorkflow({
+                ...twoStep,
+                id: 'audit-retry',
+                steps: [{ ...twoStep.steps[0], maxRetries: 1, defaultNextStepId: null }],
+            });
+            const run = await mgr.startWorkflow('audit-retry', 'u1');
+            const firstAssignment = host.created[0].id;
+
+            await mgr.publishWorkflowEvent({
+                eventId: 'audit-f1',
+                type: 'FAILED',
+                userId: 'u1',
+                assignmentId: firstAssignment,
+                workflowInstanceId: run.id,
+                stepId: 's1',
+                timestamp: Date.now(),
+            });
+            await mgr.processWorkflowEvents(10);
+
+            // The retry created a fresh assignment and the superseded one was
+            // pulled — never two live copies of the same step.
+            expect(host.removed).to.include(firstAssignment);
+            expect(host.created).to.have.length(2);
+            expect((await mgr.getWorkflowInstance(run.id))!.status).to.equal('active');
+        });
+
+        it('removes the outstanding assignment when the run fails for good', async function () {
+            const host = makeAssignmentTrackingHost();
+            const mgr = makeManager(host);
+            await mgr.registerWorkflow({
+                ...twoStep,
+                id: 'audit-fail',
+                steps: [{ ...twoStep.steps[0], defaultNextStepId: null }], // maxRetries 0
+            });
+            const run = await mgr.startWorkflow('audit-fail', 'u1');
+            const firstAssignment = host.created[0].id;
+
+            await mgr.publishWorkflowEvent({
+                eventId: 'audit-f2',
+                type: 'FAILED',
+                userId: 'u1',
+                assignmentId: firstAssignment,
+                workflowInstanceId: run.id,
+                stepId: 's1',
+                timestamp: Date.now(),
+            });
+            await mgr.processWorkflowEvents(10);
+
+            expect(host.removed).to.include(firstAssignment);
+            expect((await mgr.getWorkflowInstance(run.id))!.status).to.equal('failed');
+        });
+
+        it('reloads the transition script after a NOSCRIPT (Redis restart) instead of failing', async function () {
+            const fs = require('fs');
+            const source = fs.readFileSync('src/lua/workflow-transition.lua', 'utf8');
+            const host = makeAssignmentTrackingHost();
+            const mgr = makeManager(host);
+            const sha = await redisClient.scriptLoad(source);
+            mgr.setLuaScriptSha(sha, source);
+
+            await mgr.registerWorkflow({
+                ...twoStep,
+                id: 'audit-noscript',
+                steps: [{ ...twoStep.steps[0], defaultNextStepId: null }],
+            });
+            const run = await mgr.startWorkflow('audit-noscript', 'u1');
+
+            // The "restart": the script cache is emptied while data persists.
+            await redisClient.scriptFlush();
+
+            await mgr.publishWorkflowEvent({
+                eventId: 'audit-ns1',
+                type: 'COMPLETED',
+                userId: 'u1',
+                assignmentId: host.created[0].id,
+                workflowInstanceId: run.id,
+                stepId: 's1',
+                timestamp: Date.now(),
+            });
+            await mgr.processWorkflowEvents(10);
+
+            expect((await mgr.getWorkflowInstance(run.id))!.status).to.equal('completed');
+        });
+
+        it("recovers another consumer's unacked events without an orchestrator", async function () {
+            const host = makeAssignmentTrackingHost();
+            const mgr = makeManager(host, { reclaimMinIdleMs: 0 });
+            await mgr.registerWorkflow({
+                ...twoStep,
+                id: 'audit-reclaim',
+                steps: [{ ...twoStep.steps[0], defaultNextStepId: null }],
+            });
+            const run = await mgr.startWorkflow('audit-reclaim', 'u1');
+            await mgr.processWorkflowEvents(10); // init group + drain run start
+
+            await mgr.publishWorkflowEvent({
+                eventId: 'audit-r1',
+                type: 'COMPLETED',
+                userId: 'u1',
+                assignmentId: host.created[0].id,
+                workflowInstanceId: run.id,
+                stepId: 's1',
+                timestamp: Date.now(),
+            });
+            // A consumer that reads the event and dies before acking:
+            await redisClient.xReadGroup('runs-group', 'doomed-consumer', [{ key: keys.eventStream(), id: '>' }], {
+                COUNT: 10,
+            });
+
+            // New deliveries are gone; only reclaim can recover the entry.
+            expect(await mgr.processWorkflowEvents(10)).to.equal(0);
+            const reclaimed = await mgr.reclaimOrphanedMessages();
+            expect(reclaimed).to.be.at.least(1);
+            expect((await mgr.getWorkflowInstance(run.id))!.status).to.equal('completed');
+        });
+
+        it('self-heals byTime index ghosts left behind by retention', async function () {
+            const host = makeAssignmentTrackingHost();
+            const mgr = makeManager(host, { retentionMs: 60000 });
+            await mgr.registerWorkflow({
+                ...twoStep,
+                id: 'audit-retention',
+                steps: [{ ...twoStep.steps[0], defaultNextStepId: null }],
+            });
+            const run = await mgr.startWorkflow('audit-retention', 'u1');
+            await mgr.publishWorkflowEvent({
+                eventId: 'audit-ret1',
+                type: 'COMPLETED',
+                userId: 'u1',
+                assignmentId: host.created[0].id,
+                workflowInstanceId: run.id,
+                stepId: 's1',
+                timestamp: Date.now(),
+            });
+            await mgr.processWorkflowEvents(10);
+
+            // Simulate the retention TTL firing on the instance hash.
+            await redisClient.del(keys.workflowInstance(run.id));
+            expect(await redisClient.zScore(keys.workflowInstancesByTime(), run.id)).to.not.equal(null);
+
+            const page = await mgr.listWorkflowInstances({ limit: 10 });
+            expect(page.instances.map((i) => i.id)).to.not.include(run.id);
+            // The ghost member was pruned by the read itself.
+            expect(await redisClient.zScore(keys.workflowInstancesByTime(), run.id)).to.equal(null);
+        });
+    });
 });

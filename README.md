@@ -241,6 +241,8 @@ Registration rejects an escalation target that doesn't exist, a step escalating 
 
 Targeting matters: `targetUser({ tag: '…' })` routes the step's assignment through ordinary tag matching (so fairness, backlog caps, and the rolling-window grant cap all apply), while `targetUser('<userId>')` makes it workflow-targeted and therefore exempt from the fairness window cap. For tiered escalation you almost always want the tag form.
 
+A workflow-targeted assignment is claimed queued→pending for its target through the same atomic claim gate as organic matching, whether or not the worker's tags/weights would ever have matched it — so `acceptAssignment`/`completeAssignment` work identically and the workflow advances. A worker who rejects a targeted assignment is not re-granted it (the standard rejection contract); the step then runs its response-deadline/escalation machinery.
+
 Plain object workflow definitions are also accepted. The library now fills in sensible defaults:
 
 - `version` defaults to `1`
@@ -302,7 +304,7 @@ Adds or updates a user in the system.
 - `user`: An object representing the user.
     - `id: string`: Unique identifier for the user.
     - `tags: string[]`: Array of tags associated with the user.
-    - `maxBacklogSize?: number`: Optional per-user backlog cap overriding the matcher-wide `maxUserBacklogSize` in every matching path (`0` = receive nothing; negative or non-numeric values are ignored). The fairness rolling-window auto-cap derivation stays team-level and keeps using the global value.
+    - `maxBacklogSize?: number`: Optional per-user backlog cap overriding the matcher-wide `maxUserBacklogSize` in every matching path (`0` = receive nothing; negative or non-numeric values are ignored). The cap bounds the user's **total** pending backlog: a user already holding work is only topped up to the cap, never past it. The fairness rolling-window auto-cap derivation stays team-level and keeps using the global value.
 
 ### `addAssignment(assignment: Assignment): Promise<void>`
 
@@ -325,15 +327,51 @@ Retrieves the current list of assignments that a user is tentatively matched wit
 
 - `userId: string`: The ID of the user.
 
-### `getPendingAssignmentsWithAge(): Promise<PendingAssignmentInfo[]>`
+### `getPendingAssignmentsWithAge(options?: { limit?: number }): Promise<PendingAssignmentInfo[]>`
 
-Retrieves current pending assignments, including who owns each assignment and how long it has been pending.
+Retrieves current pending assignments, including who owns each assignment and how long it has been pending. Reads are bounded (the pending hash is paged with `HSCAN` and each page's lookups are batched), and corrupt entries are skipped. Pass `{ limit }` (clamped to 1000) to hydrate only the top-N longest-pending assignments instead of every one; without options the behavior is unchanged.
 
 - `assignment`: The assignment payload.
 - `ownerId`: The current owner user ID, or `null` if missing.
 - `pendingForMs`: Elapsed pending time in milliseconds.
 - `pendingSince`: Unix timestamp (ms) when the assignment entered pending state.
 - `expiresAt`: Unix timestamp (ms) when pending expiration is scheduled.
+
+### User status & workload queries
+
+Three bounded APIs answer "who is in the pool and how loaded are they?" without materializing whole Redis structures:
+
+#### `getUsersPaginated(options?: UserQueryOptions): Promise<UserQueryResult>`
+
+Paginated user scan with composable filters (logical AND):
+
+```ts
+const page = await matcher.getUsersPaginated({
+    status: 'active', // 'all' | 'active' | 'paused' | 'idle'
+    idleForMs: 10 * 60_000, // last touchUser() older than this
+    hasBacklog: true, // pending backlog non-empty
+    atCapacity: true, // backlog reached the effective cap
+    limit: 100, // clamped to [1, 1000]
+    includeAssignments: true, // also return pending/accepted ids
+    includeTotal: true, // also return the unfiltered pool size
+    cursor: null, // pass nextCursor verbatim to continue
+});
+```
+
+Each `UserSummary` carries `userId`, the stored `user` record, `paused`, `lastActiveAt`, `backlog`, `acceptedCount`, the effective `maxBacklogSize` (per-user override honored), and `atCapacity`. `status: 'idle'` without an explicit `idleForMs` falls back to the matcher's `idleUserTimeoutMs` (and matches nobody when neither is set). Two pagination caveats, both consequences of paging the users hash with `HSCAN`: a scan page is never split, so a returned page may exceed `limit` by less than one scan page; and filters are applied during the scan, so a page may return fewer than `limit` users while `hasMore` is still true. Loop on `hasMore` until it is false. With `includeAssignments`, the returned `acceptedAssignmentIds` come straight from the per-user index and are not verified against the accepted store — a rare stale id can appear; `getActiveAssignmentsForUser()` is the verified (and self-healing) read.
+
+#### `getUserSummaries(userIds: string[]): Promise<UserSummary[]>`
+
+Order-preserving batch version for a known set of ids (chunked pipelined reads). Missing or corrupt user records are omitted.
+
+#### `getActiveAssignmentsForUser(userId: string): Promise<ActiveAssignmentInfo[]>`
+
+A user's accepted (in-progress) assignments, newest first, each with its `acceptedAt` timestamp — the complement to `getCurrentAssignmentsForUser()`'s pending backlog. Backed by a per-user accepted index (`user:{id}:accepted`) maintained on accept and on every terminal transition (complete/fail/remove/SLA sweeps). Two freshness notes:
+
+- The index is maintained from the version that introduced it: accepted work that predates upgrading (or that is in flight during a rolling upgrade) appears only after it cycles.
+- A stale member can survive `removeAssignment` on a non-SLA accepted assignment (only SLA records carry their owner); reads verify ids against the accepted store and self-heal, so results stay correct.
+
+**Crash-safety note.** `getUsers()` (and `getQueueStats()`'s internal user scan) now skip a corrupt user record instead of throwing on it — the same precedent `getAllAssignmentsFromStores` already set. One malformed entry can no longer take down a dashboard endpoint.
 
 ### `pauseUser(userId: string): Promise<boolean>` / `resumeUser(userId: string): Promise<boolean>`
 
@@ -998,11 +1036,11 @@ bandit policy.
 
 - `policy: 'ucb1'` (default): high-mean tags get high weights, an exploration
   bonus favors less-sampled tags, and bad tags are hard-vetoed at weight `0`.
-- `policy: 'confidence'`: uses upper-confidence-bound for the weight and a
-  conservative lower-confidence-bound for the veto decision, so uncertainty
-  works against exclusion.
+- `policy: 'confidence'`: uses upper-confidence-bound for the weight and for
+  the veto decision — a tag is hard-vetoed only when the whole confidence
+  interval sits below the threshold, so uncertainty alone never excludes.
 - `policy: 'thompson'`: samples from the per-tag posterior when mapping to a
-  weight.
+  weight; the veto decision uses the deterministic mean, never the draw.
 
 **Guardrails (all opt-in):**
 
@@ -1013,8 +1051,11 @@ bandit policy.
 - `maxDeltaPerSync`: clamps how far any single learned weight can move per
   sync, avoiding oscillation.
 - `minTotalSamples`: skip users whose total evidence is still too thin.
-- `decayHalfLifeMs`: exponentially decay older observations on read so stale
-  history cannot veto a user's improving skills.
+- `decayHalfLifeMs`: exponentially decay older observations so stale history
+  cannot veto a user's improving skills. The decay is applied at write time
+  (old mass is rescaled before each new outcome lands, atomically in Redis)
+  and continues on read, so a single fresh outcome re-weights the stats
+  toward recent behavior instead of resurrecting decayed history.
 - `terminalOnlyTagStats`: when `true`, only terminal outcomes
   (complete/reject/expire/fail plus manual rewards/feedback) feed tag stats;
   the non-terminal `accept` update is skipped.
@@ -1060,6 +1101,14 @@ const wouldBe = await matcher.syncLearnedRoutingWeights('user-1', { dryRun: true
 // Undo the last sync if the result looks wrong:
 await matcher.revertLearnedRoutingWeights('user-1');
 ```
+
+Two safety properties of the sync: a user's **declared tags always stay
+matchable** — a declared tag with no recorded outcomes gets the exploration
+prior rather than silently dropping out of the installed `routingWeights` —
+and the pre-sync state is always restorable: a user who had no
+`routingWeights` at all is snapshotted as such (`routingWeightsSnapshot:
+null`), so `revertLearnedRoutingWeights()` returns them to plain tag-based
+matching.
 
 Synthesis happens outside the matching hot path — matching itself reads the
 user's stored `routingWeights` exactly as before, so the per-match cost is
@@ -1561,7 +1610,7 @@ const result = solveSchedule({
 
 Rules cover: daily rest (rolling window, reduction allowances, clock-band containment), weekly rest (two-level floor plus average), rolling working-time averages with absence neutralisation, overtime (ordinary-vs-overtime split, consent, per-day and per-window caps, time-off-in-lieu), duty-type volume quotas, night work (configurable band, per-shift cap, averaging, hazardous absolute cap, volume quotas, prohibited bands), in-shift breaks, consecutive days and nights, forbidden shift successions, minimum start interval, Sunday and holiday rules, minimum engagement, publication and change notice, availability and preferences, date-valid qualifications, group composition, statutory protections, contract limits, and fairness.
 
-`Employee.rules` overrides the global set per person — that is how age classes, individual opt-outs and hazardous-work status are expressed. `Employee.personId` aggregates several contracts onto one natural person, which rest and window rules require.
+`Employee.rules` overrides the global set per person — that is how age classes, individual opt-outs and hazardous-work status are expressed. `Employee.personId` aggregates several contracts onto one natural person, which rest and window rules require: overlap (`no-overlap`) and inter-assignment rest (`min-rest`, `dailyRest`) are judged on the person timeline — spanning sibling contracts and supplied `history` — so two contracts cannot double-book a person or dodge a rest floor at the period boundary. Contract hour/day **maxima** are the opposite: per employee record, like the minimum and the `timeOffInLieu` ledger — one contract's cap is never consumed by a sibling's hours. Rolling volume windows (night-shift quotas, weekly-rest averaging) probe true rolling windows anchored on entry boundaries, never a day grid. Declared `available` windows are credited as a **union**: a shift spanning two contiguous windows is inside the declaration.
 
 Break entitlements are checked against shift design: `unpaidBreakMinutes` (deducted from working time) and `paidBreakMinutes` (working time, and the only thing that discharges a `paid: true` break rule). Deadline arithmetic that needs a "now" — notably whether a cancellation of a published assignment fell inside `notice.cancellationDeadlineMinutes` — is anchored by the optional `asOf` input; without it every cancellation is treated as late, the conservative reading.
 

@@ -212,4 +212,23 @@ describe('Matcher Geolocation Tests', function () {
         expect(coords).to.be.an('array');
         expect(coords[0]).to.not.equal(null);
     });
+
+    it('clears the geo index when an assignment is claimed', async function () {
+        await matcher.addUser({ id: 'geo-claimer', tags: ['support'], latitude: 59.9139, longitude: 10.7522 });
+        await matcher.addAssignment({
+            id: 'geo-claimed',
+            tags: ['support'],
+            latitude: 59.92,
+            longitude: 10.75,
+            maxDistanceKm: 25,
+        });
+
+        await matcher.matchUsersAssignments('geo-claimer');
+        expect(await matcher.getCurrentAssignmentsForUser('geo-claimer')).to.include('geo-claimed');
+
+        // Claimed out of the queued universe: the geo index entry goes with it
+        // (a requeue re-adds it via enqueue's geoAdd).
+        const coords = await matcher.redisClient.geoPos(`${redisPrefix}assignments:geo`, 'geo-claimed');
+        expect(coords[0] ?? null).to.equal(null);
+    });
 });

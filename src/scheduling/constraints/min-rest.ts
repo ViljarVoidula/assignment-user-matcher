@@ -17,29 +17,21 @@
  */
 
 import type { SchedulingConstraint, SearchState, AssignmentPair } from '../types';
+import { entryIdOf, instanceOf, rangeOf, timelineFor } from './support';
 
 /** EU floor: Directive 2003/88/EC Article 3 — 11 consecutive hours per 24-hour period. */
 export const DEFAULT_MIN_REST_MINUTES = 660;
 
 export function minRest(minRestMinutes: number): SchedulingConstraint {
     const breach = (state: SearchState, pair: AssignmentPair) => {
-        const inst = state.ctx.instanceById.get(pair.shiftInstanceId);
+        const inst = instanceOf(state, pair);
         if (!inst) return false;
-        const assigned = state.byEmployee.get(pair.employeeId);
-        if (!assigned) return false;
-        for (const otherId of assigned) {
-            if (otherId === pair.shiftInstanceId) continue;
-            const other = state.ctx.instanceById.get(otherId);
-            if (!other) continue;
-            const gap =
-                inst.startMinute >= other.endMinute
-                    ? inst.startMinute - other.endMinute
-                    : other.startMinute >= inst.endMinute
-                      ? other.startMinute - inst.endMinute
-                      : 0; // overlapping: no-overlap owns that, rest sees zero gap
-            if (gap < minRestMinutes) return true;
-        }
-        return false;
+        // Person timeline, not the per-contract assignment set: rest aggregates
+        // on the person (C-585/19), and history is what makes the rule correct
+        // at the period boundary. Overlaps read as a zero gap, which breaches
+        // here just as it did under the old pairwise arithmetic.
+        const gap = timelineFor(state, pair.employeeId).minGapAround(rangeOf(inst), entryIdOf(pair));
+        return gap < minRestMinutes;
     };
     return {
         id: 'min-rest',

@@ -799,6 +799,12 @@ export interface ShiftInstance {
     workingMinutes: number;
     /** Paid break minutes declared by the template. Count as working time. */
     paidBreakMinutes: number;
+    /**
+     * Unpaid break minutes declared by the template. Break entitlements read
+     * this rather than span − working: for a duty-scaled shift the difference
+     * is duty occupation, not rest.
+     */
+    unpaidBreakMinutes: number;
     maxEmployees?: number;
     tagMaximums: Record<string, number>;
     requiredTags: string[];

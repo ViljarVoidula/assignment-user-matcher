@@ -51,6 +51,12 @@ export class WorkflowManager {
     private subscriberClient: RedisClientType | null = null;
     private subscriberReconnectAttempts: number = 0;
     private luaScriptSha: string | null = null;
+    /** Script source, kept so a NOSCRIPT after a Redis restart can re-load it. */
+    private luaScriptSource: string | null = null;
+    /** Event id being applied right now — saveInstance stamps its idempotency
+     *  marker atomically with the CAS write. Safe as an ambient field: events
+     *  are processed sequentially within one manager. */
+    private processingEventId: string | null = null;
     private machineHandlers: Map<string, MachineTaskHandler> = new Map();
     private throttleWindowStart: number = 0;
     private throttleTokensUsed: number = 0;
@@ -127,8 +133,9 @@ export class WorkflowManager {
         return message.includes('NOGROUP');
     }
 
-    setLuaScriptSha(sha: string): void {
+    setLuaScriptSha(sha: string, source?: string): void {
         this.luaScriptSha = sha;
+        if (source !== undefined) this.luaScriptSource = source;
     }
 
     /**
@@ -327,14 +334,25 @@ export class WorkflowManager {
             });
             if (!ids.length) break;
 
+            const ghosts: string[] = [];
             for (const { value: id, score } of ids) {
                 const instance = await this.getWorkflowInstance(id);
                 lastScore = score;
-                if (!instance) continue;
+                if (!instance) {
+                    // Retention expired the instance hash after the terminal
+                    // transition removed its registry entry, so nothing else
+                    // can ever clean this member — self-heal on read.
+                    ghosts.push(id);
+                    continue;
+                }
                 if (query.status && instance.status !== query.status) continue;
                 if (query.workflowDefinitionId && instance.workflowDefinitionId !== query.workflowDefinitionId) continue;
                 instances.push(instance);
                 if (instances.length >= limit) break;
+            }
+
+            if (ghosts.length > 0) {
+                await this.redisClient.zRem(byTimeKey, ghosts);
             }
 
             if (ids.length < scanBatchSize) break; // index exhausted
@@ -1132,7 +1150,15 @@ export class WorkflowManager {
 
         try {
             const maxAttempts = 3;
+            this.processingEventId = event.eventId;
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                // Re-checked each attempt: a concurrent duplicate delivery loses
+                // the CAS race, retries here with fresh state, and must see
+                // the winner's marker (written atomically with the winning
+                // transition) instead of applying the same event twice.
+                if (attempt > 0 && (await this.reliability.isEventProcessed(event.eventId))) {
+                    break;
+                }
                 const instance = await this.getWorkflowInstance(event.workflowInstanceId);
                 if (!instance || instance.status !== 'active') {
                     break;
@@ -1142,6 +1168,21 @@ export class WorkflowManager {
                     instance.definitionSnapshot ?? (await this.getWorkflowDefinition(instance.workflowDefinitionId));
                 if (!definition) {
                     break;
+                }
+
+                // Consume-time relevance guard, mirroring the publish-time one
+                // in processExpiredWorkflowSteps: a stale event for a step the
+                // run has moved past (an EXPIRED consumed after an on-time
+                // COMPLETED advanced the run, or a late COMPLETED after an
+                // escalation) must not fail, escalate, or re-advance the run.
+                if (event.stepId) {
+                    const isCurrentStep = instance.currentStepId === event.stepId;
+                    const isPendingBranch =
+                        instance.parallelBranches?.some((b) => b.stepId === event.stepId && b.status === 'pending') ??
+                        false;
+                    if (!isCurrentStep && !isPendingBranch) {
+                        break;
+                    }
                 }
 
                 try {
@@ -1173,6 +1214,8 @@ export class WorkflowManager {
             this.telemetry.recordSpanError(span, err instanceof Error ? err : new Error(String(err)));
             endSpan();
             throw err;
+        } finally {
+            this.processingEventId = null;
         }
     }
 
@@ -1305,6 +1348,20 @@ export class WorkflowManager {
             assignmentId: event.assignmentId,
             payload: { ...event.payload, willRetry },
         });
+
+        // Pull the superseded assignment before retrying or failing the run —
+        // the same removal the escalation path does. The matcher's expiry
+        // sweep requeues an expired workflow assignment, so a retry would
+        // otherwise run TWO live copies of the step, and a failed run would
+        // leave matchable work for a dead workflow.
+        const supersededId = event.assignmentId || instance.currentAssignmentId;
+        if (supersededId && this.host.removeAssignment) {
+            await this.host.removeAssignment(supersededId).catch(() => {
+                /* already gone (completed, cancelled, swept) — nothing to supersede */
+            });
+            await this.redisClient.del(this.keys.workflowAssignmentLink(supersededId));
+        }
+
         if (willRetry) {
             instance.retryCount += 1;
             await this.executeWorkflowStep(instance, stepId, definition);
@@ -1433,12 +1490,15 @@ export class WorkflowManager {
     }
 
     async reclaimOrphanedMessages(): Promise<number> {
-        if (!this.subscriberClient?.isOpen) return 0;
+        // Sweep-mode hosts have no subscriber client, but a crashed consumer's
+        // delivered-unacked entries still need recovering — XAUTOCLAIM is
+        // non-blocking, so the main client serves when no subscriber exists.
+        const client = this.subscriberClient?.isOpen ? this.subscriberClient : this.redisClient;
         const streamKey = this.keys.eventStream();
         let totalReclaimed = 0;
 
         try {
-            const result = await this.subscriberClient.xAutoClaim(
+            const result = await client.xAutoClaim(
                 streamKey,
                 this.options.streamConsumerGroup,
                 this.options.streamConsumerName,
@@ -1453,7 +1513,7 @@ export class WorkflowManager {
                     const event = this.parseStreamMessage(message as any);
                     try {
                         if (await this.reliability.isEventProcessed(event.eventId)) {
-                            await this.subscriberClient.xAck(streamKey, this.options.streamConsumerGroup, message.id);
+                            await client.xAck(streamKey, this.options.streamConsumerGroup, message.id);
                             continue;
                         }
 
@@ -1462,12 +1522,12 @@ export class WorkflowManager {
 
                         if (retryCount >= this.reliability.options.workflowMaxRetries!) {
                             await this.reliability.moveToDeadLetter(event, 'Max retries exceeded');
-                            await this.subscriberClient.xAck(streamKey, this.options.streamConsumerGroup, message.id);
+                            await client.xAck(streamKey, this.options.streamConsumerGroup, message.id);
                         } else {
                             try {
                                 await this.processWorkflowEvent(event);
                                 await this.reliability.markEventProcessed(event.eventId);
-                                await this.subscriberClient.xAck(streamKey, this.options.streamConsumerGroup, message.id);
+                                await client.xAck(streamKey, this.options.streamConsumerGroup, message.id);
                                 totalReclaimed++;
                             } catch (err) {
                                 await this.redisClient.incr(retryKey);
@@ -1497,10 +1557,29 @@ export class WorkflowManager {
         const newData = JSON.stringify(instance);
 
         if (this.luaScriptSha) {
-            const result = (await this.redisClient.evalSha(this.luaScriptSha, {
-                keys: [instanceKey],
-                arguments: [String(expectedVersion), newData],
-            })) as string;
+            // The idempotency marker rides in the same atomic script as the
+            // CAS write: a crash after the transition but before a separate
+            // marker write would otherwise re-apply the event on redelivery.
+            const markerTtl = this.reliability.options.workflowIdempotencyTtlMs;
+            const keys =
+                this.processingEventId && markerTtl
+                    ? [instanceKey, this.keys.processedEvent(this.processingEventId)]
+                    : [instanceKey];
+            const args =
+                keys.length === 2
+                    ? [String(expectedVersion), newData, String(markerTtl)]
+                    : [String(expectedVersion), newData];
+
+            let result: string;
+            try {
+                result = (await this.redisClient.evalSha(this.luaScriptSha, { keys, arguments: args })) as string;
+            } catch (err) {
+                // A Redis restart/failover empties the script cache; without a
+                // reload every transition fails NOSCRIPT until process restart.
+                if (!String((err as Error)?.message ?? err).includes('NOSCRIPT') || !this.luaScriptSource) throw err;
+                this.luaScriptSha = await this.redisClient.scriptLoad(this.luaScriptSource);
+                result = (await this.redisClient.evalSha(this.luaScriptSha, { keys, arguments: args })) as string;
+            }
             const parsed = JSON.parse(result);
             if (parsed.err) {
                 throw new Error(`Workflow transition failed: ${parsed.err}`);

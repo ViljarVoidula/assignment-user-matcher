@@ -126,6 +126,7 @@ export function expandTemplate(
             durationMinutes,
             workingMinutes,
             paidBreakMinutes: paidBreak,
+            unpaidBreakMinutes: unpaidBreak,
             minEmployees: template.minEmployees ?? 1,
             maxEmployees: template.maxEmployees,
             tagRequirements: template.tagRequirements ?? {},

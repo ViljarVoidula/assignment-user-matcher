@@ -22,6 +22,12 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         userWindowGrants: (userId: string) => `${prefix}user:${userId}:window-grants`,
         userActivity: () => `${prefix}users:activity`,
         pausedUsers: () => `${prefix}users:paused`,
+        // Per-user accepted-work index: zset of RAW assignment ids (unlike
+        // the backlog set's `assignment:{id}` members) scored by accept epoch
+        // ms. Written on accept, removed on every terminal transition; a
+        // member orphaned by a missed removal is filtered against the global
+        // acceptedAssignments hash on read and self-healed with a zRem.
+        userAcceptedAssignments: (userId: string) => `${prefix}user:${userId}:accepted`,
 
         // Assignment keys
         assignments: () => `${prefix}assignments`,

@@ -60,6 +60,31 @@ export interface LearningManagerOptions {
     autoWeights?: AutoRoutingWeightsOptions;
 }
 
+/**
+ * Atomic decayed tag-outcome update: rescale the stored count/reward/rewardSq
+ * sums by the elapsed half-life factor since the tag's last write, add the new
+ * outcome at full weight, and stamp the write time — an exponentially-weighted
+ * aggregate, exact per observation. KEYS: counts, rewards, rewardSq, ts
+ * hashes. ARGV: tag, now (ms), halfLife (ms), reward.
+ */
+const DECAYED_TAG_OUTCOME_LUA = `
+local tag = ARGV[1]
+local now = tonumber(ARGV[2])
+local halfLife = tonumber(ARGV[3])
+local reward = tonumber(ARGV[4])
+local ts = tonumber(redis.call('HGET', KEYS[4], tag))
+local f = 1
+if ts and halfLife > 0 and now > ts then f = 2 ^ (-(now - ts) / halfLife) end
+local count = (tonumber(redis.call('HGET', KEYS[1], tag)) or 0) * f + 1
+local sum = (tonumber(redis.call('HGET', KEYS[2], tag)) or 0) * f + reward
+local sq = (tonumber(redis.call('HGET', KEYS[3], tag)) or 0) * f + reward * reward
+redis.call('HSET', KEYS[1], tag, count)
+redis.call('HSET', KEYS[2], tag, sum)
+redis.call('HSET', KEYS[3], tag, sq)
+redis.call('HSET', KEYS[4], tag, now)
+return 1
+`;
+
 export class LearningManager {
     readonly learningRate: number;
     readonly explorationRate: number;
@@ -320,6 +345,30 @@ export class LearningManager {
 
         const needVariance = this.needsVarianceTracking();
         const now = Date.now();
+        const halfLife = this.autoWeights.decayHalfLifeMs ?? 0;
+
+        if (halfLife > 0) {
+            // With decay configured, the stored sums must be rescaled to "as of
+            // now" BEFORE the new outcome is added, atomically per tag. Plain
+            // increments plus a timestamp reset would (a) never change the
+            // mean (count and sum decay identically) and (b) resurrect fully
+            // decayed history the moment one fresh outcome landed.
+            for (const tag of tags) {
+                if (!tag) continue;
+                await this.redisClient.eval(DECAYED_TAG_OUTCOME_LUA, {
+                    keys: [
+                        this.keys.learningUserTagCounts(userId),
+                        this.keys.learningUserTagRewards(userId),
+                        this.keys.learningUserTagRewardSq(userId),
+                        this.keys.learningUserTagTs(userId),
+                    ],
+                    arguments: [tag, String(now), String(halfLife), String(reward)],
+                });
+            }
+            await this.redisClient.sAdd(this.keys.learningUsers(), userId);
+            return;
+        }
+
         const multi = this.redisClient.multi();
         for (const tag of tags) {
             if (!tag) continue;

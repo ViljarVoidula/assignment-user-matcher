@@ -276,11 +276,12 @@ describe('Matcher Coverage Improvements', function () {
             const matcher = createMatcher({ enableLearning: true });
             await matcher.waitUntilReady();
 
-            // Only add a user (not an assignment) so allTagsKey stays unset.
-            // sMembers on a missing key returns [] without a WRONGTYPE error.
             await matcher.addUser({ id: 'user1', tags: ['mytag'] });
+            // The known-tags index is a ZSET written by enqueueAssignment;
+            // reading it must work once real assignments exist (regression:
+            // an SMEMBERS read threw WRONGTYPE on any non-empty deployment).
+            await matcher.addAssignment({ id: 'kt-a1', tags: ['mytag'], priority: 1 });
 
-            // includeUnexploredTags: true triggers getKnownTagsForAutoWeights (line 592-594)
             const weights = await matcher.getLearnedRoutingWeights('user1', { includeUnexploredTags: true });
             expect(weights).to.be.an('object');
         });

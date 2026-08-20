@@ -22,8 +22,14 @@ export function hourBudget(): SchedulingConstraint {
             // working time, and the budget is documented as *worked* hours, so
             // the candidate must contribute in the same unit — an unpaid break
             // or a fractional duty must not be double-counted against it.
+            // An already-assigned pair's shift is in the total, so it is not
+            // added again (the same self-exclusion `withEntry` gives the
+            // timeline rules): re-judging a committed roster must ask "is the
+            // total over the cap", not "would the cap survive this twice".
             const current = state.minutesByEmployee.get(pair.employeeId) ?? 0;
-            return current + inst.workingMinutes > employee.maxHoursForPeriod * 60 ? 1 : 0;
+            const assigned = state.assignments.get(pair.shiftInstanceId)?.has(pair.employeeId) ?? false;
+            const total = assigned ? current : current + inst.workingMinutes;
+            return total > employee.maxHoursForPeriod * 60 ? 1 : 0;
         },
         explain(state, pair) {
             const employee = state.ctx.employeeById.get(pair.employeeId);

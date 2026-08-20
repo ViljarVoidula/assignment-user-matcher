@@ -98,8 +98,19 @@ function totalQualifyingRest(
     bounds: { start: number; end: number },
     minPer: number,
 ): number {
+    // Window starts anchored on entry boundaries, never a day grid (a grid
+    // silently misses straddling windows — see CLAUDE.md). The worst (least
+    // rest) windows are the ones aligning their edges with work, so probe
+    // every start where a window edge touches an entry boundary.
+    const starts = new Set<number>([bounds.start, bounds.end]);
+    for (const entry of timeline.entriesIn({ start: bounds.start, end: bounds.end + averagingMinutes })) {
+        for (const s of [entry.start, entry.end, entry.start - averagingMinutes + 1, entry.end - averagingMinutes]) {
+            if (s >= bounds.start && s <= bounds.end) starts.add(s);
+        }
+    }
+
     let worst = Infinity;
-    for (let start = bounds.start; start <= bounds.end; start += MINUTES_PER_DAY) {
+    for (const start of starts) {
         const window = { start, end: start + averagingMinutes };
         let total = 0;
         for (const gap of timeline.restGapsIn(window)) {

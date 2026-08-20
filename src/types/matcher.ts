@@ -21,8 +21,12 @@ export interface User {
     // ignored). The fairness rolling-window auto-cap derivation stays
     // team-level and keeps using the global value.
     maxBacklogSize?: number;
-    /** Snapshot of routingWeights before the last learned sync; used by revertLearnedRoutingWeights(). */
-    routingWeightsSnapshot?: Record<string, number>;
+    /**
+     * Snapshot of routingWeights before the last learned sync; used by
+     * revertLearnedRoutingWeights(). `null` records "had no routingWeights"
+     * (tag-based matching), so that state is restorable too.
+     */
+    routingWeightsSnapshot?: Record<string, number> | null;
     /** Unix epoch ms of the last learned routing-weights sync for this user. */
     learnedRoutingWeightsSyncedAt?: number;
     /** The weights last applied by syncLearnedRoutingWeights(); for observability only. */
@@ -338,6 +342,76 @@ export type PendingAssignmentInfo = {
     pendingForMs: number | null;
     pendingSince: number | null;
     expiresAt: number | null;
+};
+
+/**
+ * Status filter for `getUsersPaginated()`:
+ * - `all`: every user in the pool (default)
+ * - `active`: not paused
+ * - `paused`: currently paused via `pauseUser()`
+ * - `idle`: last activity older than `idleForMs` (requires `idleForMs`)
+ */
+export type UserStatusFilter = 'all' | 'active' | 'paused' | 'idle';
+
+/**
+ * Options for `getUsersPaginated()`. Filters compose (logical AND). Filtered
+ * pages may return fewer than `limit` users while `hasMore` is still true —
+ * keep consuming until `hasMore` is false.
+ */
+export type UserQueryOptions = {
+    /** Opaque cursor from a previous `UserQueryResult.nextCursor` */
+    cursor?: string | null;
+    /** Page size after filtering, clamped to [1, 1000]; default 100 */
+    limit?: number;
+    /** Status filter; default 'all' */
+    status?: UserStatusFilter;
+    /** Idle threshold in ms; implied when `status: 'idle'`, ANDed otherwise */
+    idleForMs?: number;
+    /** Keep only users with a non-empty pending backlog */
+    hasBacklog?: boolean;
+    /** Keep only users whose backlog reached their effective cap */
+    atCapacity?: boolean;
+    /** Include pending/accepted assignment ids for the returned page */
+    includeAssignments?: boolean;
+    /** Include the total number of users in the pool (unfiltered) */
+    includeTotal?: boolean;
+};
+
+/** One user's status/workload summary. */
+export type UserSummary = {
+    userId: string;
+    /** The stored user record as written by `addUser()` */
+    user: User;
+    paused: boolean;
+    /** Last `touchUser()` epoch ms; null when never recorded */
+    lastActiveAt: number | null;
+    /** Pending backlog depth */
+    backlog: number;
+    /** Number of accepted (in-progress) assignments */
+    acceptedCount: number;
+    /** Effective cap (per-user `maxBacklogSize` or the matcher-wide default) */
+    maxBacklogSize: number;
+    /** `backlog >= maxBacklogSize` */
+    atCapacity: boolean;
+    /** Present only when requested via `includeAssignments` */
+    pendingAssignmentIds?: string[];
+    /** Present only when requested via `includeAssignments`; newest first */
+    acceptedAssignmentIds?: string[];
+};
+
+export type UserQueryResult = {
+    users: UserSummary[];
+    nextCursor: string | null;
+    hasMore: boolean;
+    /** Total users in the pool (unfiltered); present only when requested */
+    total?: number;
+};
+
+/** One accepted (in-progress) assignment of a user, newest first. */
+export type ActiveAssignmentInfo = {
+    assignmentId: string;
+    /** Accept epoch ms (score of the accepted index entry) */
+    acceptedAt: number;
 };
 
 /**

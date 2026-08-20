@@ -39,6 +39,11 @@ export type {
     QueueAuditReport,
     MaintenanceOptions,
     MaintenanceReport,
+    UserStatusFilter,
+    UserQueryOptions,
+    UserSummary,
+    UserQueryResult,
+    ActiveAssignmentInfo,
 } from './matcher.class';
 
 // Pre-flight lint (pure, Redis-free) — usable host-side before addAssignment

@@ -59,9 +59,20 @@ export function contractLimits(): SchedulingConstraint {
             return timeline.withEntry(probe, (t) => {
                 const periodWindow = { start: 0, end: state.ctx.periodDays * MINUTES_PER_DAY };
 
+                // A contract bounds the employee *record*, not the person (the
+                // same per-record reading as the minimum aggregate below and the
+                // timeOffInLieu ledger): the person timeline also carries
+                // sibling contracts' entries, which must not eat this
+                // contract's budget. Roster entries are attributable by their
+                // `${employeeId}@@` prefix; history entries are not
+                // attributable to either record, so they count conservatively.
+                const ownPrefix = `${pair.employeeId}@@`;
+                const attributable = t
+                    .entriesIn(periodWindow)
+                    .filter((e) => !e.id.includes('@@') || e.id.startsWith(ownPrefix));
+
                 if (contract.kind === 'days' && contract.maxDaysInPeriod !== undefined) {
-                    const days = new Set(t.entriesIn(periodWindow).map((e) => state.ctx.clock.dayIndexOfMinute(e.start)))
-                        .size;
+                    const days = new Set(attributable.map((e) => state.ctx.clock.dayIndexOfMinute(e.start))).size;
                     if (days > contract.maxDaysInPeriod) {
                         return fail(
                             'contract',
@@ -79,7 +90,11 @@ export function contractLimits(): SchedulingConstraint {
                 }
 
                 if (contract.maxPeriodMinutes !== undefined) {
-                    const worked = t.workingMinutesIn(periodWindow);
+                    const worked = attributable.reduce((sum, e) => {
+                        const overlap = Math.min(e.end, periodWindow.end) - Math.max(e.start, periodWindow.start);
+                        const span = e.end - e.start;
+                        return sum + (span > 0 ? Math.round((e.workingMinutes * Math.max(0, overlap)) / span) : 0);
+                    }, 0);
                     if (worked > contract.maxPeriodMinutes) {
                         return fail(
                             'contract',

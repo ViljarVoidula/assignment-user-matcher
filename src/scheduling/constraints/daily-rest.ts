@@ -43,8 +43,12 @@ export function dailyRest(rule: DailyRestRule): SchedulingConstraint {
 
             if (gap === 0) {
                 // Overlapping work is `no-overlap`'s business; reporting it here
-                // too would double-count the same defect.
-                return pass('daily-rest', 'overlap is handled by no-overlap');
+                // too would double-count the same defect. A zero gap without an
+                // overlap is back-to-back work, and that IS this rule's business
+                // — fall through to the floor check.
+                const own = entryIdOf(pair);
+                const overlapping = timeline.entriesIn(range).some((e) => e.id !== own);
+                if (overlapping) return pass('daily-rest', 'overlap is handled by no-overlap');
             }
 
             if (gap < floor) {

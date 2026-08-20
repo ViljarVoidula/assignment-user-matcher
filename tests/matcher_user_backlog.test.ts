@@ -127,4 +127,38 @@ describe('Per-User Backlog Cap Tests', async function () {
         await matcher.matchUsersAssignments();
         expect(await matcher.getCurrentAssignmentsForUser('weird')).to.have.length(2);
     });
+
+    // Regression: the cap must bound TOTAL backlog, not new grants per pass —
+    // a user already holding work was previously toppable to 2×limit−1.
+    describe('partial backlog is counted against the cap', function () {
+        async function addMore(matcher: AssignmentMatcher, ids: string[]) {
+            for (const [i, id] of ids.entries()) {
+                await matcher.addAssignment({ id, tags: ['t1'], priority: 50 - i });
+            }
+        }
+
+        it('bulk path tops a partially-loaded user up to the cap, never past it', async function () {
+            const matcher = createMatcher();
+            await matcher.addUser({ id: 'u1', tags: ['t1'] }); // global cap 5
+            await addAssignments(matcher, 3);
+            await matcher.matchUsersAssignments();
+            expect(await matcher.getCurrentAssignmentsForUser('u1')).to.have.length(3);
+
+            await addMore(matcher, ['b1', 'b2', 'b3', 'b4', 'b5', 'b6']);
+            await matcher.matchUsersAssignments();
+            expect(await matcher.getCurrentAssignmentsForUser('u1')).to.have.length(5);
+        });
+
+        it('per-user path tops a partially-loaded user up to the cap, never past it', async function () {
+            const matcher = createMatcher();
+            await matcher.addUser({ id: 'u1', tags: ['t1'], maxBacklogSize: 4 });
+            await addAssignments(matcher, 2);
+            await matcher.matchUsersAssignments('u1');
+            expect(await matcher.getCurrentAssignmentsForUser('u1')).to.have.length(2);
+
+            await addMore(matcher, ['b1', 'b2', 'b3', 'b4', 'b5']);
+            await matcher.matchUsersAssignments('u1');
+            expect(await matcher.getCurrentAssignmentsForUser('u1')).to.have.length(4);
+        });
+    });
 });

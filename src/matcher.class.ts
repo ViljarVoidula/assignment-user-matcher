@@ -14,6 +14,7 @@ import {
     type PaginationResult,
     type AssignmentCounts,
 } from './queries/pagination';
+import { getUsersPaginatedFromStore, getUserSummariesBatch, getActiveAssignmentsFromStore } from './queries/users';
 import { calculateMatchScore, calculateDefaultPriority, explainMatchScore } from './scoring/match-score';
 import { arbitrateFair, resolveFairnessKnobs } from './scoring/fair-arbitration';
 import {
@@ -112,6 +113,11 @@ import type {
     QueueAuditOptions,
     QueueAuditEntry,
     QueueAuditReport,
+    UserStatusFilter,
+    UserQueryOptions,
+    UserSummary,
+    UserQueryResult,
+    ActiveAssignmentInfo,
 } from './types/matcher';
 
 // Re-export types for backwards compatibility
@@ -157,6 +163,11 @@ export type {
     QueueAuditOptions,
     QueueAuditEntry,
     QueueAuditReport,
+    UserStatusFilter,
+    UserQueryOptions,
+    UserSummary,
+    UserQueryResult,
+    ActiveAssignmentInfo,
 } from './types/matcher';
 
 export type {
@@ -542,7 +553,9 @@ export default class AssignmentMatcher implements WorkflowHost {
     private async loadLuaScripts(): Promise<void> {
         try {
             this.luaScriptSha = await this.redisClient.scriptLoad(WORKFLOW_TRANSITION_LUA);
-            this.workflow.setLuaScriptSha(this.luaScriptSha);
+            // The source rides along so a NOSCRIPT after a Redis restart can
+            // be answered with a re-load instead of bricking every transition.
+            this.workflow.setLuaScriptSha(this.luaScriptSha, WORKFLOW_TRANSITION_LUA);
         } catch (err) {
             console.error('Failed to load Lua scripts:', err);
             // Fallback to non-atomic mode
@@ -1547,7 +1560,17 @@ export default class AssignmentMatcher implements WorkflowHost {
                 ? Object.fromEntries(Object.entries(user.routingWeights).filter(([tag]) => !(tag in previousLearned)))
                 : undefined;
 
-            const learned = await this.learning.getLearnedRoutingWeights(id, knownTags, existingForSynthesis);
+            // The user's own declared tags are always known: once the sync
+            // installs a routingWeights map, only positive entries match, so a
+            // declared tag the learner has no data for would silently stop
+            // matching forever. Including it here gives it the exploration
+            // prior instead.
+            const userKnownTags = [...new Set([...(knownTags ?? []), ...(user.tags ?? [])])];
+            const learned = await this.learning.getLearnedRoutingWeights(
+                id,
+                userKnownTags.length > 0 ? userKnownTags : undefined,
+                existingForSynthesis,
+            );
             if (Object.keys(learned).length === 0) continue;
 
             // Apply per-sync step clamp. Vetoes (weight 0) that passed the
@@ -1588,7 +1611,11 @@ export default class AssignmentMatcher implements WorkflowHost {
                 JSON.stringify({
                     ...user,
                     routingWeights,
-                    routingWeightsSnapshot: user.routingWeights,
+                    // `null` (not undefined) for a previously weightless user:
+                    // undefined is dropped by JSON, which made the sync
+                    // irreversible for exactly the tag-based users it affects
+                    // the most. Revert restores tag-based matching from null.
+                    routingWeightsSnapshot: user.routingWeights ?? null,
                     learnedRoutingWeights: clampedLearned,
                     learnedRoutingWeightsSyncedAt: Date.now(),
                 }),
@@ -1616,7 +1643,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             for (const [id, json] of Object.entries(all)) {
                 try {
                     const u = JSON.parse(json) as User;
-                    if (u.routingWeightsSnapshot) targets.push(id);
+                    if (u.routingWeightsSnapshot !== undefined) targets.push(id);
                 } catch {
                     // ignore malformed user entries
                 }
@@ -1628,14 +1655,16 @@ export default class AssignmentMatcher implements WorkflowHost {
             const userJson = await this.redisClient.hGet(this.usersKey, id);
             if (!userJson) continue;
             const user = JSON.parse(userJson) as User;
-            if (!user.routingWeightsSnapshot) continue;
+            // A `null` snapshot means "had no routingWeights before the sync"
+            // — reverting restores tag-based matching by dropping the map.
+            if (user.routingWeightsSnapshot === undefined) continue;
 
             await this.redisClient.hSet(
                 this.usersKey,
                 id,
                 JSON.stringify({
                     ...user,
-                    routingWeights: user.routingWeightsSnapshot,
+                    routingWeights: user.routingWeightsSnapshot ?? undefined,
                     routingWeightsSnapshot: undefined,
                     learnedRoutingWeights: undefined,
                     learnedRoutingWeightsSyncedAt: undefined,
@@ -1688,7 +1717,10 @@ export default class AssignmentMatcher implements WorkflowHost {
 
     /** All known tags except the internal 'default' tag (for exploration priors) */
     private async getKnownTagsForAutoWeights(): Promise<string[]> {
-        const tags: string[] = await this.redisClient.sMembers(this.allTagsKey);
+        // allTags is a ZSET (zAdd in enqueueAssignment, zRangeByLex in wildcard
+        // expansion) — an SMEMBERS read threw WRONGTYPE on any deployment that
+        // had ever enqueued an assignment.
+        const tags: string[] = await this.redisClient.zRange(this.allTagsKey, 0, -1);
         return tags.filter((t) => t !== 'default');
     }
 
@@ -1857,12 +1889,26 @@ export default class AssignmentMatcher implements WorkflowHost {
         const assignmentTagsKey = this.keys.assignmentTags(id);
         const assignmentGeoKey = this.keys.assignmentsGeo();
 
-        // Fetch tags, owner (in case it's pending), and vetoed users for index cleanup
-        const [tagsCsv, owner, vetoedUsers] = await Promise.all([
+        // Fetch tags, owner (in case it's pending), accepted JSON (for the
+        // per-user accepted index), and vetoed users for index cleanup
+        const [tagsCsv, owner, acceptedJson, vetoedUsers] = await Promise.all([
             this.redisClient.hGet(assignmentTagsKey, 'tags'),
             this.redisClient.hGet(this.assignmentOwnerKey, id),
+            this.redisClient.hGet(this.acceptedAssignmentsKey, id),
             this.redisClient.sMembers(this.keys.assignmentVetoed(id)),
         ]);
+
+        // Best-effort owner of the accepted record: only SLA-bearing items
+        // carry _acceptedBy, so a non-SLA accepted assignment leaves a stale
+        // per-user index member here — reads filter it out and self-heal.
+        let acceptedBy: string | null = null;
+        if (acceptedJson && acceptedJson.indexOf('"sla"') !== -1) {
+            try {
+                acceptedBy = (JSON.parse(acceptedJson) as Record<string, any>)[SLA_ACCEPTED_BY_FIELD] ?? null;
+            } catch {
+                // keep null on parse failure
+            }
+        }
 
         let tags: string[] = [];
         if (tagsCsv && tagsCsv.length > 0) {
@@ -1896,6 +1942,9 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         // 3. Remove from Accepted state
         multi.hDel(this.acceptedAssignmentsKey, id);
+        if (acceptedBy) {
+            multi.zRem(this.keys.userAcceptedAssignments(acceptedBy), id);
+        }
 
         // 4. Clear SLA indexes (no-ops for non-SLA assignments)
         multi.zRem(this.acceptedAssignmentsExpiryKey, id);
@@ -1918,6 +1967,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             .del(this.keys.userAssignments(userId))
             .del(this.keys.userRejected(userId))
             .del(this.keys.userVetoed(userId))
+            .del(this.keys.userAcceptedAssignments(userId))
             .zRem(this.keys.userActivity(), userId)
             .sRem(this.keys.pausedUsers(), userId)
             .hDel(this.usersKey, userId);
@@ -1953,10 +2003,59 @@ export default class AssignmentMatcher implements WorkflowHost {
         let cursor = '0';
         do {
             const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.usersKey, cursor, { COUNT: 500 });
-            users.push(...entries.map((t: { field: string; value: string }) => JSON.parse(t.value)));
+            for (const entry of entries) {
+                try {
+                    users.push(JSON.parse(entry.value));
+                } catch {
+                    // Skip corrupt entries (same precedent as getAllAssignmentsFromStores)
+                }
+            }
             cursor = nextCursor;
         } while (cursor !== '0');
         return users;
+    }
+
+    /**
+     * Paginated user query with composable status/workload filters
+     * (`status`, `idleForMs`, `hasBacklog`, `atCapacity`). All reads are
+     * bounded: the users hash is paged with HSCAN and per-page metadata is
+     * batched into one multi(). A scan page is never split, so a page may
+     * exceed `limit` by less than one scan page, and filtered scans may
+     * return short pages with `hasMore: true` — keep consuming until
+     * `hasMore` is false. `status: 'idle'` without an explicit `idleForMs`
+     * falls back to the matcher's `idleUserTimeoutMs` (matches nobody when
+     * that is not configured either).
+     */
+    async getUsersPaginated(options?: UserQueryOptions): Promise<UserQueryResult> {
+        await this.readyPromise;
+        const resolved: UserQueryOptions | undefined = options ? { ...options } : undefined;
+        if (resolved && resolved.idleForMs === undefined && resolved.status === 'idle' && this.idleUserTimeoutMs !== null) {
+            resolved.idleForMs = this.idleUserTimeoutMs;
+        }
+        return getUsersPaginatedFromStore(this.redisClient, this.keys, resolved, (user) => this.backlogLimitFor(user));
+    }
+
+    /**
+     * Order-preserving workload summaries for a known set of user ids
+     * (chunked pipelined reads). Missing or corrupt user records are omitted.
+     */
+    async getUserSummaries(userIds: string[]): Promise<UserSummary[]> {
+        await this.readyPromise;
+        return getUserSummariesBatch(this.redisClient, this.keys, userIds, (user) => this.backlogLimitFor(user));
+    }
+
+    /**
+     * A user's accepted (in-progress) assignments, newest first, backed by
+     * the per-user accepted index. Verified against the accepted store, so
+     * stale index members (e.g. left by a `removeAssignment` on a non-SLA
+     * assignment, or by an older library version) are dropped and self-healed.
+     *
+     * Note: the index is maintained from the version that introduced it —
+     * accepted work that predates it appears only after it cycles.
+     */
+    async getActiveAssignmentsForUser(userId: string): Promise<ActiveAssignmentInfo[]> {
+        await this.readyPromise;
+        return getActiveAssignmentsFromStore(this.redisClient, this.keys, userId);
     }
 
     // ============================================================================
@@ -2086,18 +2185,35 @@ export default class AssignmentMatcher implements WorkflowHost {
         let cursor = '0';
         do {
             const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.usersKey, cursor, { COUNT: 500 });
-            users.push(...entries.map((t: { field: string; value: string }) => JSON.parse(t.value)));
+            for (const entry of entries) {
+                try {
+                    users.push(JSON.parse(entry.value));
+                } catch {
+                    // Skip corrupt entries (same precedent as getAllAssignmentsFromStores)
+                }
+            }
             cursor = nextCursor;
         } while (cursor !== '0');
 
-        const perUser: UserLoadInfo[] = await Promise.all(
-            users.map(async (user) => ({
-                userId: user.id,
-                backlog: await this.redisClient.sCard(this.keys.userAssignments(user.id)),
-                maxBacklogSize: this.backlogLimitFor(user),
-                paused: paused.has(user.id),
-            })),
-        );
+        // Chunked pipelined backlog reads — one multi() per 500 users keeps
+        // pipelines bounded when the pool grows.
+        const perUser: UserLoadInfo[] = [];
+        for (let start = 0; start < users.length; start += 500) {
+            const chunk = users.slice(start, start + 500);
+            const multi = this.redisClient.multi();
+            for (const user of chunk) {
+                multi.sCard(this.keys.userAssignments(user.id));
+            }
+            const backlogs = (await multi.exec()) as unknown as number[];
+            for (let i = 0; i < chunk.length; i++) {
+                perUser.push({
+                    userId: chunk[i].id,
+                    backlog: Number(backlogs[i] ?? 0),
+                    maxBacklogSize: this.backlogLimitFor(chunk[i]),
+                    paused: paused.has(chunk[i].id),
+                });
+            }
+        }
         perUser.sort((a, b) => a.userId.localeCompare(b.userId));
 
         return {
@@ -2111,48 +2227,94 @@ export default class AssignmentMatcher implements WorkflowHost {
 
     /**
      * Get all pending assignments with owner and pending duration metadata.
+     * Reads are bounded: the pending hash is paged with HSCAN and each page's
+     * owner/expiry lookups are batched. Pass `{ limit }` (clamped to 1000) to
+     * hydrate only the top-N longest-pending assignments instead of every one.
      */
-    async getPendingAssignmentsWithAge(): Promise<PendingAssignmentInfo[]> {
+    async getPendingAssignmentsWithAge(options?: { limit?: number }): Promise<PendingAssignmentInfo[]> {
         await this.readyPromise;
 
         const now = Date.now();
-        const pendingEntries = await this.redisClient.hGetAll(this.pendingAssignmentsKey);
-        const assignmentIds = Object.keys(pendingEntries);
+        type PendingMeta = {
+            json: string;
+            ownerId: string | null;
+            pendingForMs: number | null;
+            pendingSince: number | null;
+            expiresAt: number | null;
+        };
+        const metas: PendingMeta[] = [];
+        // HSCAN may repeat a field across pages under a concurrent rehash;
+        // the listing must not repeat an assignment.
+        const seen = new Set<string>();
 
-        if (assignmentIds.length === 0) {
+        let cursor = '0';
+        do {
+            const { cursor: nextCursor, entries: rawEntries } = await this.redisClient.hScan(
+                this.pendingAssignmentsKey,
+                cursor,
+                { COUNT: 500 },
+            );
+            cursor = nextCursor;
+            const entries = rawEntries.filter((entry: { field: string; value: string }) => !seen.has(entry.field));
+            if (entries.length === 0) continue;
+            for (const entry of entries) seen.add(entry.field);
+
+            const pageIds = entries.map((entry: { field: string; value: string }) => entry.field);
+            const owners = await this.redisClient.hmGet(this.assignmentOwnerKey, pageIds);
+            const multi = this.redisClient.multi();
+            for (const id of pageIds) {
+                multi.zScore(this.pendingAssignmentsExpiryKey, id);
+            }
+            const expiryScores = (await multi.exec()) as unknown as Array<number | null>;
+
+            for (let i = 0; i < entries.length; i++) {
+                const json = entries[i].value;
+                if (!json) continue;
+
+                const score = expiryScores[i];
+                const expiresAt = score === null || score === undefined ? null : Number(score);
+                const pendingSince = expiresAt === null ? null : expiresAt - this.matchExpirationMs;
+                const pendingForMs = pendingSince === null ? null : Math.max(0, now - pendingSince);
+
+                metas.push({ json, ownerId: owners[i] ?? null, pendingForMs, pendingSince, expiresAt });
+            }
+        } while (cursor !== '0');
+
+        if (metas.length === 0) {
             return [];
         }
 
-        const [owners, expiryScores] = await Promise.all([
-            this.redisClient.hmGet(this.assignmentOwnerKey, assignmentIds),
-            Promise.all(assignmentIds.map((id) => this.redisClient.zScore(this.pendingAssignmentsExpiryKey, id))),
-        ]);
+        const hydrate = (meta: PendingMeta): PendingAssignmentInfo | null => {
+            try {
+                return {
+                    assignment: JSON.parse(meta.json),
+                    ownerId: meta.ownerId,
+                    pendingForMs: meta.pendingForMs,
+                    pendingSince: meta.pendingSince,
+                    expiresAt: meta.expiresAt,
+                };
+            } catch {
+                return null;
+            }
+        };
+
+        const limit = options?.limit;
+        if (typeof limit === 'number' && Number.isFinite(limit)) {
+            // Sort the (small) metadata first, then hydrate only the top N.
+            const clamped = Math.max(1, Math.min(Math.floor(limit), 1000));
+            const top = [...metas].sort((a, b) => (b.pendingForMs ?? -1) - (a.pendingForMs ?? -1)).slice(0, clamped);
+            const results: PendingAssignmentInfo[] = [];
+            for (const meta of top) {
+                const hydrated = hydrate(meta);
+                if (hydrated) results.push(hydrated);
+            }
+            return results;
+        }
 
         const results: PendingAssignmentInfo[] = [];
-        for (let i = 0; i < assignmentIds.length; i++) {
-            const id = assignmentIds[i];
-            const json = pendingEntries[id];
-            if (!json) continue;
-
-            let assignment: Assignment;
-            try {
-                assignment = JSON.parse(json);
-            } catch {
-                continue;
-            }
-
-            const score = expiryScores[i];
-            const expiresAt = score === null ? null : Number(score);
-            const pendingSince = expiresAt === null ? null : expiresAt - this.matchExpirationMs;
-            const pendingForMs = pendingSince === null ? null : Math.max(0, now - pendingSince);
-
-            results.push({
-                assignment,
-                ownerId: owners[i] ?? null,
-                pendingForMs,
-                pendingSince,
-                expiresAt,
-            });
+        for (const meta of metas) {
+            const hydrated = hydrate(meta);
+            if (hydrated) results.push(hydrated);
         }
 
         results.sort((a, b) => (b.pendingForMs ?? -1) - (a.pendingForMs ?? -1));
@@ -2278,12 +2440,21 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     async setAssignmentPriorityByTags(tags: string[], priority: number) {
-        // Update priorities for all assignments that include any of the specified tags.
-        const assignments = await this.getAllAssignments();
-        const relevantAssignments = assignments.filter((assignment) => {
-            const assignmentTagSet = new Set(assignment.tags);
-            return tags.some((tag) => assignmentTagSet.has(tag));
-        });
+        // Update priorities for QUEUED assignments that include any of the
+        // specified tags. Pending/accepted assignments left the matching
+        // indexes at claim time — re-zAdding them here would resurrect
+        // permanent ghost candidates that crowd real work out of the batch.
+        const queued = await this.redisClient.hGetAll(this.assignmentsRefKey);
+        const relevantAssignments: Assignment[] = [];
+        for (const json of Object.values(queued) as string[]) {
+            try {
+                const assignment = JSON.parse(json) as Assignment;
+                const assignmentTagSet = new Set(assignment.tags);
+                if (tags.some((tag) => assignmentTagSet.has(tag))) relevantAssignments.push(assignment);
+            } catch {
+                // Skip corrupt entries (same precedent as getAllAssignmentsFromStores)
+            }
+        }
 
         if (relevantAssignments.length > 0) {
             const multi = this.redisClient.multi();
@@ -2301,6 +2472,24 @@ export default class AssignmentMatcher implements WorkflowHost {
                 }
             }
             await multi.exec();
+
+            // The snapshot read above races the atomic claim gate (same
+            // pattern as setAssignmentPriority): undo any ghost the writes
+            // resurrected for assignments claimed since the read.
+            const ids = relevantAssignments.map((a) => a.id);
+            const owners = await this.redisClient.hmGet(this.assignmentOwnerKey, ids);
+            const ghosts = relevantAssignments.filter((_, i) => owners[i]);
+            if (ghosts.length > 0) {
+                const cleanup = this.redisClient.multi();
+                for (const assignment of ghosts) {
+                    cleanup.zRem(this.assignmentsKey, assignment.id);
+                    const idxTags = [...assignment.tags, ...(this.enableDefaultMatching ? ['default'] : [])];
+                    for (const tag of idxTags) {
+                        cleanup.zRem(this.keys.tagAssignments(tag), assignment.id);
+                    }
+                }
+                await cleanup.exec();
+            }
         }
 
         return relevantAssignments.map((assignment) => ({ id: assignment.id, priority }));
@@ -2337,14 +2526,23 @@ export default class AssignmentMatcher implements WorkflowHost {
         user: User,
         capToBacklog = true,
         collector?: TraceCollector,
+        grantBudget?: number,
     ): Promise<{
-        userAssignments: Array<{ id: string; priority: number }>;
+        userAssignments: Array<{ id: string; priority: number; tags?: string }>;
         selected: Array<{ id: string; tags: string }>;
         workflowTargetedCount: number;
     }> {
-        const userAssignments: Array<{ id: string; priority: number }> = [];
+        const userAssignments: Array<{ id: string; priority: number; tags?: string }> = [];
         const routingWeights = user.routingWeights;
         const hasRoutingWeights = Boolean(routingWeights && Object.keys(routingWeights).length > 0);
+        // The cap bounds TOTAL backlog, not new grants per pass: callers that
+        // know the user's current backlog pass the remaining headroom as
+        // `grantBudget` (without it, a user holding work could be topped up to
+        // 2×limit−1). capToBacklog=false (the fair path) keeps the full
+        // candidate set for global arbitration.
+        const effectiveCap = capToBacklog
+            ? Math.max(0, grantBudget ?? this.backlogLimitFor(user))
+            : this.backlogLimitFor(user);
 
         // Priority 1: Check for workflow-targeted assignments (deterministic matching)
         if (this.enableWorkflows) {
@@ -2352,7 +2550,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             if (workflowAssignments.length > 0) {
                 // Workflow assignments take precedence - add them first with highest priority
                 userAssignments.push(...workflowAssignments);
-                if (userAssignments.length >= this.backlogLimitFor(user)) {
+                if (userAssignments.length >= effectiveCap) {
                     return { userAssignments, selected: [], workflowTargetedCount: userAssignments.length };
                 }
             }
@@ -2589,7 +2787,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             eligible.sort((a, b) => b.effectivePriority - a.effectivePriority);
 
             for (const c of eligible) {
-                if (capToBacklog && userAssignments.length >= this.backlogLimitFor(user)) break;
+                if (capToBacklog && userAssignments.length >= effectiveCap) break;
                 userAssignments.push({ id: c.detail.id, priority: c.effectivePriority });
                 selected.push({ id: c.detail.id, tags: c.detail.tags });
                 await this.learning.recordDecision(
@@ -2602,7 +2800,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             }
         } else {
             for (const d of details) {
-                if (capToBacklog && userAssignments.length >= this.backlogLimitFor(user)) break;
+                if (capToBacklog && userAssignments.length >= effectiveCap) break;
 
                 // Check CIDR restrictions: if assignment has allowedCidrs, user must have matching IP
                 if (!checkCidrMatch(user.ip, d.allowedCidrs)) {
@@ -2718,6 +2916,10 @@ export default class AssignmentMatcher implements WorkflowHost {
                 for (const tag of tags) {
                     rm.zRem(this.keys.tagAssignments(tag), s.id);
                 }
+                // Leaving the queued universe takes the geo index entry along
+                // (a requeue re-adds it via enqueue's geoAdd); without this the
+                // index grows monotonically with completed work.
+                rm.zRem(this.keys.assignmentsGeo(), s.id);
 
                 // Add to pending structures. An assignment carrying an
                 // EscalationPolicy sets its own response deadline; everything
@@ -2767,15 +2969,31 @@ export default class AssignmentMatcher implements WorkflowHost {
         return claimedIds;
     }
 
-    private async getUserRelatedAssignments(user: User, collector?: TraceCollector) {
+    private async getUserRelatedAssignments(user: User, collector?: TraceCollector, grantBudget?: number) {
         const { userAssignments, selected, workflowTargetedCount } = await this.computeCandidatesForUser(
             user,
             true,
             collector,
+            grantBudget,
         );
-        const claimedIds = await this.claimSelected(user, selected);
         const workflowTargeted = userAssignments.slice(0, workflowTargetedCount);
-        const tagScored = userAssignments.slice(workflowTargetedCount).filter((ua) => claimedIds.has(ua.id));
+        // Targeted grants go through the SAME queued→pending claim gate as
+        // organic matching — a grant that only lands in the backlog set while
+        // the assignment stays queued would "accept" into nothing and be
+        // re-granted forever. A targeted id the tag path also selected is
+        // claimed once, under its targeted entry.
+        const targetedIds = new Set(workflowTargeted.map((t) => t.id));
+        const claimList = [
+            ...workflowTargeted.map((t) => ({ id: t.id, tags: t.tags ?? '' })),
+            ...selected.filter((s) => !targetedIds.has(s.id)),
+        ];
+        const claimedIds = await this.claimSelected(user, claimList);
+        const tagScored = userAssignments
+            .slice(workflowTargetedCount)
+            .filter((ua) => claimedIds.has(ua.id) && !targetedIds.has(ua.id));
+        // A targeted assignment that lost the claim was already moved to
+        // pending for this same user on an earlier pass — its backlog
+        // membership below is an idempotent re-add, so it is never stripped.
         return { assignments: [...workflowTargeted, ...tagScored], claimedIds, workflowTargeted };
     }
 
@@ -2888,7 +3106,8 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         // Workflow-targeted assignments are deterministically targeted at one
         // user each - not contested across users - so claim them immediately,
-        // exactly like the non-fair path does.
+        // exactly like the non-fair path does: through the claimSelected gate
+        // (queued→pending with an owner), then the backlog membership.
         await Promise.all(
             perUser.map(async ({ user, candidates }) => {
                 const workflowOnly = candidates.userAssignments.slice(0, candidates.workflowTargetedCount);
@@ -2897,6 +3116,10 @@ export default class AssignmentMatcher implements WorkflowHost {
                     // Membership must be read before the sAdd below
                     workflowGrants.push(...(await this.filterNewWorkflowGrants(user, workflowOnly)));
                 }
+                await this.claimSelected(
+                    user,
+                    workflowOnly.map((a) => ({ id: a.id, tags: (a as { tags?: string }).tags ?? '' })),
+                );
                 await this.redisClient.sAdd(
                     this.keys.userAssignments(user.id),
                     workflowOnly.map((a) => `assignment:${a.id}`),
@@ -3044,7 +3267,11 @@ export default class AssignmentMatcher implements WorkflowHost {
             if (userMatchesCount >= this.backlogLimitFor(user)) return;
 
             const collector = this.tracingActive ? new TraceCollector() : undefined;
-            const { assignments, claimedIds, workflowTargeted } = await this.getUserRelatedAssignments(user, collector);
+            const { assignments, claimedIds, workflowTargeted } = await this.getUserRelatedAssignments(
+                user,
+                collector,
+                this.backlogLimitFor(user) - userMatchesCount,
+            );
             // Membership must be read before the sAdd below
             const newWorkflowGrants = collector ? await this.filterNewWorkflowGrants(user, workflowTargeted) : [];
             const relevantAssignmentKeys = assignments
@@ -3093,7 +3320,11 @@ export default class AssignmentMatcher implements WorkflowHost {
                     return;
                 }
 
-                const { assignments, claimedIds, workflowTargeted } = await this.getUserRelatedAssignments(user, collector);
+                const { assignments, claimedIds, workflowTargeted } = await this.getUserRelatedAssignments(
+                    user,
+                    collector,
+                    this.backlogLimitFor(user) - userMatchesCount,
+                );
                 if (collector) {
                     for (const id of claimedIds) winners.set(id, user.id);
                     // Membership must be read before the sAdd below
@@ -3336,6 +3567,10 @@ export default class AssignmentMatcher implements WorkflowHost {
                 }
             }
             multi.hSet(this.acceptedAssignmentsKey, assignmentId, acceptedJson);
+            // Per-user accepted-work index (raw id, score = accept time).
+            // Inside the guard: an accept whose pending JSON is missing stores
+            // nothing, so it must index nothing.
+            multi.zAdd(this.keys.userAcceptedAssignments(userId), { score: now, value: assignmentId });
         }
         await multi.exec();
 
@@ -3504,6 +3739,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         // Move from accepted to completed
         const multi = this.redisClient.multi();
         multi.hDel(this.acceptedAssignmentsKey, assignmentId);
+        multi.zRem(this.keys.userAcceptedAssignments(userId), assignmentId);
         // Clear SLA indexes (no-ops for non-SLA assignments)
         multi.zRem(this.acceptedAssignmentsExpiryKey, assignmentId);
         multi.zRem(this.assignmentsSlaExpiryKey, assignmentId);
@@ -3570,6 +3806,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         // Move from accepted to completed (with failed status)
         const multi = this.redisClient.multi();
         multi.hDel(this.acceptedAssignmentsKey, assignmentId);
+        multi.zRem(this.keys.userAcceptedAssignments(userId), assignmentId);
         // Clear SLA indexes (no-ops for non-SLA assignments)
         multi.zRem(this.acceptedAssignmentsExpiryKey, assignmentId);
         multi.zRem(this.assignmentsSlaExpiryKey, assignmentId);
@@ -4036,7 +4273,10 @@ export default class AssignmentMatcher implements WorkflowHost {
 
             if (action === 'requeue') {
                 const multi = this.redisClient.multi().hDel(this.acceptedAssignmentsKey, id);
-                if (workerId) multi.sAdd(this.keys.userRejected(workerId), id);
+                if (workerId) {
+                    multi.sAdd(this.keys.userRejected(workerId), id);
+                    multi.zRem(this.keys.userAcceptedAssignments(workerId), id);
+                }
                 await multi.exec();
                 // The JSON still carries _enqueuedAt, so the freshness TTL
                 // keeps ticking across the requeue. A requeue after a
@@ -4047,7 +4287,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             }
 
             if (action === 'fail') {
-                await this.redisClient
+                const multi = this.redisClient
                     .multi()
                     .hDel(this.acceptedAssignmentsKey, id)
                     .hSet(
@@ -4061,18 +4301,20 @@ export default class AssignmentMatcher implements WorkflowHost {
                         }),
                     )
                     // Terminal: the freshness TTL no longer applies.
-                    .zRem(this.assignmentsSlaExpiryKey, id)
-                    .exec();
+                    .zRem(this.assignmentsSlaExpiryKey, id);
+                if (workerId) multi.zRem(this.keys.userAcceptedAssignments(workerId), id);
+                await multi.exec();
                 continue;
             }
 
             // 'park'
-            await this.redisClient
+            const parkMulti = this.redisClient
                 .multi()
                 .hDel(this.acceptedAssignmentsKey, id)
                 .hSet(this.keys.parkedAssignments(), id, JSON.stringify(assignment))
-                .zRem(this.assignmentsSlaExpiryKey, id)
-                .exec();
+                .zRem(this.assignmentsSlaExpiryKey, id);
+            if (workerId) parkMulti.zRem(this.keys.userAcceptedAssignments(workerId), id);
+            await parkMulti.exec();
         }
 
         return { breached };
@@ -4136,12 +4378,13 @@ export default class AssignmentMatcher implements WorkflowHost {
                 multi.zRem(this.keys.assignmentsQueuedAt(), id);
                 await multi.exec();
             } else if (acceptedJson) {
-                await this.redisClient
+                const multi = this.redisClient
                     .multi()
                     .hDel(this.acceptedAssignmentsKey, id)
                     .zRem(this.acceptedAssignmentsExpiryKey, id)
-                    .zRem(this.assignmentsSlaExpiryKey, id)
-                    .exec();
+                    .zRem(this.assignmentsSlaExpiryKey, id);
+                if (ownerId) multi.zRem(this.keys.userAcceptedAssignments(ownerId), id);
+                await multi.exec();
             } else {
                 // Queued: full index cleanup via removeAssignment (also zRems
                 // the SLA expiry index).
@@ -4264,7 +4507,15 @@ export default class AssignmentMatcher implements WorkflowHost {
             // A due notBefore falls straight through addAssignment's hold
             // guard into the normal enqueue, which also clears the scheduled
             // hash atomically with the queued write.
-            await this.addAssignment(JSON.parse(json));
+            try {
+                await this.addAssignment(JSON.parse(json));
+            } catch (err) {
+                // The zRem claim already consumed the only trigger; without
+                // restoring it, a failed enqueue strands the assignment in the
+                // scheduled store forever (nothing re-examines it).
+                await this.redisClient.zAdd(this.scheduledActivateAtKey, { score: now, value: id });
+                throw err;
+            }
             activated++;
             this.emitAssignmentLifecycle({ kind: 'scheduleActivated', taskId: id, at: now });
         }
@@ -4326,8 +4577,12 @@ export default class AssignmentMatcher implements WorkflowHost {
             delete record[SLA_ACCEPTED_BY_FIELD];
         }
 
-        await this.redisClient.hDel(this.keys.parkedAssignments(), id);
+        // Re-enqueue BEFORE dropping the parked copy: the parked hash holds
+        // the only copy of the JSON, so the reverse order loses the assignment
+        // outright if the enqueue fails mid-flight. A crash between these two
+        // leaves a duplicate (queued + parked), which a repeat unpark heals.
         await this.addAssignment(assignment);
+        await this.redisClient.hDel(this.keys.parkedAssignments(), id);
         return true;
     }
 
@@ -4605,22 +4860,32 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Get assignments specifically targeted at a user through active workflows.
      * These take priority over general pool assignments for deterministic matching.
      */
-    private async getWorkflowTargetedAssignments(userId: string): Promise<Array<{ id: string; priority: number }>> {
-        const targeted: Array<{ id: string; priority: number }> = [];
+    private async getWorkflowTargetedAssignments(
+        userId: string,
+    ): Promise<Array<{ id: string; priority: number; tags: string }>> {
+        const targeted: Array<{ id: string; priority: number; tags: string }> = [];
 
         // Scan queued assignments for those with _targetUserId matching this user
-        const queuedAssignments = await this.redisClient.hGetAll(this.assignmentsRefKey);
+        const [queuedAssignments, rejectedMembers] = await Promise.all([
+            this.redisClient.hGetAll(this.assignmentsRefKey),
+            this.redisClient.sMembers(this.keys.userRejected(userId)),
+        ]);
+        const rejected = new Set<string>(rejectedMembers);
 
         for (const [assignmentId, json] of Object.entries(queuedAssignments)) {
             try {
                 const assignment = JSON.parse(json);
-                // Hard veto applies even to deterministic workflow targeting
+                // Hard veto applies even to deterministic workflow targeting,
+                // and so does the user's own prior rejection — re-granting a
+                // rejected assignment forever violates the rejection contract.
                 if (assignment.vetoedUsers?.includes(userId)) continue;
+                if (rejected.has(assignmentId)) continue;
                 if (assignment._targetUserId === userId && assignment._workflowInstanceId) {
                     // This is a workflow assignment targeted at this user
                     targeted.push({
                         id: assignmentId,
                         priority: assignment.priority ?? 1000,
+                        tags: ((assignment.tags ?? []) as string[]).join(','),
                     });
                 }
             } catch {

@@ -155,28 +155,39 @@ export class PeriodClock {
      * "did it start at night".
      */
     minutesInClockRange(range: MinuteRange, clock: ClockRange): number {
+        return this.clockRangeIntervals(range, clock).reduce((sum, i) => sum + (i.end - i.start), 0);
+    }
+
+    /**
+     * The clipped period-minute intervals where `range` intersects the daily
+     * clock band. This is `minutesInClockRange` without the final sum — for
+     * callers that need to union several bands rather than total one.
+     */
+    clockRangeIntervals(range: MinuteRange, clock: ClockRange): MinuteRange[] {
         const from = parseTimeOfDay(clock.from, 'clockRange.from');
         const to = parseTimeOfDay(clock.to, 'clockRange.to');
-        if (range.end <= range.start) return 0;
+        if (range.end <= range.start) return [];
 
-        let total = 0;
+        const out: MinuteRange[] = [];
+        const push = (interval: MinuteRange) => {
+            const start = Math.max(range.start, interval.start);
+            const end = Math.min(range.end, interval.end);
+            if (end > start) out.push({ start, end });
+        };
         const firstDay = this.dayIndexOfMinute(range.start);
         const lastDay = this.dayIndexOfMinute(range.end - 1);
         // A wrapping window spills into the following day, so start one day early.
         for (let day = firstDay - 1; day <= lastDay + 1; day++) {
             if (from < to) {
-                total += overlapMinutes(range, {
-                    start: this.periodMinuteAt(day, from),
-                    end: this.periodMinuteAt(day, to),
-                });
+                push({ start: this.periodMinuteAt(day, from), end: this.periodMinuteAt(day, to) });
             } else {
                 // Wraps midnight: [from, 24:00) on this day plus [00:00, to) on the next.
                 const nextMidnight = this.dayStartMinutes(day + 1);
-                total += overlapMinutes(range, { start: this.periodMinuteAt(day, from), end: nextMidnight });
-                total += overlapMinutes(range, { start: nextMidnight, end: this.periodMinuteAt(day + 1, to) });
+                push({ start: this.periodMinuteAt(day, from), end: nextMidnight });
+                push({ start: nextMidnight, end: this.periodMinuteAt(day + 1, to) });
             }
         }
-        return total;
+        return out;
     }
 
     /**

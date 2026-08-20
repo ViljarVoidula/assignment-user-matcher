@@ -105,6 +105,12 @@ export function greedyFill(
 
         for (const c of candidates) {
             if (need <= 0) break;
+            // Re-vet against the state as this slot fills: the vet above ran
+            // before any of this batch was assigned, so a constraint that
+            // depends on the instance's other assignees (tagMaximums, a
+            // night-worker cap) could be satisfied for each candidate alone
+            // yet breached by the pair of them.
+            if (!hardCompliant(ctx, state, c.employeeId, instanceId)) continue;
             assign(state, c.employeeId, instanceId, c.reasons);
             need--;
         }

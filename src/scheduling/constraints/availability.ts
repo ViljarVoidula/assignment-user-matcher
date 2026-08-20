@@ -45,11 +45,15 @@ export function availability(): SchedulingConstraint {
             // Declaring any 'available' window inverts the default: everything
             // outside every declared window is ineligible, including days no
             // window mentions — a Monday-only declaration bars Tuesdays too.
+            // Coverage is the UNION of the declared windows: a shift spanning
+            // two contiguous windows lies inside the declaration.
             const allowLists = employee.availability.filter((r) => r.kind === 'available');
             if (allowLists.length > 0) {
-                const covered = matching
-                    .filter((r) => r.kind === 'available')
-                    .reduce((max, rule) => Math.max(max, overlapsRule(clock, range, rule)), 0);
+                const covered = unionCoveredMinutes(
+                    clock,
+                    range,
+                    matching.filter((r) => r.kind === 'available'),
+                );
                 if (covered < span) {
                     return fail(
                         'availability',
@@ -103,7 +107,38 @@ export function availability(): SchedulingConstraint {
     return constraint;
 }
 
-/** Minutes of `range` covered by one availability rule's clock window. */
+/**
+ * Minutes of `range` covered by the union of the given windows. A window with
+ * no `from`/`to` covers the whole range; timed windows are projected onto the
+ * range via the clock (same per-day band semantics as `overlapsRule`) and
+ * merged, so contiguous or overlapping declarations never undercount.
+ */
+function unionCoveredMinutes(
+    clock: {
+        clockRangeIntervals: (
+            r: { start: number; end: number },
+            c: { from: string; to: string },
+        ) => Array<{ start: number; end: number }>;
+    },
+    range: { start: number; end: number },
+    rules: AvailabilityRule[],
+): number {
+    const intervals: Array<{ start: number; end: number }> = [];
+    for (const rule of rules) {
+        if (rule.from === undefined || rule.to === undefined) return range.end - range.start;
+        intervals.push(...clock.clockRangeIntervals(range, { from: rule.from, to: rule.to }));
+    }
+    intervals.sort((a, b) => a.start - b.start);
+    let covered = 0;
+    let cursor = range.start;
+    for (const interval of intervals) {
+        if (interval.end <= cursor) continue;
+        covered += interval.end - Math.max(interval.start, cursor);
+        cursor = interval.end;
+    }
+    return covered;
+}
+
 function overlapsRule(
     clock: { minutesInClockRange: (r: { start: number; end: number }, c: { from: string; to: string }) => number },
     range: { start: number; end: number },

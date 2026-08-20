@@ -22,6 +22,7 @@ function ctxFor(input: Partial<ScheduleInput> & { rules?: WorkingTimeRules }): M
         absences: input.absences,
         published: input.published,
         asOf: input.asOf,
+        history: input.history,
     });
 }
 
@@ -195,6 +196,90 @@ describe('coverage-sweep regressions', function () {
         });
     });
 
+    describe('hour-budget judges assigned pairs without double-counting', function () {
+        const employees = [{ id: 'e1', tags: [], timeOff: [], maxHoursForPeriod: 10 }];
+
+        it('accepts an assigned shift that leaves the cap intact', function () {
+            // 6h worked of a 10h cap: legal with 4h of headroom. Re-judging the
+            // assigned pair must not add its own shift a second time.
+            const ctx = ctxFor({ employees, shifts: [shift('d', '08:00', '14:00', ['2026-01-05'])] });
+            const state = stateWith(ctx, [['e1', 'd@2026-01-05']]);
+            const pair = { employeeId: 'e1', shiftInstanceId: 'd@2026-01-05' };
+            expect(constraint(ctx, 'hour-budget').delta(state, pair)).to.equal(0);
+        });
+
+        it('still flags a roster genuinely over the cap', function () {
+            const dates = ['2026-01-05', '2026-01-06'];
+            const ctx = ctxFor({ employees, shifts: [shift('d', '08:00', '14:00', dates)] }); // 2 × 6h > 10h
+            const state = stateWith(
+                ctx,
+                dates.map((d) => ['e1', `d@${d}`] as [string, string]),
+            );
+            expect(
+                constraint(ctx, 'hour-budget').delta(state, { employeeId: 'e1', shiftInstanceId: 'd@2026-01-05' }),
+            ).to.equal(1);
+        });
+
+        it('still blocks a candidate that would cross the cap', function () {
+            const dates = ['2026-01-05', '2026-01-06'];
+            const ctx = ctxFor({ employees, shifts: [shift('d', '08:00', '14:00', dates)] });
+            const state = stateWith(ctx, [['e1', 'd@2026-01-05']]); // 6h held, 6h candidate, 10h cap
+            expect(
+                constraint(ctx, 'hour-budget').delta(state, { employeeId: 'e1', shiftInstanceId: 'd@2026-01-06' }),
+            ).to.equal(1);
+        });
+
+        it('reports a within-cap roster compliant end to end', function () {
+            const { solveSchedule, checkCompliance } = require('../../src/scheduling');
+            const input = {
+                period: { startDate: '2026-01-05', endDate: '2026-01-05' },
+                employees,
+                shifts: [shift('d', '08:00', '14:00', ['2026-01-05'])],
+                timeBudgetMs: 0,
+            };
+            const solved = solveSchedule(input);
+            expect(solved.assignments).to.have.length(1);
+            expect(solved.violations.filter((v: { severity: string }) => v.severity === 'hard')).to.deep.equal([]);
+            const report = checkCompliance(input, solved.assignments);
+            expect(report.compliant).to.equal(true);
+        });
+    });
+
+    describe('duty-scaled shifts and break entitlements', function () {
+        it('does not mistake non-working duty time for a break', function () {
+            // 8h stand-by accruing at half: 4h working, and no break declared at
+            // all — the other 4h is duty occupation, not rest.
+            const rules: WorkingTimeRules = { breaks: [{ afterMinutes: 3 * H, minMinutes: 30 }] };
+            const ctx = ctxFor({
+                rules,
+                shifts: [
+                    shift('sb', '08:00', '16:00', ['2026-01-05'], {
+                        duty: { countsAsWorkingTime: 0.5, classificationNote: 'off-premises stand-by, 50% accrual' },
+                    }),
+                ],
+            });
+            const v = constraint(ctx, 'in-shift-breaks').verdict!(createState(ctx), {
+                employeeId: 'e1',
+                shiftInstanceId: 'sb@2026-01-05',
+            });
+            expect(v.pass).to.equal(false);
+            expect(v.actual).to.equal(0);
+        });
+
+        it('still credits declared unpaid and paid breaks on a full-duty shift', function () {
+            const rules: WorkingTimeRules = { breaks: [{ afterMinutes: 6 * H, minMinutes: 30 }] };
+            const ctx = ctxFor({
+                rules,
+                shifts: [shift('d', '08:00', '17:00', ['2026-01-05'], { unpaidBreakMinutes: 20, paidBreakMinutes: 15 })],
+            });
+            const v = constraint(ctx, 'in-shift-breaks').verdict!(createState(ctx), {
+                employeeId: 'e1',
+                shiftInstanceId: 'd@2026-01-05',
+            });
+            expect(v.pass).to.equal(true);
+        });
+    });
+
     it('scores avoid and preferred windows in the soft objective', function () {
         const shifts = [shift('d', '08:00', '16:00', ['2026-01-05'], { maxEmployees: 1 })];
         const employees = [
@@ -212,5 +297,152 @@ describe('coverage-sweep regressions', function () {
         expect(a.hard).to.equal(b.hard);
         expect(a.medium).to.equal(b.medium);
         expect(compareScores(b, a)).to.be.lessThan(0); // the willing worker wins
+    });
+});
+
+/**
+ * Regressions for defects surfaced by the multi-subsystem audit sweep. Same
+ * contract as above: each test asserts the behaviour the documentation always
+ * promised.
+ */
+describe('audit-sweep regressions (scheduling)', function () {
+    describe('person-level aggregation (C-585/19)', function () {
+        const anna = (id: string, extra: Record<string, unknown> = {}) => ({
+            id,
+            personId: 'anna',
+            tags: [],
+            timeOff: [],
+            ...extra,
+        });
+
+        it('no-overlap bars a person from overlapping shifts held through two contracts', function () {
+            const ctx = ctxFor({
+                employees: [anna('contract-a'), anna('contract-b')],
+                shifts: [shift('day', '09:00', '17:00', ['2026-01-05']), shift('mid', '12:00', '20:00', ['2026-01-05'])],
+            });
+            const state = stateWith(ctx, [['contract-a', 'day@2026-01-05']]);
+            const pair = { employeeId: 'contract-b', shiftInstanceId: 'mid@2026-01-05' };
+            expect(constraint(ctx, 'no-overlap').delta(state, pair)).to.equal(1);
+
+            // The same judgement must hold once the pair is committed.
+            const committed = stateWith(ctx, [
+                ['contract-a', 'day@2026-01-05'],
+                ['contract-b', 'mid@2026-01-05'],
+            ]);
+            expect(constraint(ctx, 'no-overlap').delta(committed, pair)).to.equal(1);
+        });
+
+        it('the default min-rest rule sees the sibling contract', function () {
+            const ctx = ctxFor({
+                employees: [anna('contract-a'), anna('contract-b')],
+                shifts: [shift('eve', '14:00', '22:00', ['2026-01-05']), shift('am', '06:00', '14:00', ['2026-01-06'])],
+            });
+            // 22:00 → 06:00 is 8h of rest for the person, under the 11h default.
+            const state = stateWith(ctx, [['contract-a', 'eve@2026-01-05']]);
+            expect(
+                constraint(ctx, 'min-rest').delta(state, { employeeId: 'contract-b', shiftInstanceId: 'am@2026-01-06' }),
+            ).to.equal(1);
+        });
+
+        it('judges a contract hour maximum per employee record, not per person', function () {
+            const ctx = ctxFor({
+                employees: [
+                    anna('contract-a', { contract: { kind: 'hours', maxPeriodMinutes: 10 * H } }),
+                    anna('contract-b'),
+                ],
+                shifts: [
+                    shift('am', '08:00', '12:00', ['2026-01-05', '2026-01-07']), // 4h
+                    shift('pm', '13:00', '21:00', ['2026-01-06', '2026-01-08']), // 8h
+                ],
+            });
+            // The person works 24h, but contract-a itself only reaches 8h of its 10h cap.
+            const state = stateWith(ctx, [
+                ['contract-a', 'am@2026-01-05'],
+                ['contract-b', 'pm@2026-01-06'],
+                ['contract-b', 'pm@2026-01-08'],
+            ]);
+            const v = constraint(ctx, 'contract').verdict!(state, {
+                employeeId: 'contract-a',
+                shiftInstanceId: 'am@2026-01-07',
+            });
+            expect(v.pass).to.equal(true);
+        });
+    });
+
+    it('the default min-rest rule sees history at the period boundary', function () {
+        const ctx = ctxFor({
+            shifts: [shift('d', '08:00', '16:00', ['2026-01-05'])],
+            history: [{ employeeId: 'e1', date: '2026-01-04', startTime: '22:00', endTime: '06:00' }],
+        });
+        // History ends 06:00 on day one; an 08:00 start is 2h of rest.
+        expect(
+            constraint(ctx, 'min-rest').delta(createState(ctx), { employeeId: 'e1', shiftInstanceId: 'd@2026-01-05' }),
+        ).to.equal(1);
+    });
+
+    it('night volume quotas probe true rolling windows, not a day grid', function () {
+        const ctx = ctxFor({
+            rules: {
+                nightWork: { window: { from: '22:00', to: '06:00' }, volumeQuotas: [{ max: 1, windowDays: 2 }] },
+            },
+            shifts: [shift('nightA', '22:00', '06:00', ['2026-01-05']), shift('nightB', '23:00', '07:00', ['2026-01-07'])],
+        });
+        // Both nights fit one rolling 48h window ([Mon 23:00, Wed 23:00)), but no
+        // window anchored on the candidate's start at day strides holds both.
+        const state = stateWith(ctx, [['e1', 'nightA@2026-01-05']]);
+        const v = constraint(ctx, 'night-work').verdict!(state, { employeeId: 'e1', shiftInstanceId: 'nightB@2026-01-07' });
+        expect(v.pass).to.equal(false);
+    });
+
+    it('greedy construction re-vets hard constraints as a slot fills', function () {
+        const { solveSchedule } = require('../../src/scheduling');
+        const result = solveSchedule({
+            period: { startDate: '2026-01-05', endDate: '2026-01-05' },
+            employees: [
+                { id: 't1', tags: ['trainee'] },
+                { id: 't2', tags: ['trainee'] },
+            ],
+            shifts: [
+                {
+                    id: 'd',
+                    name: 'D',
+                    startTime: '08:00',
+                    endTime: '16:00',
+                    dates: ['2026-01-05'],
+                    minEmployees: 2,
+                    tagMaximums: { trainee: 1 },
+                },
+            ],
+            timeBudgetMs: 0,
+        });
+        // One trainee slot stays unfilled (coverage shortfall), but the roster
+        // must not ship a self-inflicted hard group-composition breach.
+        const hard = result.violations.filter(
+            (v: { constraintId: string; severity: string }) =>
+                v.constraintId === 'group-composition' && v.severity === 'hard',
+        );
+        expect(hard).to.deep.equal([]);
+    });
+
+    it('credits the union of contiguous availability windows', function () {
+        const ctx = ctxFor({
+            employees: [
+                {
+                    id: 'e1',
+                    tags: [],
+                    timeOff: [],
+                    availability: [
+                        { kind: 'available', daysOfWeek: [1], from: '08:00', to: '12:00' },
+                        { kind: 'available', daysOfWeek: [1], from: '12:00', to: '16:00' },
+                    ],
+                },
+            ],
+            shifts: [shift('mon', '08:00', '16:00', ['2026-01-05'])],
+        });
+        const v = constraint(ctx, 'availability').verdict!(createState(ctx), {
+            employeeId: 'e1',
+            shiftInstanceId: 'mon@2026-01-05',
+        });
+        expect(v.pass).to.equal(true);
     });
 });

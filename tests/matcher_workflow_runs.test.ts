@@ -217,4 +217,75 @@ describe('Workflow runs through the facade', function () {
         expect(await matcher.getAssignment(assignmentId)).to.be.null;
         expect(transitions.some((t) => t.kind === 'run.cancelled')).to.equal(true);
     });
+
+    // Regression: targeted grants must go through the same queued→pending claim
+    // as organic matching. Previously they only reached pending when tag
+    // overlap happened to select them too — without overlap, accept "succeeded"
+    // while storing nothing and complete then threw, wedging the run.
+    it('claims a targeted step assignment even when the worker shares no tags with it', async function () {
+        // Isolated matcher without default matching: nothing but the targeted
+        // grant itself can move this assignment, which is the very case
+        // deterministic targeting exists for.
+        const isolated = new Matcher(redisClient, {
+            redisPrefix: 'wfclaim:',
+            enableWorkflows: true,
+            enableDefaultMatching: false,
+            matchExpirationMs: 60000,
+        });
+        await isolated.addUser({ id: 'approver-1', tags: ['approvals'] });
+        await isolated.registerWorkflow({
+            id: 'facade-no-overlap',
+            name: 'No Overlap',
+            version: 1,
+            initialStepId: 'only',
+            steps: [
+                {
+                    id: 'only',
+                    name: 'Only',
+                    assignmentTemplate: { tags: ['legal-review'] },
+                    targetUser: 'initiator',
+                    defaultNextStepId: null,
+                },
+            ],
+        });
+        const run = await isolated.startWorkflow('facade-no-overlap', 'approver-1');
+        const assignmentId = run.currentAssignmentId!;
+
+        await isolated.matchUsersAssignments('approver-1');
+        expect(await isolated.getCurrentAssignmentsForUser('approver-1')).to.include(assignmentId);
+
+        await isolated.acceptAssignment('approver-1', assignmentId);
+        await isolated.completeAssignment('approver-1', assignmentId, { success: true, data: { approved: true } });
+        await isolated.processWorkflowEvents(10);
+
+        const done = await isolated.getWorkflowInstance(run.id);
+        expect(done!.status).to.equal('completed');
+    });
+
+    it('does not re-grant a targeted assignment its worker already rejected', async function () {
+        await matcher.addUser({ id: 'rejector-1', tags: ['approvals'] });
+        await matcher.registerWorkflow({
+            id: 'facade-reject-def',
+            name: 'Reject',
+            version: 1,
+            initialStepId: 'only',
+            steps: [
+                {
+                    id: 'only',
+                    name: 'Only',
+                    assignmentTemplate: { tags: ['legal-review'] },
+                    targetUser: 'initiator',
+                    defaultNextStepId: null,
+                },
+            ],
+        });
+        const run = await matcher.startWorkflow('facade-reject-def', 'rejector-1');
+        const assignmentId = run.currentAssignmentId!;
+
+        await matcher.matchUsersAssignments('rejector-1');
+        await matcher.rejectAssignment('rejector-1', assignmentId);
+
+        await matcher.matchUsersAssignments('rejector-1');
+        expect(await matcher.getCurrentAssignmentsForUser('rejector-1')).to.not.include(assignmentId);
+    });
 });

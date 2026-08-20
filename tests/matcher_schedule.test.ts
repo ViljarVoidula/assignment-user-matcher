@@ -605,4 +605,54 @@ describe('Schedule policies', function () {
             expect((await matcher.getAssignment('a1'))!._status).to.equal('queued');
         });
     });
+
+    // Regression: the parked→queued and scheduled→queued handoffs must not
+    // lose the only copy when the re-enqueue fails mid-flight.
+    describe('crash-safe store handoffs', function () {
+        it('a failed unpark keeps the parked copy', async function () {
+            await matcher.addAssignment({ id: 'a1', tags: ['t'], schedule: { notAfter: Date.now() + 1000 } });
+            clock.tick(1001);
+            await matcher.processScheduledAssignments();
+            expect(await redisClient.hGet(parkedKey, 'a1')).to.be.a('string');
+
+            const stub = sinon.stub(matcher, 'addAssignment').rejects(new Error('redis gone'));
+            try {
+                let error: Error | undefined;
+                try {
+                    await matcher.unparkAssignment('a1', { resetSchedule: true });
+                } catch (err) {
+                    error = err as Error;
+                }
+                expect(error).to.not.equal(undefined);
+                // The parked copy survives, so the operator can retry.
+                expect(await redisClient.hGet(parkedKey, 'a1')).to.be.a('string');
+            } finally {
+                stub.restore();
+            }
+            expect(await matcher.unparkAssignment('a1', { resetSchedule: true })).to.equal(true);
+        });
+
+        it('a failed activation keeps the activation index entry for the next sweep', async function () {
+            await matcher.addAssignment({ id: 'held', tags: ['t'], schedule: { notBefore: Date.now() + 5000 } });
+            clock.tick(5001);
+
+            const stub = sinon.stub(matcher, 'addAssignment').rejects(new Error('redis gone'));
+            try {
+                let error: Error | undefined;
+                try {
+                    await matcher.processScheduledAssignments();
+                } catch (err) {
+                    error = err as Error;
+                }
+                expect(error).to.not.equal(undefined);
+                expect(await redisClient.zScore(`${prefix}assignments:scheduled:activateAt`, 'held')).to.not.equal(null);
+            } finally {
+                stub.restore();
+            }
+            // The next sweep completes the activation.
+            const swept = await matcher.processScheduledAssignments();
+            expect(swept.activated).to.equal(1);
+            expect((await matcher.getAssignment('held'))!._status).to.equal('queued');
+        });
+    });
 });
