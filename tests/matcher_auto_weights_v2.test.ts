@@ -1,6 +1,7 @@
 import Matcher from '../src/matcher.class';
 import { createClient } from 'redis';
 import { expect } from 'chai';
+import sinon from 'sinon';
 
 describe('Auto Routing Weights v2 - Matcher Integration', function () {
     this.timeout(20000);
@@ -106,28 +107,39 @@ describe('Auto Routing Weights v2 - Matcher Integration', function () {
         });
 
         it('a fresh outcome outweighs long-decayed history instead of resurrecting it', async function () {
-            const matcher = createMatcher({
-                autoRoutingWeights: { minSamples: 1, decayHalfLifeMs: 50 },
-                enableDefaultMatching: false,
-            });
-            await matcher.addUser({ id: 'user1', tags: ['billing'] });
-            // Build a strongly negative history: three rejections.
-            for (let i = 0; i < 3; i++) {
-                await runLifecycle(matcher, 'user1', `r${i}`, ['billing'], 'reject');
+            // Decay is continuous in Date.now(), so real elapsed time between
+            // the accept write, the complete write and the read would shave an
+            // unpredictable slice off the fresh samples (a slow runner turned
+            // 2.0 into 1.90). Freezing Date makes the arithmetic exact while
+            // clock.tick() still supplies the elapsed half-lives.
+            const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+            try {
+                const matcher = createMatcher({
+                    autoRoutingWeights: { minSamples: 1, decayHalfLifeMs: 50 },
+                    enableDefaultMatching: false,
+                });
+                await matcher.addUser({ id: 'user1', tags: ['billing'] });
+                // Build a strongly negative history: three rejections.
+                for (let i = 0; i < 3; i++) {
+                    await runLifecycle(matcher, 'user1', `r${i}`, ['billing'], 'reject');
+                }
+                const before = await matcher.getLearnedTagStats('user1');
+                expect(before[0].meanReward).to.be.lessThan(0);
+
+                // Ten half-lives on, record one positive lifecycle.
+                clock.tick(500);
+                await runLifecycle(matcher, 'user1', 'fresh1', ['billing'], 'complete');
+
+                // The write rescaled the old mass (2^-10 of it left, ~0.003 of
+                // a sample), so the stats reflect the fresh accept+complete
+                // pair. Without the rescale the count would read ~5 and the
+                // mean would stay negative — the resurrection this guards.
+                const after = await matcher.getLearnedTagStats('user1');
+                expect(after[0].meanReward).to.be.greaterThan(0.5);
+                expect(after[0].count).to.be.closeTo(2, 0.05);
+            } finally {
+                clock.restore();
             }
-            const before = await matcher.getLearnedTagStats('user1');
-            expect(before[0].meanReward).to.be.lessThan(0);
-
-            // Wait many half-lives, then record one positive lifecycle.
-            await new Promise((r) => setTimeout(r, 500));
-            await runLifecycle(matcher, 'user1', 'fresh1', ['billing'], 'complete');
-
-            // The write rescaled the old mass (~2^-10 of it left), so the
-            // stats now reflect the fresh accept+complete, not the
-            // resurrected rejection history.
-            const after = await matcher.getLearnedTagStats('user1');
-            expect(after[0].meanReward).to.be.greaterThan(0.5);
-            expect(after[0].count).to.be.closeTo(2, 0.1);
         });
     });
 
