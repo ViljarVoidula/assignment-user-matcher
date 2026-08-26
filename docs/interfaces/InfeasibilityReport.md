@@ -17,14 +17,14 @@
 
 #### Defined in
 
-[src/scheduling/operations.ts:408](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L408)
+[src/scheduling/operations.ts:408](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L408)
 
----
+___
 
 ### findings
 
-• **findings**: \{ `kind`: `"noEligibleEmployee"` \| `"insufficientCapacity"` \| `"tagCapacity"` ; `message`: `string` ; `shiftInstanceId?`: `string` ; `shortfall?`: `number` ; `tag?`: `string` }[]
+• **findings**: \{ `kind`: ``"noEligibleEmployee"`` \| ``"insufficientCapacity"`` \| ``"tagCapacity"`` ; `message`: `string` ; `shiftInstanceId?`: `string` ; `shortfall?`: `number` ; `tag?`: `string`  }[]
 
 #### Defined in
 
-[src/scheduling/operations.ts:409](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L409)
+[src/scheduling/operations.ts:409](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L409)

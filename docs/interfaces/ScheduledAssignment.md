@@ -23,9 +23,9 @@ ISO date of the shift occurrence (its start day).
 
 #### Defined in
 
-[src/scheduling/types.ts:646](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L646)
+[src/scheduling/types.ts:646](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L646)
 
----
+___
 
 ### employeeId
 
@@ -33,9 +33,9 @@ ISO date of the shift occurrence (its start day).
 
 #### Defined in
 
-[src/scheduling/types.ts:644](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L644)
+[src/scheduling/types.ts:644](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L644)
 
----
+___
 
 ### reasons
 
@@ -45,9 +45,9 @@ Human-readable reasons produced by the constraint layer.
 
 #### Defined in
 
-[src/scheduling/types.ts:648](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L648)
+[src/scheduling/types.ts:648](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L648)
 
----
+___
 
 ### shiftInstanceId
 
@@ -55,4 +55,4 @@ Human-readable reasons produced by the constraint layer.
 
 #### Defined in
 
-[src/scheduling/types.ts:643](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L643)
+[src/scheduling/types.ts:643](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L643)

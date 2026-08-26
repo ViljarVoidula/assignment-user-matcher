@@ -227,9 +227,10 @@ export interface SlaPolicy {
  * activation, not creation. Timers fire with sweep granularity (see
  * `startMaintenance()` / `runMaintenanceOnce()` / `processScheduledAssignments()`).
  *
- * Recurrence is deliberately out of scope: hosts materialize each occurrence
- * as its own assignment (re-adding an existing id is a no-op on the clocks,
- * so materialization is idempotent).
+ * A single policy is one offer window. Repeating work is a *recurring
+ * assignment* (`addRecurringAssignment`): a standing template whose sweep
+ * materializes each occurrence as an ordinary scheduled assignment carrying
+ * one of these policies — see `RecurrencePolicy`.
  *
  * @example
  * ```typescript
@@ -269,6 +270,100 @@ export interface SchedulePolicy {
      */
     onMiss?: 'park' | 'drop';
 }
+
+/**
+ * How a recurring assignment repeats.
+ *
+ * A recurring assignment (`addRecurringAssignment`) is a standing template,
+ * not a matchable assignment: the recurrence sweep materializes each
+ * occurrence as an ordinary assignment whose `schedule` is derived from this
+ * policy (`notBefore` = the slot's open time, `notAfter` = open + `windowMs`).
+ * Occurrence ids are deterministic — `<templateId>@<openEpochMs>` — so a
+ * crashed sweep re-materializing a slot is an idempotent re-add.
+ *
+ * The sweep keeps the *next* occurrence materialized one interval ahead of
+ * its open time, so upcoming work is visible in the scheduled store (and in
+ * any host UI reading it) before the window opens. Slots are aligned to
+ * `startAt + k × everyMs` and never drift, whatever the sweep cadence.
+ *
+ * @example
+ * ```typescript
+ * await matcher.addRecurringAssignment({
+ *     id: 'blog-draft',
+ *     tags: ['blog'],
+ *     recurrence: {
+ *         everyMs: 14 * 24 * 3600_000,   // biweekly
+ *         startAt: Date.parse('2026-09-07T09:00:00Z'),
+ *         windowMs: 3 * 24 * 3600_000,   // each occurrence offered for 3 days
+ *         onMiss: 'park',
+ *     },
+ * });
+ * matcher.startMaintenance(); // the recurrence sweep rides the maintenance tick
+ * ```
+ */
+export interface RecurrencePolicy {
+    /** Milliseconds between one occurrence's window opening and the next. Minimum 1000. */
+    everyMs: number;
+    /**
+     * Epoch ms the first occurrence's window opens.
+     * @default now — the first sweep materializes an occurrence immediately
+     */
+    startAt?: number;
+    /**
+     * Offer window per occurrence: the occurrence's `schedule.notAfter` is its
+     * open time plus this. Omitted, an occurrence never expires off the offer
+     * clock (and under `catchUp: 'skip'` an unmaterialized slot goes stale the
+     * moment its successor's time arrives).
+     */
+    windowMs?: number;
+    /** Per-occurrence miss policy (see `SchedulePolicy.onMiss`). @default 'park' */
+    onMiss?: 'park' | 'drop';
+    /** Stop recurring: no occurrence opens after this epoch ms; the template retires. */
+    until?: number;
+    /** Stop recurring after this many occurrences have been materialized. */
+    maxOccurrences?: number;
+    /**
+     * What to do with slots whose time already passed when the sweep runs
+     * (host downtime):
+     * - `'skip'` — materialize only slots whose window is still open; fully
+     *   elapsed slots are skipped without counting against `maxOccurrences`.
+     *   A revived host resumes the cadence instead of flooding the queue.
+     * - `'all'` — materialize every elapsed slot; ones whose window already
+     *   closed are immediately missed by the schedule sweep (parked/dropped
+     *   per `onMiss`), which is the audit-trail reading of a dead interval.
+     * @default 'skip'
+     */
+    catchUp?: 'skip' | 'all';
+}
+
+/**
+ * A standing template that repeats. Everything an `Assignment` carries —
+ * tags, priority, SLA, escalation, vetoes, geo — is inherited by every
+ * occurrence; `schedule` is generated per occurrence from `recurrence`, so
+ * the template itself cannot carry one.
+ */
+export type RecurringAssignment = Assignment & {
+    recurrence: RecurrencePolicy;
+    /** Generated per occurrence from `recurrence` — a template cannot carry its own. */
+    schedule?: never;
+};
+
+/** A stored recurring template plus its clock, from `getRecurringAssignment()` / `listRecurringAssignments()`. */
+export interface RecurringAssignmentRecord {
+    template: RecurringAssignment;
+    /** Epoch ms the next occurrence's window opens */
+    nextAt: number;
+    /** Occurrences materialized so far (skipped slots do not count) */
+    occurrences: number;
+}
+
+/** Outcome of one `processRecurringAssignments()` sweep. */
+export type RecurrenceSweepResult = {
+    /** Occurrences materialized as assignments this pass */
+    materialized: number;
+    /** Templates retired (`until` passed or `maxOccurrences` reached) */
+    retired: number;
+};
 
 /** Aggregate SLO attainment counters from `getSlaStats()`. */
 export interface SlaStats {
@@ -762,6 +857,32 @@ export type AssignmentLifecycleEvent =
           /** The assignment as it stood when the window closed. See the note below. */
           assignment: Assignment;
           at: number;
+      }
+    /**
+     * The recurrence sweep materialized one occurrence of a recurring
+     * assignment. `taskId` is the occurrence (an ordinary assignment, now in
+     * the scheduled store or the queue); `recurringId` is the template it was
+     * cut from. Hosts that keep per-task context (titles, descriptions) copy
+     * it from the template to the occurrence on this event.
+     */
+    | {
+          kind: 'recurrenceMaterialized';
+          taskId: string;
+          recurringId: string;
+          /** 1-based index of this occurrence among those materialized */
+          occurrence: number;
+          /** Epoch ms the occurrence's offer window opens (its `schedule.notBefore`) */
+          opensAt: number;
+          at: number;
+      }
+    /** A recurring template reached its bound (`until` / `maxOccurrences`) and was removed. */
+    | {
+          kind: 'recurrenceRetired';
+          recurringId: string;
+          reason: 'until' | 'maxOccurrences';
+          /** Total occurrences the template materialized over its life */
+          occurrences: number;
+          at: number;
       };
 
 /*
@@ -824,6 +945,10 @@ export type MaintenanceReport = {
     scheduleActivations: number;
     /** Assignments whose offer window (`schedule.notAfter`) elapsed */
     scheduleMisses: number;
+    /** Occurrences materialized from recurring assignments */
+    recurrenceMaterializations: number;
+    /** Recurring templates retired (bound reached) */
+    recurrenceRetirements: number;
     /** Wall-clock duration of the pass */
     tookMs: number;
 };
@@ -840,6 +965,8 @@ export type MaintenanceOptions = {
     slaExpiries?: boolean;
     /** Scheduled-assignment activations and offer-window misses. @default true */
     scheduled?: boolean;
+    /** Recurring-assignment materialization. @default true */
+    recurrence?: boolean;
     /** Workflow step timeouts. @default true when `enableWorkflows` */
     workflowStepTimeouts?: boolean;
     /** Idle-user release. @default true when `idleUserTimeoutMs` is set */

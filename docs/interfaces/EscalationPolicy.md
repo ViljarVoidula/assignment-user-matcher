@@ -53,16 +53,15 @@ Maximum number of escalations.
 
 #### Defined in
 
-[src/types/matcher.ts:118](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L118)
+[src/types/matcher.ts:122](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L122)
 
----
+___
 
 ### onExhausted
 
-• `Optional` **onExhausted**: `"queue"` \| `"park"`
+• `Optional` **onExhausted**: ``"queue"`` \| ``"park"``
 
 Terminal behaviour once the ladder is exhausted.
-
 - `'queue'` — requeue and keep offering it (default).
 - `'park'` — stop matching it and move it to the parked store, where
   `getParkedAssignments()` / `unparkAssignment()` can pick it up. This is
@@ -71,21 +70,20 @@ Terminal behaviour once the ladder is exhausted.
 **`Default`**
 
 ```ts
-'queue';
+'queue'
 ```
 
 #### Defined in
 
-[src/types/matcher.ts:127](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L127)
+[src/types/matcher.ts:131](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L131)
 
----
+___
 
 ### onNoResponse
 
-• `Optional` **onNoResponse**: `"block"` \| `"allow"`
+• `Optional` **onNoResponse**: ``"block"`` \| ``"allow"``
 
 What happens to the user who let the clock run out.
-
 - `'block'` — treated as a soft rejection: the user is added to their
   rejected set so the requeue cannot land back on them.
 - `'allow'` — the assignment returns to the open pool and the same user
@@ -94,14 +92,14 @@ What happens to the user who let the clock run out.
 **`Default`**
 
 ```ts
-'allow';
+'allow'
 ```
 
 #### Defined in
 
-[src/types/matcher.ts:104](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L104)
+[src/types/matcher.ts:108](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L108)
 
----
+___
 
 ### priorityBoost
 
@@ -111,9 +109,9 @@ Priority delta applied on each escalation so ignored work climbs the queue.
 
 #### Defined in
 
-[src/types/matcher.ts:106](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L106)
+[src/types/matcher.ts:110](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L110)
 
----
+___
 
 ### respondWithinMs
 
@@ -124,9 +122,9 @@ taken back. Per-assignment override of `matchExpirationMs`.
 
 #### Defined in
 
-[src/types/matcher.ts:95](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L95)
+[src/types/matcher.ts:99](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L99)
 
----
+___
 
 ### tiers
 
@@ -139,4 +137,4 @@ assignment starts with; the first escalation moves it to entry 1.
 
 #### Defined in
 
-[src/types/matcher.ts:113](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L113)
+[src/types/matcher.ts:117](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L117)

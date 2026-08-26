@@ -29,15 +29,15 @@ The full scheduling problem.
 
 ### absences
 
-• `Optional` **absences**: \{ `employeeId`: `string` ; `from`: `string` ; `kind?`: `string` ; `to`: `string` }[]
+• `Optional` **absences**: \{ `employeeId`: `string` ; `from`: `string` ; `kind?`: `string` ; `to`: `string`  }[]
 
 Absences that block assignment and may be neutral in rolling averages.
 
 #### Defined in
 
-[src/scheduling/types.ts:623](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L623)
+[src/scheduling/types.ts:623](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L623)
 
----
+___
 
 ### asOf
 
@@ -52,9 +52,9 @@ so runs stay deterministic and replayable.
 
 #### Defined in
 
-[src/scheduling/types.ts:619](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L619)
+[src/scheduling/types.ts:619](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L619)
 
----
+___
 
 ### calendar
 
@@ -64,16 +64,16 @@ Public holidays and closures, as ISO dates.
 
 #### Type declaration
 
-| Name              | Type       |
-| :---------------- | :--------- |
-| `closedDates?`    | `string`[] |
+| Name | Type |
+| :------ | :------ |
+| `closedDates?` | `string`[] |
 | `publicHolidays?` | `string`[] |
 
 #### Defined in
 
-[src/scheduling/types.ts:601](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L601)
+[src/scheduling/types.ts:601](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L601)
 
----
+___
 
 ### constraints
 
@@ -81,9 +81,9 @@ Public holidays and closures, as ISO dates.
 
 #### Defined in
 
-[src/scheduling/types.ts:592](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L592)
+[src/scheduling/types.ts:592](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L592)
 
----
+___
 
 ### employees
 
@@ -91,9 +91,9 @@ Public holidays and closures, as ISO dates.
 
 #### Defined in
 
-[src/scheduling/types.ts:587](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L587)
+[src/scheduling/types.ts:587](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L587)
 
----
+___
 
 ### history
 
@@ -106,19 +106,19 @@ construction, because an 11h rest rule cannot see the shift that ended at
 
 #### Defined in
 
-[src/scheduling/types.ts:608](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L608)
+[src/scheduling/types.ts:608](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L608)
 
----
+___
 
 ### objective
 
-• `Optional` **objective**: `"balanced"` \| `"standard"`
+• `Optional` **objective**: ``"balanced"`` \| ``"standard"``
 
 #### Defined in
 
-[src/scheduling/types.ts:589](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L589)
+[src/scheduling/types.ts:589](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L589)
 
----
+___
 
 ### objectives
 
@@ -128,9 +128,9 @@ Weights of optional soft-objective terms. Omitted terms stay out of the solve.
 
 #### Defined in
 
-[src/scheduling/types.ts:591](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L591)
+[src/scheduling/types.ts:591](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L591)
 
----
+___
 
 ### onProgress
 
@@ -144,8 +144,8 @@ Called with the best roster so far as the search improves it.
 
 ##### Parameters
 
-| Name   | Type                                  |
-| :----- | :------------------------------------ |
+| Name | Type |
+| :------ | :------ |
 | `best` | [`ScheduleResult`](ScheduleResult.md) |
 
 ##### Returns
@@ -154,9 +154,9 @@ Called with the best roster so far as the search improves it.
 
 #### Defined in
 
-[src/scheduling/types.ts:625](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L625)
+[src/scheduling/types.ts:625](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L625)
 
----
+___
 
 ### period
 
@@ -166,17 +166,17 @@ Inclusive ISO date range, plus the zone its wall-clock times are read in.
 
 #### Type declaration
 
-| Name        | Type     |
-| :---------- | :------- |
-| `endDate`   | `string` |
+| Name | Type |
+| :------ | :------ |
+| `endDate` | `string` |
 | `startDate` | `string` |
 | `timeZone?` | `string` |
 
 #### Defined in
 
-[src/scheduling/types.ts:586](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L586)
+[src/scheduling/types.ts:586](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L586)
 
----
+___
 
 ### pinned
 
@@ -186,9 +186,9 @@ Pairs the solver may not move.
 
 #### Defined in
 
-[src/scheduling/types.ts:621](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L621)
+[src/scheduling/types.ts:621](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L621)
 
----
+___
 
 ### published
 
@@ -198,16 +198,16 @@ A published roster, which anchors the notice clock and the perturbation objectiv
 
 #### Type declaration
 
-| Name           | Type                                              |
-| :------------- | :------------------------------------------------ |
-| `publishedAt?` | `string`                                          |
-| `roster`       | [`ScheduledAssignment`](ScheduledAssignment.md)[] |
+| Name | Type |
+| :------ | :------ |
+| `publishedAt?` | `string` |
+| `roster` | [`ScheduledAssignment`](ScheduledAssignment.md)[] |
 
 #### Defined in
 
-[src/scheduling/types.ts:610](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L610)
+[src/scheduling/types.ts:610](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L610)
 
----
+___
 
 ### rules
 
@@ -217,9 +217,9 @@ The labour-law layer. Omit for a plain feasibility solve.
 
 #### Defined in
 
-[src/scheduling/types.ts:599](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L599)
+[src/scheduling/types.ts:599](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L599)
 
----
+___
 
 ### seed
 
@@ -229,9 +229,9 @@ Seed for reproducible runs.
 
 #### Defined in
 
-[src/scheduling/types.ts:594](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L594)
+[src/scheduling/types.ts:594](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L594)
 
----
+___
 
 ### shifts
 
@@ -239,9 +239,9 @@ Seed for reproducible runs.
 
 #### Defined in
 
-[src/scheduling/types.ts:588](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L588)
+[src/scheduling/types.ts:588](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L588)
 
----
+___
 
 ### timeBudgetMs
 
@@ -251,4 +251,4 @@ Wall-clock budget for the improvement loop. Default 10_000.
 
 #### Defined in
 
-[src/scheduling/types.ts:596](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L596)
+[src/scheduling/types.ts:596](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L596)

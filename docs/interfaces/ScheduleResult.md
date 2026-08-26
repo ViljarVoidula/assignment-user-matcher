@@ -24,9 +24,9 @@ The outcome of a solve. `'optimal'` means "no known improvement", never a proof.
 
 #### Defined in
 
-[src/scheduling/types.ts:701](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L701)
+[src/scheduling/types.ts:701](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L701)
 
----
+___
 
 ### cost
 
@@ -36,16 +36,16 @@ Per-person cost breakdown when a cost model was supplied.
 
 #### Type declaration
 
-| Name         | Type                           |
-| :----------- | :----------------------------- |
+| Name | Type |
+| :------ | :------ |
 | `byEmployee` | `Record`\<`string`, `number`\> |
-| `totalCents` | `number`                       |
+| `totalCents` | `number` |
 
 #### Defined in
 
-[src/scheduling/types.ts:715](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L715)
+[src/scheduling/types.ts:715](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L715)
 
----
+___
 
 ### ledger
 
@@ -55,9 +55,9 @@ Deferred obligations the roster created, such as compensatory rest owed.
 
 #### Defined in
 
-[src/scheduling/types.ts:713](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L713)
+[src/scheduling/types.ts:713](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L713)
 
----
+___
 
 ### provenance
 
@@ -71,9 +71,9 @@ matter (BetrVG §87(1)), not internal tuning.
 
 #### Defined in
 
-[src/scheduling/types.ts:711](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L711)
+[src/scheduling/types.ts:711](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L711)
 
----
+___
 
 ### stats
 
@@ -81,27 +81,27 @@ matter (BetrVG §87(1)), not internal tuning.
 
 #### Type declaration
 
-| Name                | Type     |
-| :------------------ | :------- |
-| `durationMs`        | `number` |
+| Name | Type |
+| :------ | :------ |
+| `durationMs` | `number` |
 | `evaluatedVariants` | `number` |
-| `unfilledSlots`     | `number` |
+| `unfilledSlots` | `number` |
 
 #### Defined in
 
-[src/scheduling/types.ts:703](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L703)
+[src/scheduling/types.ts:703](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L703)
 
----
+___
 
 ### status
 
-• **status**: `"optimal"` \| `"feasible"` \| `"partial"`
+• **status**: ``"optimal"`` \| ``"feasible"`` \| ``"partial"``
 
 #### Defined in
 
-[src/scheduling/types.ts:700](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L700)
+[src/scheduling/types.ts:700](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L700)
 
----
+___
 
 ### violations
 
@@ -109,4 +109,4 @@ matter (BetrVG §87(1)), not internal tuning.
 
 #### Defined in
 
-[src/scheduling/types.ts:702](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L702)
+[src/scheduling/types.ts:702](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L702)

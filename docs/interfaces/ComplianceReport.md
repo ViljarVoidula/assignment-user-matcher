@@ -19,9 +19,9 @@
 
 #### Defined in
 
-[src/scheduling/operations.ts:45](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L45)
+[src/scheduling/operations.ts:45](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L45)
 
----
+___
 
 ### ledger
 
@@ -29,21 +29,21 @@
 
 #### Defined in
 
-[src/scheduling/operations.ts:49](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L49)
+[src/scheduling/operations.ts:49](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L49)
 
----
+___
 
 ### verdicts
 
-• **verdicts**: \{ `pair`: [`AssignmentPair`](AssignmentPair.md) ; `verdicts`: [`RuleVerdict`](RuleVerdict.md)[] }[]
+• **verdicts**: \{ `pair`: [`AssignmentPair`](AssignmentPair.md) ; `verdicts`: [`RuleVerdict`](RuleVerdict.md)[]  }[]
 
 Per-assignment verdicts for every rule that had something to say.
 
 #### Defined in
 
-[src/scheduling/operations.ts:48](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L48)
+[src/scheduling/operations.ts:48](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L48)
 
----
+___
 
 ### violations
 
@@ -51,4 +51,4 @@ Per-assignment verdicts for every rule that had something to say.
 
 #### Defined in
 
-[src/scheduling/operations.ts:46](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L46)
+[src/scheduling/operations.ts:46](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L46)

@@ -21,11 +21,11 @@ rather than being internal tuning.
 • `Optional` **costWeightPerEuro**: `number`
 
 Soft-score points per euro of projected labour cost. Any positive value
-makes the solver prefer cheaper rosters _within_ the soft level — it can
+makes the solver prefer cheaper rosters *within* the soft level — it can
 never buy a hard or coverage breach, because levels are lexicographic.
 Unset or 0 leaves cost out of the solve; ranking and the result's cost
 summary still use the cost model either way.
 
 #### Defined in
 
-[src/scheduling/types.ts:750](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L750)
+[src/scheduling/types.ts:750](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L750)

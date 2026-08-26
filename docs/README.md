@@ -243,6 +243,8 @@ Registration rejects an escalation target that doesn't exist, a step escalating 
 
 Targeting matters: `targetUser({ tag: '…' })` routes the step's assignment through ordinary tag matching (so fairness, backlog caps, and the rolling-window grant cap all apply), while `targetUser('<userId>')` makes it workflow-targeted and therefore exempt from the fairness window cap. For tiered escalation you almost always want the tag form.
 
+A workflow-targeted assignment is claimed queued→pending for its target through the same atomic claim gate as organic matching, whether or not the worker's tags/weights would ever have matched it — so `acceptAssignment`/`completeAssignment` work identically and the workflow advances. A worker who rejects a targeted assignment is not re-granted it (the standard rejection contract); the step then runs its response-deadline/escalation machinery.
+
 Plain object workflow definitions are also accepted. The library now fills in sensible defaults:
 
 - `version` defaults to `1`
@@ -304,7 +306,7 @@ Adds or updates a user in the system.
 - `user`: An object representing the user.
     - `id: string`: Unique identifier for the user.
     - `tags: string[]`: Array of tags associated with the user.
-    - `maxBacklogSize?: number`: Optional per-user backlog cap overriding the matcher-wide `maxUserBacklogSize` in every matching path (`0` = receive nothing; negative or non-numeric values are ignored). The fairness rolling-window auto-cap derivation stays team-level and keeps using the global value.
+    - `maxBacklogSize?: number`: Optional per-user backlog cap overriding the matcher-wide `maxUserBacklogSize` in every matching path (`0` = receive nothing; negative or non-numeric values are ignored). The cap bounds the user's **total** pending backlog: a user already holding work is only topped up to the cap, never past it. The fairness rolling-window auto-cap derivation stays team-level and keeps using the global value.
 
 ### `addAssignment(assignment: Assignment): Promise<void>`
 
@@ -327,15 +329,51 @@ Retrieves the current list of assignments that a user is tentatively matched wit
 
 - `userId: string`: The ID of the user.
 
-### `getPendingAssignmentsWithAge(): Promise<PendingAssignmentInfo[]>`
+### `getPendingAssignmentsWithAge(options?: { limit?: number }): Promise<PendingAssignmentInfo[]>`
 
-Retrieves current pending assignments, including who owns each assignment and how long it has been pending.
+Retrieves current pending assignments, including who owns each assignment and how long it has been pending. Reads are bounded (the pending hash is paged with `HSCAN` and each page's lookups are batched), and corrupt entries are skipped. Pass `{ limit }` (clamped to 1000) to hydrate only the top-N longest-pending assignments instead of every one; without options the behavior is unchanged.
 
 - `assignment`: The assignment payload.
 - `ownerId`: The current owner user ID, or `null` if missing.
 - `pendingForMs`: Elapsed pending time in milliseconds.
 - `pendingSince`: Unix timestamp (ms) when the assignment entered pending state.
 - `expiresAt`: Unix timestamp (ms) when pending expiration is scheduled.
+
+### User status & workload queries
+
+Three bounded APIs answer "who is in the pool and how loaded are they?" without materializing whole Redis structures:
+
+#### `getUsersPaginated(options?: UserQueryOptions): Promise<UserQueryResult>`
+
+Paginated user scan with composable filters (logical AND):
+
+```ts
+const page = await matcher.getUsersPaginated({
+    status: 'active', // 'all' | 'active' | 'paused' | 'idle'
+    idleForMs: 10 * 60_000, // last touchUser() older than this
+    hasBacklog: true, // pending backlog non-empty
+    atCapacity: true, // backlog reached the effective cap
+    limit: 100, // clamped to [1, 1000]
+    includeAssignments: true, // also return pending/accepted ids
+    includeTotal: true, // also return the unfiltered pool size
+    cursor: null, // pass nextCursor verbatim to continue
+});
+```
+
+Each `UserSummary` carries `userId`, the stored `user` record, `paused`, `lastActiveAt`, `backlog`, `acceptedCount`, the effective `maxBacklogSize` (per-user override honored), and `atCapacity`. `status: 'idle'` without an explicit `idleForMs` falls back to the matcher's `idleUserTimeoutMs` (and matches nobody when neither is set). Two pagination caveats, both consequences of paging the users hash with `HSCAN`: a scan page is never split, so a returned page may exceed `limit` by less than one scan page; and filters are applied during the scan, so a page may return fewer than `limit` users while `hasMore` is still true. Loop on `hasMore` until it is false. With `includeAssignments`, the returned `acceptedAssignmentIds` come straight from the per-user index and are not verified against the accepted store — a rare stale id can appear; `getActiveAssignmentsForUser()` is the verified (and self-healing) read.
+
+#### `getUserSummaries(userIds: string[]): Promise<UserSummary[]>`
+
+Order-preserving batch version for a known set of ids (chunked pipelined reads). Missing or corrupt user records are omitted.
+
+#### `getActiveAssignmentsForUser(userId: string): Promise<ActiveAssignmentInfo[]>`
+
+A user's accepted (in-progress) assignments, newest first, each with its `acceptedAt` timestamp — the complement to `getCurrentAssignmentsForUser()`'s pending backlog. Backed by a per-user accepted index (`user:{id}:accepted`) maintained on accept and on every terminal transition (complete/fail/remove/SLA sweeps). Two freshness notes:
+
+- The index is maintained from the version that introduced it: accepted work that predates upgrading (or that is in flight during a rolling upgrade) appears only after it cycles.
+- A stale member can survive `removeAssignment` on a non-SLA accepted assignment (only SLA records carry their owner); reads verify ids against the accepted store and self-heal, so results stay correct.
+
+**Crash-safety note.** `getUsers()` (and `getQueueStats()`'s internal user scan) now skip a corrupt user record instead of throwing on it — the same precedent `getAllAssignmentsFromStores` already set. One malformed entry can no longer take down a dashboard endpoint.
 
 ### `pauseUser(userId: string): Promise<boolean>` / `resumeUser(userId: string): Promise<boolean>`
 
@@ -467,7 +505,7 @@ Semantics worth knowing:
 - **The offer deadline never extends.** `notAfter` is absolute, so rejection requeues carry the same deadline — a re-offered assignment can still miss.
 - **Fire-once, replica-safe.** Sweep entries are claimed with a `ZREM` before acting, so concurrent replicas can run the sweep in parallel.
 - **Sweep granularity.** Schedule clocks fire on the maintenance tick (`processScheduledAssignments()`), not at the exact millisecond.
-- **Recurrence is out of scope.** Materialize each occurrence as its own assignment from your scheduler/shift tool; re-adding an existing id never resets its clocks, so materialization is idempotent. The [`scheduling` module](#shift-scheduling-scheduling-module) is that shift tool if you need one — it produces dated occurrences you can feed straight in.
+- **One policy, one window.** Repeating work is a [recurring assignment](#recurring-assignments-addrecurringassignment): a standing template whose sweep materializes each occurrence as an ordinary scheduled assignment carrying a derived policy. (Hand-materializing occurrences from your own scheduler still works — re-adding an existing id never resets its clocks, so materialization is idempotent — and the [`scheduling` module](#shift-scheduling-scheduling-module) produces dated occurrences you can feed straight in.)
 - **Operator override.** `assignToUser(id, userId)` refuses held assignments; `{ force: true }` early-activates (clocks anchor there). If the user then rejects and `notBefore` is still in the future, the assignment returns to the scheduled store.
 - **Unparking.** `unparkAssignment(id, { resetSchedule: true })` strips the schedule policy; without it a miss-parked assignment misses again on the next sweep.
 
@@ -477,18 +515,62 @@ Lifecycle events: `scheduleActivated` (`{ taskId, at }`) and `scheduleMissed` (`
 
 **Learning integration.** Misses feed the contextual bandit as `expire` outcomes — a pending-state miss penalizes the user who sat on the offer, so automatic routing-weight vetoes pick up chronic missers with no extra configuration.
 
+### Recurring assignments (`addRecurringAssignment`)
+
+A recurring assignment is a **standing template**, never itself matchable: the recurrence sweep cuts each occurrence from it as an ordinary assignment whose `schedule` is derived from the policy (`notBefore` = the slot's open time, `notAfter` = open + `windowMs`). Everything else the template carries — tags, priority, SLA, escalation, vetoes, geo — is inherited by every occurrence.
+
+```ts
+await matcher.addRecurringAssignment({
+    id: 'blog-draft',
+    tags: ['blog'],
+    recurrence: {
+        everyMs: 14 * 24 * 3600_000, // biweekly
+        startAt: Date.parse('2026-09-07T09:00:00Z'), // first window opens here (default: now)
+        windowMs: 3 * 24 * 3600_000, // each occurrence offered for 3 days
+        onMiss: 'park', // an unserved window parks the occurrence for inspection
+    },
+});
+
+matcher.startMaintenance(); // the recurrence sweep rides the maintenance tick
+```
+
+| Field            | Meaning                                                                                                                             | Default  |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `everyMs`        | Interval between window opens. Minimum 1000                                                                                          | required |
+| `startAt`        | Epoch ms the first window opens                                                                                                      | now      |
+| `windowMs`       | Offer window per occurrence (`schedule.notAfter = open + windowMs`). Omitted: occurrences never expire off the offer clock           | none     |
+| `onMiss`         | Per-occurrence miss policy, as in `SchedulePolicy`                                                                                   | `'park'` |
+| `until`          | No occurrence opens after this epoch ms; the template retires                                                                        | none     |
+| `maxOccurrences` | Retire after this many occurrences materialized                                                                                      | none     |
+| `catchUp`        | Downtime policy: `'skip'` materializes only slots whose window is still open; `'all'` materializes every elapsed slot (audit trail) | `'skip'` |
+
+Semantics worth knowing:
+
+- **Occurrence ids are deterministic** — `<templateId>@<openEpochMs>` — so a crashed sweep re-materializing a slot is an idempotent re-add, and any occurrence traces back to its template with no extra state.
+- **Slots never drift.** They align to `startAt + k × everyMs` whatever the sweep cadence; the tick decides when a slot is *noticed*, never where it sits.
+- **One occurrence ahead.** The sweep materializes each occurrence one interval before its window opens, so upcoming work is already visible in the scheduled store (`getScheduledAssignments()`, `getQueueStats().scheduled`).
+- **Skipped slots are free.** Under `catchUp: 'skip'`, slots that fully elapsed during downtime never existed: they don't count against `maxOccurrences` and don't flood the queue on revival. Under `'all'` they materialize and are immediately missed by the schedule sweep (parked/dropped per `onMiss`) — the audit-trail reading of a dead interval.
+- **Re-adding updates the template, not the clock.** Occurrences already cut and the next slot are facts about the past; remove and re-add to restart.
+- **Removal is forward-looking.** `removeRecurringAssignment(id)` stops future occurrences; already-materialized ones live on as ordinary assignments. `{ dropScheduled: true }` additionally clears occurrences still held un-activated in the scheduled store — never queued, pending, or accepted work.
+- **Fire-once, replica-safe, self-healing.** Sweep claims are one-shot `ZREM`s like the scheduled sweep; the due index is re-derived from the template store at the top of every pass, so a crashed sweep can strand nothing.
+
+API: `addRecurringAssignment(template)` · `removeRecurringAssignment(id, { dropScheduled? })` · `getRecurringAssignment(id)` / `listRecurringAssignments()` (each returns `{ template, nextAt, occurrences }`) · `processRecurringAssignments()` (manual sweep; also runs on the maintenance tick as `recurrence`, default on).
+
+Lifecycle events: `recurrenceMaterialized` (`{ taskId, recurringId, occurrence, opensAt, at }` — hosts that keep per-task context copy it template → occurrence on this event) and `recurrenceRetired` (`{ recurringId, reason, occurrences, at }`).
+
 ### `startMaintenance(options?)` / `stopMaintenance()` / `runMaintenanceOnce(options?)`
 
 Deadlines are not self-firing — something has to sweep them. `startMaintenance()` runs every enabled sweep on one tick:
 
-- `scheduled` (default on) — schedule activations and offer-window misses (`schedule.notBefore` / `schedule.notAfter`). Runs first in the pass so a just-activated assignment's other clocks start from the same tick.
+- `recurrence` (default on) — recurring-assignment materialization. Runs first so a due-now occurrence flows recurrence → schedule → queue inside one tick.
+- `scheduled` (default on) — schedule activations and offer-window misses (`schedule.notBefore` / `schedule.notAfter`). Runs before the deadline sweeps so a just-activated assignment's other clocks start from the same tick.
 - `responseDeadlines` (default on) — expiry, escalation, parking.
 - `completionDeadlines` (default on) — SLA completion deadlines (`sla.completeWithinMs`).
 - `slaExpiries` (default on) — SLA freshness TTLs (`sla.expireAfterMs`).
 - `workflowStepTimeouts` (default on when `enableWorkflows`) — the step-timeout index. **Note:** `startOrchestrator()` consumes the event stream but does not sweep step timeouts; without maintenance, `timeoutMs` on a workflow step never fires.
 - `idleUsers` (default on when `idleUserTimeoutMs` is set).
 
-`runMaintenanceOnce()` does one pass and returns a `MaintenanceReport` (`expiredMatches`, `escalations`, `parked`, `completionBreaches`, `slaExpiries`, `scheduleActivations`, `scheduleMisses`, `expiredSteps`, `releasedIdleUsers`, `tookMs`) — use it from a host that already owns a tick (a multi-tenant worker, a serverless schedule) instead of holding a timer per matcher. `startAutoReleaseInterval()` remains as a deprecated alias that sweeps response deadlines only.
+`runMaintenanceOnce()` does one pass and returns a `MaintenanceReport` (`expiredMatches`, `escalations`, `parked`, `completionBreaches`, `slaExpiries`, `scheduleActivations`, `scheduleMisses`, `recurrenceMaterializations`, `recurrenceRetirements`, `expiredSteps`, `releasedIdleUsers`, `tookMs`) — use it from a host that already owns a tick (a multi-tenant worker, a serverless schedule) instead of holding a timer per matcher. `startAutoReleaseInterval()` remains as a deprecated alias that sweeps response deadlines only.
 
 ### `getQueueStats(): Promise<QueueStats>`
 
@@ -1000,11 +1082,11 @@ bandit policy.
 
 - `policy: 'ucb1'` (default): high-mean tags get high weights, an exploration
   bonus favors less-sampled tags, and bad tags are hard-vetoed at weight `0`.
-- `policy: 'confidence'`: uses upper-confidence-bound for the weight and a
-  conservative lower-confidence-bound for the veto decision, so uncertainty
-  works against exclusion.
+- `policy: 'confidence'`: uses upper-confidence-bound for the weight and for
+  the veto decision — a tag is hard-vetoed only when the whole confidence
+  interval sits below the threshold, so uncertainty alone never excludes.
 - `policy: 'thompson'`: samples from the per-tag posterior when mapping to a
-  weight.
+  weight; the veto decision uses the deterministic mean, never the draw.
 
 **Guardrails (all opt-in):**
 
@@ -1015,8 +1097,11 @@ bandit policy.
 - `maxDeltaPerSync`: clamps how far any single learned weight can move per
   sync, avoiding oscillation.
 - `minTotalSamples`: skip users whose total evidence is still too thin.
-- `decayHalfLifeMs`: exponentially decay older observations on read so stale
-  history cannot veto a user's improving skills.
+- `decayHalfLifeMs`: exponentially decay older observations so stale history
+  cannot veto a user's improving skills. The decay is applied at write time
+  (old mass is rescaled before each new outcome lands, atomically in Redis)
+  and continues on read, so a single fresh outcome re-weights the stats
+  toward recent behavior instead of resurrecting decayed history.
 - `terminalOnlyTagStats`: when `true`, only terminal outcomes
   (complete/reject/expire/fail plus manual rewards/feedback) feed tag stats;
   the non-terminal `accept` update is skipped.
@@ -1062,6 +1147,14 @@ const wouldBe = await matcher.syncLearnedRoutingWeights('user-1', { dryRun: true
 // Undo the last sync if the result looks wrong:
 await matcher.revertLearnedRoutingWeights('user-1');
 ```
+
+Two safety properties of the sync: a user's **declared tags always stay
+matchable** — a declared tag with no recorded outcomes gets the exploration
+prior rather than silently dropping out of the installed `routingWeights` —
+and the pre-sync state is always restorable: a user who had no
+`routingWeights` at all is snapshotted as such (`routingWeightsSnapshot:
+null`), so `revertLearnedRoutingWeights()` returns them to plain tag-based
+matching.
 
 Synthesis happens outside the matching hot path — matching itself reads the
 user's stored `routingWeights` exactly as before, so the per-match cost is
@@ -1562,7 +1655,7 @@ const result = solveSchedule({
 
 Rules cover: daily rest (rolling window, reduction allowances, clock-band containment), weekly rest (two-level floor plus average), rolling working-time averages with absence neutralisation, overtime (ordinary-vs-overtime split, consent, per-day and per-window caps, time-off-in-lieu), duty-type volume quotas, night work (configurable band, per-shift cap, averaging, hazardous absolute cap, volume quotas, prohibited bands), in-shift breaks, consecutive days and nights, forbidden shift successions, minimum start interval, Sunday and holiday rules, minimum engagement, publication and change notice, availability and preferences, date-valid qualifications, group composition, statutory protections, contract limits, and fairness.
 
-`Employee.rules` overrides the global set per person — that is how age classes, individual opt-outs and hazardous-work status are expressed. `Employee.personId` aggregates several contracts onto one natural person, which rest and window rules require.
+`Employee.rules` overrides the global set per person — that is how age classes, individual opt-outs and hazardous-work status are expressed. `Employee.personId` aggregates several contracts onto one natural person, which rest and window rules require: overlap (`no-overlap`) and inter-assignment rest (`min-rest`, `dailyRest`) are judged on the person timeline — spanning sibling contracts and supplied `history` — so two contracts cannot double-book a person or dodge a rest floor at the period boundary. Contract hour/day **maxima** are the opposite: per employee record, like the minimum and the `timeOffInLieu` ledger — one contract's cap is never consumed by a sibling's hours. Rolling volume windows (night-shift quotas, weekly-rest averaging) probe true rolling windows anchored on entry boundaries, never a day grid. Declared `available` windows are credited as a **union**: a shift spanning two contiguous windows is inside the declaration.
 
 Break entitlements are checked against shift design: `unpaidBreakMinutes` (deducted from working time) and `paidBreakMinutes` (working time, and the only thing that discharges a `paid: true` break rule). Deadline arithmetic that needs a "now" — notably whether a cancellation of a published assignment fell inside `notice.cancellationDeadlineMinutes` — is anchored by the optional `asOf` input; without it every cancellation is treated as late, the conservative reading.
 

@@ -35,9 +35,9 @@ Inclusive ISO dates this template occurs on. Mutually exclusive with `daysOfWeek
 
 #### Defined in
 
-[src/scheduling/types.ts:494](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L494)
+[src/scheduling/types.ts:494](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L494)
 
----
+___
 
 ### daysOfWeek
 
@@ -47,9 +47,9 @@ ISO weekdays 1 (Mon) .. 7 (Sun) within the scheduling period. Mutually exclusive
 
 #### Defined in
 
-[src/scheduling/types.ts:496](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L496)
+[src/scheduling/types.ts:496](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L496)
 
----
+___
 
 ### duty
 
@@ -66,9 +66,9 @@ C-580/19). The caller classifies; the engine does the arithmetic.
 
 #### Defined in
 
-[src/scheduling/types.ts:534](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L534)
+[src/scheduling/types.ts:534](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L534)
 
----
+___
 
 ### endTime
 
@@ -78,9 +78,9 @@ Time of day the shift ends; `endTime <= startTime` means it runs into the next d
 
 #### Defined in
 
-[src/scheduling/types.ts:492](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L492)
+[src/scheduling/types.ts:492](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L492)
 
----
+___
 
 ### id
 
@@ -88,9 +88,9 @@ Time of day the shift ends; `endTime <= startTime` means it runs into the next d
 
 #### Defined in
 
-[src/scheduling/types.ts:487](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L487)
+[src/scheduling/types.ts:487](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L487)
 
----
+___
 
 ### maxEmployees
 
@@ -100,9 +100,9 @@ Cap on assignees. Useful for supervision limits and to stop over-staffing.
 
 #### Defined in
 
-[src/scheduling/types.ts:503](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L503)
+[src/scheduling/types.ts:503](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L503)
 
----
+___
 
 ### minEmployees
 
@@ -112,9 +112,9 @@ Minimum employees that must be assigned to each occurrence. Defaults to 1.
 
 #### Defined in
 
-[src/scheduling/types.ts:498](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L498)
+[src/scheduling/types.ts:498](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L498)
 
----
+___
 
 ### name
 
@@ -122,9 +122,9 @@ Minimum employees that must be assigned to each occurrence. Defaults to 1.
 
 #### Defined in
 
-[src/scheduling/types.ts:488](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L488)
+[src/scheduling/types.ts:488](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L488)
 
----
+___
 
 ### paidBreakMinutes
 
@@ -135,9 +135,9 @@ deduction), and they are what discharges a `BreakRule` with `paid: true`.
 
 #### Defined in
 
-[src/scheduling/types.ts:523](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L523)
+[src/scheduling/types.ts:523](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L523)
 
----
+___
 
 ### requiredTags
 
@@ -147,9 +147,9 @@ Tags every assignee must hold, checked against date-valid qualifications.
 
 #### Defined in
 
-[src/scheduling/types.ts:507](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L507)
+[src/scheduling/types.ts:507](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L507)
 
----
+___
 
 ### shiftTypeTag
 
@@ -160,9 +160,9 @@ Classification tag for sequence rules — `'night'`, `'early'`, `'late'`.
 
 #### Defined in
 
-[src/scheduling/types.ts:512](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L512)
+[src/scheduling/types.ts:512](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L512)
 
----
+___
 
 ### siteId
 
@@ -172,9 +172,9 @@ Site this shift is at, for multi-site rosters.
 
 #### Defined in
 
-[src/scheduling/types.ts:536](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L536)
+[src/scheduling/types.ts:536](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L536)
 
----
+___
 
 ### startTime
 
@@ -184,9 +184,9 @@ Time of day the shift starts.
 
 #### Defined in
 
-[src/scheduling/types.ts:490](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L490)
+[src/scheduling/types.ts:490](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L490)
 
----
+___
 
 ### tagMaximums
 
@@ -196,9 +196,9 @@ Per-tag maximums, e.g. at most 2 trainees on a shift.
 
 #### Defined in
 
-[src/scheduling/types.ts:505](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L505)
+[src/scheduling/types.ts:505](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L505)
 
----
+___
 
 ### tagRequirements
 
@@ -208,9 +208,9 @@ Per-tag minimums: at least `count` assigned employees must carry the tag.
 
 #### Defined in
 
-[src/scheduling/types.ts:500](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L500)
+[src/scheduling/types.ts:500](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L500)
 
----
+___
 
 ### unpaidBreakMinutes
 
@@ -222,4 +222,4 @@ hours budget — not 9h.
 
 #### Defined in
 
-[src/scheduling/types.ts:518](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L518)
+[src/scheduling/types.ts:518](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L518)

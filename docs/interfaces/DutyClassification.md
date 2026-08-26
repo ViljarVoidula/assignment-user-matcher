@@ -25,13 +25,13 @@ roster can be defended without re-litigating the classification.
 
 #### Defined in
 
-[src/scheduling/types.ts:561](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L561)
+[src/scheduling/types.ts:561](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L561)
 
----
+___
 
 ### countsAsWorkingTime
 
-• **countsAsWorkingTime**: `number` \| `"full"` \| `"actualOnly"`
+• **countsAsWorkingTime**: `number` \| ``"full"`` \| ``"actualOnly"``
 
 `'full'` counts the whole span (a normal shift, or on-premises stand-by).
 `'actualOnly'` counts only `expectedActiveMinutes`.
@@ -40,9 +40,9 @@ stand-by that accrues at a percentage.
 
 #### Defined in
 
-[src/scheduling/types.ts:547](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L547)
+[src/scheduling/types.ts:547](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L547)
 
----
+___
 
 ### countsTowardRestClock
 
@@ -52,9 +52,9 @@ Whether the duty still blocks the rest clock even if it barely counts as work.
 
 #### Defined in
 
-[src/scheduling/types.ts:551](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L551)
+[src/scheduling/types.ts:551](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L551)
 
----
+___
 
 ### expectedActiveMinutes
 
@@ -64,9 +64,9 @@ Expected active minutes when `countsAsWorkingTime` is `'actualOnly'`.
 
 #### Defined in
 
-[src/scheduling/types.ts:549](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L549)
+[src/scheduling/types.ts:549](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L549)
 
----
+___
 
 ### standby
 
@@ -74,12 +74,12 @@ Expected active minutes when `countsAsWorkingTime` is `'actualOnly'`.
 
 #### Type declaration
 
-| Name                    | Type      |
-| :---------------------- | :-------- |
-| `atWorkplace`           | `boolean` |
-| `avgCalloutsPerPeriod?` | `number`  |
-| `responseMinutes?`      | `number`  |
+| Name | Type |
+| :------ | :------ |
+| `atWorkplace` | `boolean` |
+| `avgCalloutsPerPeriod?` | `number` |
+| `responseMinutes?` | `number` |
 
 #### Defined in
 
-[src/scheduling/types.ts:552](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L552)
+[src/scheduling/types.ts:552](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L552)

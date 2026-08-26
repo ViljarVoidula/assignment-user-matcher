@@ -28,6 +28,7 @@ One expanded, dated occurrence of a shift template.
 - [tagMaximums](ShiftInstance.md#tagmaximums)
 - [tagRequirements](ShiftInstance.md#tagrequirements)
 - [templateId](ShiftInstance.md#templateid)
+- [unpaidBreakMinutes](ShiftInstance.md#unpaidbreakminutes)
 - [weekday](ShiftInstance.md#weekday)
 - [workingMinutes](ShiftInstance.md#workingminutes)
 
@@ -41,9 +42,9 @@ ISO date the shift starts on.
 
 #### Defined in
 
-[src/scheduling/types.ts:783](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L783)
+[src/scheduling/types.ts:783](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L783)
 
----
+___
 
 ### durationMinutes
 
@@ -53,9 +54,9 @@ Elapsed duration in minutes, always positive.
 
 #### Defined in
 
-[src/scheduling/types.ts:789](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L789)
+[src/scheduling/types.ts:789](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L789)
 
----
+___
 
 ### duty
 
@@ -63,9 +64,9 @@ Elapsed duration in minutes, always positive.
 
 #### Defined in
 
-[src/scheduling/types.ts:807](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L807)
+[src/scheduling/types.ts:813](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L813)
 
----
+___
 
 ### endMinute
 
@@ -75,9 +76,9 @@ Minutes since period epoch when the shift ends; may exceed 24h for overnight shi
 
 #### Defined in
 
-[src/scheduling/types.ts:787](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L787)
+[src/scheduling/types.ts:787](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L787)
 
----
+___
 
 ### id
 
@@ -87,9 +88,9 @@ Unique id: `<templateId>@<date>`.
 
 #### Defined in
 
-[src/scheduling/types.ts:779](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L779)
+[src/scheduling/types.ts:779](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L779)
 
----
+___
 
 ### isNightShift
 
@@ -99,9 +100,9 @@ Whether it counts as a night shift under `NightWorkRule.qualifiesAfterMinutes`.
 
 #### Defined in
 
-[src/scheduling/types.ts:811](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L811)
+[src/scheduling/types.ts:817](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L817)
 
----
+___
 
 ### isPublicHoliday
 
@@ -109,9 +110,9 @@ Whether it counts as a night shift under `NightWorkRule.qualifiesAfterMinutes`.
 
 #### Defined in
 
-[src/scheduling/types.ts:815](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L815)
+[src/scheduling/types.ts:821](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L821)
 
----
+___
 
 ### isSunday
 
@@ -119,9 +120,9 @@ Whether it counts as a night shift under `NightWorkRule.qualifiesAfterMinutes`.
 
 #### Defined in
 
-[src/scheduling/types.ts:814](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L814)
+[src/scheduling/types.ts:820](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L820)
 
----
+___
 
 ### maxEmployees
 
@@ -129,9 +130,9 @@ Whether it counts as a night shift under `NightWorkRule.qualifiesAfterMinutes`.
 
 #### Defined in
 
-[src/scheduling/types.ts:802](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L802)
+[src/scheduling/types.ts:808](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L808)
 
----
+___
 
 ### minEmployees
 
@@ -139,9 +140,9 @@ Whether it counts as a night shift under `NightWorkRule.qualifiesAfterMinutes`.
 
 #### Defined in
 
-[src/scheduling/types.ts:790](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L790)
+[src/scheduling/types.ts:790](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L790)
 
----
+___
 
 ### name
 
@@ -149,9 +150,9 @@ Whether it counts as a night shift under `NightWorkRule.qualifiesAfterMinutes`.
 
 #### Defined in
 
-[src/scheduling/types.ts:781](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L781)
+[src/scheduling/types.ts:781](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L781)
 
----
+___
 
 ### nightMinutes
 
@@ -161,9 +162,9 @@ Minutes of this occurrence falling inside the configured night band.
 
 #### Defined in
 
-[src/scheduling/types.ts:809](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L809)
+[src/scheduling/types.ts:815](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L815)
 
----
+___
 
 ### paidBreakMinutes
 
@@ -173,9 +174,9 @@ Paid break minutes declared by the template. Count as working time.
 
 #### Defined in
 
-[src/scheduling/types.ts:801](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L801)
+[src/scheduling/types.ts:801](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L801)
 
----
+___
 
 ### requiredTags
 
@@ -183,9 +184,9 @@ Paid break minutes declared by the template. Count as working time.
 
 #### Defined in
 
-[src/scheduling/types.ts:804](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L804)
+[src/scheduling/types.ts:810](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L810)
 
----
+___
 
 ### shiftTypeTag
 
@@ -193,9 +194,9 @@ Paid break minutes declared by the template. Count as working time.
 
 #### Defined in
 
-[src/scheduling/types.ts:805](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L805)
+[src/scheduling/types.ts:811](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L811)
 
----
+___
 
 ### siteId
 
@@ -203,9 +204,9 @@ Paid break minutes declared by the template. Count as working time.
 
 #### Defined in
 
-[src/scheduling/types.ts:806](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L806)
+[src/scheduling/types.ts:812](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L812)
 
----
+___
 
 ### startMinute
 
@@ -215,9 +216,9 @@ Minutes since period epoch (midnight of `period.startDate`) when the shift start
 
 #### Defined in
 
-[src/scheduling/types.ts:785](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L785)
+[src/scheduling/types.ts:785](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L785)
 
----
+___
 
 ### tagMaximums
 
@@ -225,9 +226,9 @@ Minutes since period epoch (midnight of `period.startDate`) when the shift start
 
 #### Defined in
 
-[src/scheduling/types.ts:803](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L803)
+[src/scheduling/types.ts:809](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L809)
 
----
+___
 
 ### tagRequirements
 
@@ -235,9 +236,9 @@ Minutes since period epoch (midnight of `period.startDate`) when the shift start
 
 #### Defined in
 
-[src/scheduling/types.ts:791](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L791)
+[src/scheduling/types.ts:791](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L791)
 
----
+___
 
 ### templateId
 
@@ -245,9 +246,23 @@ Minutes since period epoch (midnight of `period.startDate`) when the shift start
 
 #### Defined in
 
-[src/scheduling/types.ts:780](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L780)
+[src/scheduling/types.ts:780](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L780)
 
----
+___
+
+### unpaidBreakMinutes
+
+• **unpaidBreakMinutes**: `number`
+
+Unpaid break minutes declared by the template. Break entitlements read
+this rather than span − working: for a duty-scaled shift the difference
+is duty occupation, not rest.
+
+#### Defined in
+
+[src/scheduling/types.ts:807](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L807)
+
+___
 
 ### weekday
 
@@ -257,9 +272,9 @@ ISO weekday 1..7 of the start day.
 
 #### Defined in
 
-[src/scheduling/types.ts:813](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L813)
+[src/scheduling/types.ts:819](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L819)
 
----
+___
 
 ### workingMinutes
 
@@ -272,4 +287,4 @@ clock without counting as work.
 
 #### Defined in
 
-[src/scheduling/types.ts:799](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L799)
+[src/scheduling/types.ts:799](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L799)

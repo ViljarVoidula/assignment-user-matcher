@@ -52,9 +52,9 @@ runs out the completion-deadline sweep applies `onCompletionBreach`.
 
 #### Defined in
 
-[src/types/matcher.ts:163](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L163)
+[src/types/matcher.ts:167](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L167)
 
----
+___
 
 ### expireAfterMs
 
@@ -68,9 +68,9 @@ regardless of who holds it.
 
 #### Defined in
 
-[src/types/matcher.ts:171](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L171)
+[src/types/matcher.ts:175](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L175)
 
----
+___
 
 ### maxRejections
 
@@ -84,16 +84,15 @@ do not.
 
 #### Defined in
 
-[src/types/matcher.ts:179](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L179)
+[src/types/matcher.ts:183](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L183)
 
----
+___
 
 ### onCompletionBreach
 
-• `Optional` **onCompletionBreach**: `"park"` \| `"notify"` \| `"requeue"` \| `"fail"`
+• `Optional` **onCompletionBreach**: ``"park"`` \| ``"notify"`` \| ``"requeue"`` \| ``"fail"``
 
 What happens when the completion deadline (`completeWithinMs`) elapses.
-
 - `'notify'` — emit a `completionBreached` lifecycle event and record
   an `expire` learning outcome; the worker keeps the assignment.
 - `'requeue'` — take the assignment back, block the breaching user,
@@ -104,21 +103,20 @@ What happens when the completion deadline (`completeWithinMs`) elapses.
 **`Default`**
 
 ```ts
-'notify';
+'notify'
 ```
 
 #### Defined in
 
-[src/types/matcher.ts:190](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L190)
+[src/types/matcher.ts:194](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L194)
 
----
+___
 
 ### onExpire
 
-• `Optional` **onExpire**: `"park"` \| `"drop"`
+• `Optional` **onExpire**: ``"park"`` \| ``"drop"``
 
 What happens when the freshness cutoff (`expireAfterMs`) elapses.
-
 - `'drop'` — remove the assignment entirely from whichever store it
   occupies.
 - `'park'` — move it to the parked store for operator inspection.
@@ -126,21 +124,20 @@ What happens when the freshness cutoff (`expireAfterMs`) elapses.
 **`Default`**
 
 ```ts
-'drop';
+'drop'
 ```
 
 #### Defined in
 
-[src/types/matcher.ts:208](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L208)
+[src/types/matcher.ts:212](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L212)
 
----
+___
 
 ### onMaxRejections
 
-• `Optional` **onMaxRejections**: `"park"` \| `"fail"` \| `"keep"`
+• `Optional` **onMaxRejections**: ``"park"`` \| ``"fail"`` \| ``"keep"``
 
 What happens when the rejection budget (`maxRejections`) is exhausted.
-
 - `'park'` — move to the parked store; retrievable via
   `getParkedAssignments()` / `unparkAssignment()`.
 - `'fail'` — close the assignment as failed in the completed store.
@@ -150,9 +147,9 @@ What happens when the rejection budget (`maxRejections`) is exhausted.
 **`Default`**
 
 ```ts
-'park';
+'park'
 ```
 
 #### Defined in
 
-[src/types/matcher.ts:200](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L200)
+[src/types/matcher.ts:204](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L204)

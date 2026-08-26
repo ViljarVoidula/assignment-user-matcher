@@ -8,7 +8,7 @@ Thrown synchronously by the facade for malformed input (bad dates, negative budg
 
 - `Error`
 
-    ↳ **`ScheduleValidationError`**
+  ↳ **`ScheduleValidationError`**
 
 ## Table of contents
 
@@ -36,8 +36,8 @@ Thrown synchronously by the facade for malformed input (bad dates, negative budg
 
 #### Parameters
 
-| Name      | Type     |
-| :-------- | :------- |
+| Name | Type |
+| :------ | :------ |
 | `message` | `string` |
 
 #### Returns
@@ -50,7 +50,7 @@ Error.constructor
 
 #### Defined in
 
-[src/scheduling/types.ts:766](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L766)
+[src/scheduling/types.ts:766](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L766)
 
 ## Properties
 
@@ -66,7 +66,7 @@ Error.message
 
 node_modules/.pnpm/typescript@4.9.5/node_modules/typescript/lib/lib.es5.d.ts:1054
 
----
+___
 
 ### name
 
@@ -80,7 +80,7 @@ Error.name
 
 node_modules/.pnpm/typescript@4.9.5/node_modules/typescript/lib/lib.es5.d.ts:1053
 
----
+___
 
 ### stack
 
@@ -94,7 +94,7 @@ Error.stack
 
 node_modules/.pnpm/typescript@4.9.5/node_modules/typescript/lib/lib.es5.d.ts:1055
 
----
+___
 
 ### stackTraceLimit
 
@@ -131,7 +131,7 @@ a string representing the location in the code at which
 ```js
 const myObject = {};
 Error.captureStackTrace(myObject);
-myObject.stack; // Similar to `new Error().stack`
+myObject.stack;  // Similar to `new Error().stack`
 ```
 
 The first line of the trace will be prefixed with
@@ -146,23 +146,23 @@ details of error generation from the user. For instance:
 
 ```js
 function a() {
-    b();
+  b();
 }
 
 function b() {
-    c();
+  c();
 }
 
 function c() {
-    // Create an error without stack trace to avoid calculating the stack trace twice.
-    const { stackTraceLimit } = Error;
-    Error.stackTraceLimit = 0;
-    const error = new Error();
-    Error.stackTraceLimit = stackTraceLimit;
+  // Create an error without stack trace to avoid calculating the stack trace twice.
+  const { stackTraceLimit } = Error;
+  Error.stackTraceLimit = 0;
+  const error = new Error();
+  Error.stackTraceLimit = stackTraceLimit;
 
-    // Capture the stack trace above function b
-    Error.captureStackTrace(error, b); // Neither function c, nor b is included in the stack trace
-    throw error;
+  // Capture the stack trace above function b
+  Error.captureStackTrace(error, b); // Neither function c, nor b is included in the stack trace
+  throw error;
 }
 
 a();
@@ -170,9 +170,9 @@ a();
 
 #### Parameters
 
-| Name              | Type       |
-| :---------------- | :--------- |
-| `targetObject`    | `object`   |
+| Name | Type |
+| :------ | :------ |
+| `targetObject` | `object` |
 | `constructorOpt?` | `Function` |
 
 #### Returns
@@ -187,7 +187,7 @@ Error.captureStackTrace
 
 node_modules/.pnpm/@types+node@18.19.103/node_modules/@types/node/globals.d.ts:132
 
----
+___
 
 ### prepareStackTrace
 
@@ -195,9 +195,9 @@ node_modules/.pnpm/@types+node@18.19.103/node_modules/@types/node/globals.d.ts:1
 
 #### Parameters
 
-| Name          | Type         |
-| :------------ | :----------- |
-| `err`         | `Error`      |
+| Name | Type |
+| :------ | :------ |
+| `err` | `Error` |
 | `stackTraces` | `CallSite`[] |
 
 #### Returns

@@ -39,6 +39,14 @@ import {
     type NormalizedSlaPolicy,
 } from './sla/policy';
 import { isHeld, normalizeSchedulePolicy, type NormalizedSchedulePolicy } from './schedule/policy';
+import {
+    dueSlots,
+    materializeOccurrence,
+    normalizeRecurrencePolicy,
+    occurrenceId,
+    sweepDueAt,
+    MIN_EVERY_MS,
+} from './schedule/recurrence';
 import { lintAssignment, userCoversTag } from './validation/assignment-lint';
 import {
     TraceCollector,
@@ -107,6 +115,10 @@ import type {
     SlaPolicy,
     SlaStats,
     SchedulePolicy,
+    RecurrencePolicy,
+    RecurringAssignment,
+    RecurringAssignmentRecord,
+    RecurrenceSweepResult,
     AssignmentLintIssue,
     AssignmentLintContext,
     AssignmentReadinessReport,
@@ -157,6 +169,10 @@ export type {
     SlaPolicy,
     SlaStats,
     SchedulePolicy,
+    RecurrencePolicy,
+    RecurringAssignment,
+    RecurringAssignmentRecord,
+    RecurrenceSweepResult,
     AssignmentLintIssue,
     AssignmentLintContext,
     AssignmentReadinessReport,
@@ -248,6 +264,8 @@ export default class AssignmentMatcher implements WorkflowHost {
     private scheduledAssignmentsKey: string;
     private scheduledActivateAtKey: string;
     private scheduleNotAfterKey: string;
+    private recurringAssignmentsKey: string;
+    private recurringDueAtKey: string;
     private keys: KeyBuilders;
 
     // Workflow-related properties
@@ -318,6 +336,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         this.scheduledAssignmentsKey = this.keys.scheduledAssignments();
         this.scheduledActivateAtKey = this.keys.scheduledActivateAt();
         this.scheduleNotAfterKey = this.keys.scheduleNotAfter();
+        this.recurringAssignmentsKey = this.keys.recurringAssignments();
+        this.recurringDueAtKey = this.keys.recurringDueAt();
         this.completedAssignmentsKey = this.keys.completedAssignments();
         this.calculatePriority = options?.prioritizationFunction ?? this.calculatePriority;
         this.usingDefaultMatchScore = !options?.matchingFunction;
@@ -4543,6 +4563,196 @@ export default class AssignmentMatcher implements WorkflowHost {
         return Object.values(all).map((json) => JSON.parse(json as string));
     }
 
+    // ============================================================================
+    // Recurring assignments — standing templates the sweep cuts occurrences from
+    // ============================================================================
+
+    /**
+     * Register (or update) a recurring assignment: a standing template whose
+     * recurrence sweep materializes each occurrence as an ordinary scheduled
+     * assignment (id `<templateId>@<openEpochMs>`, offer window derived from
+     * the policy). The template itself is never matchable.
+     *
+     * Re-adding an existing id replaces the template but keeps its clock —
+     * occurrences already materialized and the next slot are facts about the
+     * past, not properties of the template. Remove and re-add to restart.
+     *
+     * Occurrences fire with sweep granularity: `startMaintenance()` /
+     * `runMaintenanceOnce()` / `processRecurringAssignments()`.
+     *
+     * @throws when `recurrence` is unusable (`everyMs` missing or < 1000,
+     *         or `until` before `startAt`)
+     */
+    async addRecurringAssignment(template: RecurringAssignment): Promise<RecurringAssignment> {
+        await this.readyPromise;
+        const policy = normalizeRecurrencePolicy(template.recurrence);
+        if (!policy) {
+            throw new Error(
+                `addRecurringAssignment: recurrence needs everyMs >= ${MIN_EVERY_MS} and a satisfiable until/startAt`,
+            );
+        }
+
+        const existingJson = await this.redisClient.hGet(this.recurringAssignmentsKey, template.id);
+        const existing = existingJson ? (JSON.parse(existingJson) as RecurringAssignmentRecord) : null;
+        const record: RecurringAssignmentRecord = {
+            template,
+            nextAt: existing?.nextAt ?? policy.startAt ?? Date.now(),
+            occurrences: existing?.occurrences ?? 0,
+        };
+        await this.redisClient
+            .multi()
+            .hSet(this.recurringAssignmentsKey, template.id, JSON.stringify(record))
+            .zAdd(this.recurringDueAtKey, { score: sweepDueAt(record, policy), value: template.id })
+            .exec();
+        return template;
+    }
+
+    /**
+     * Remove a recurring template: no further occurrences materialize.
+     * Occurrences already cut from it are ordinary assignments and live on —
+     * `dropScheduled: true` additionally removes the ones still sitting
+     * un-activated in the scheduled store (never queued/pending/accepted
+     * work).
+     *
+     * @returns false when the id was not a recurring template
+     */
+    async removeRecurringAssignment(id: string, opts?: { dropScheduled?: boolean }): Promise<boolean> {
+        await this.readyPromise;
+        const [removed] = (await this.redisClient
+            .multi()
+            .hDel(this.recurringAssignmentsKey, id)
+            .zRem(this.recurringDueAtKey, id)
+            .exec()) as unknown as [number, number];
+
+        if (opts?.dropScheduled) {
+            const prefix = `${id}@`;
+            const scheduledIds = await this.redisClient.hKeys(this.scheduledAssignmentsKey);
+            for (const occId of scheduledIds) {
+                if (!occId.startsWith(prefix)) continue;
+                await this.redisClient
+                    .multi()
+                    .hDel(this.scheduledAssignmentsKey, occId)
+                    .zRem(this.scheduledActivateAtKey, occId)
+                    .zRem(this.scheduleNotAfterKey, occId)
+                    .exec();
+            }
+        }
+        return Number(removed) === 1;
+    }
+
+    /** One recurring template with its clock, or null. */
+    async getRecurringAssignment(id: string): Promise<RecurringAssignmentRecord | null> {
+        await this.readyPromise;
+        const json = await this.redisClient.hGet(this.recurringAssignmentsKey, id);
+        return json ? (JSON.parse(json) as RecurringAssignmentRecord) : null;
+    }
+
+    /** Every recurring template with its clock, soonest next occurrence first. */
+    async listRecurringAssignments(): Promise<RecurringAssignmentRecord[]> {
+        await this.readyPromise;
+        const all = await this.redisClient.hGetAll(this.recurringAssignmentsKey);
+        return Object.values(all)
+            .map((json) => JSON.parse(json as string) as RecurringAssignmentRecord)
+            .sort((a, b) => a.nextAt - b.nextAt);
+    }
+
+    /**
+     * Sweep the recurring templates: materialize every due slot (one interval
+     * ahead of its open time, so the next occurrence is visible in the
+     * scheduled store before its window opens) and retire templates whose
+     * bound (`until` / `maxOccurrences`) is reached.
+     *
+     * Claims are one-shot zRems like the scheduled sweep, so concurrent
+     * replicas skip templates another sweep already took. A crashed pass is
+     * healed two ways: the due index is re-derived from the template hash at
+     * the top of every sweep (missing entries re-indexed as due now, NX so a
+     * live score is never clobbered), and occurrence ids are deterministic,
+     * so re-materializing a slot that already landed is an idempotent re-add.
+     */
+    async processRecurringAssignments(): Promise<RecurrenceSweepResult> {
+        await this.readyPromise;
+        const now = Date.now();
+        let materialized = 0;
+        let retired = 0;
+
+        // Self-heal: a template whose sweep crashed between the claim and the
+        // state write has no due-index entry and nothing else re-examines it.
+        const [templateIds, indexedIds] = await Promise.all([
+            this.redisClient.hKeys(this.recurringAssignmentsKey),
+            this.redisClient.zRange(this.recurringDueAtKey, 0, -1),
+        ]);
+        const indexed = new Set(indexedIds);
+        const orphaned = templateIds.filter((id) => !indexed.has(id));
+        if (orphaned.length > 0) {
+            await this.redisClient.zAdd(
+                this.recurringDueAtKey,
+                orphaned.map((id) => ({ score: now, value: id })),
+                { NX: true },
+            );
+        }
+
+        const dueIds = await this.redisClient.zRangeByScore(this.recurringDueAtKey, '-inf', now);
+        for (const id of dueIds) {
+            const claimed = await this.redisClient.zRem(this.recurringDueAtKey, id);
+            if (!claimed) continue;
+            const json = await this.redisClient.hGet(this.recurringAssignmentsKey, id);
+            // Removed since the range read: the claim was the whole cleanup.
+            if (!json) continue;
+
+            const record: RecurringAssignmentRecord = JSON.parse(json);
+            const policy = normalizeRecurrencePolicy(record.template.recurrence);
+            if (!policy) {
+                // A stored record that no longer normalizes (hand-edited, or a
+                // future field contract change): leave the hash entry readable
+                // but inert rather than deleting data or looping on it.
+                continue;
+            }
+
+            const { slots, next, retiredReason } = dueSlots(policy, record, now);
+            try {
+                for (const [index, openAt] of slots.entries()) {
+                    await this.addAssignment(materializeOccurrence(record.template, policy, openAt));
+                    materialized++;
+                    this.emitAssignmentLifecycle({
+                        kind: 'recurrenceMaterialized',
+                        taskId: occurrenceId(record.template.id, openAt),
+                        recurringId: id,
+                        occurrence: record.occurrences + index + 1,
+                        opensAt: openAt,
+                        at: now,
+                    });
+                }
+            } catch (err) {
+                // The claim already consumed the only trigger and the state is
+                // deliberately not advanced yet; restore the claim so the next
+                // sweep retries. Slots that did land re-add idempotently.
+                await this.redisClient.zAdd(this.recurringDueAtKey, { score: now, value: id });
+                throw err;
+            }
+
+            if (retiredReason) {
+                await this.redisClient.hDel(this.recurringAssignmentsKey, id);
+                retired++;
+                this.emitAssignmentLifecycle({
+                    kind: 'recurrenceRetired',
+                    recurringId: id,
+                    reason: retiredReason,
+                    occurrences: next.occurrences,
+                    at: now,
+                });
+            } else {
+                const updated: RecurringAssignmentRecord = { ...record, ...next };
+                await this.redisClient
+                    .multi()
+                    .hSet(this.recurringAssignmentsKey, id, JSON.stringify(updated))
+                    .zAdd(this.recurringDueAtKey, { score: sweepDueAt(updated, policy), value: id })
+                    .exec();
+            }
+        }
+
+        return { materialized, retired };
+    }
+
     /**
      * Return a parked assignment to the queue, optionally resetting its
      * escalation level so the ladder can run again from the top.
@@ -4624,7 +4834,16 @@ export default class AssignmentMatcher implements WorkflowHost {
         let slaExpiries = 0;
         let scheduleActivations = 0;
         let scheduleMisses = 0;
+        let recurrenceMaterializations = 0;
+        let recurrenceRetirements = 0;
 
+        // Recurrence before schedule: an occurrence materialized due-now is
+        // then activated by the schedule sweep in this same tick.
+        if (opts.recurrence) {
+            const result = await this.processRecurringAssignments();
+            recurrenceMaterializations = result.materialized;
+            recurrenceRetirements = result.retired;
+        }
         // Schedule first: a just-activated assignment's response/SLA clocks
         // then start from this same tick's state.
         if (opts.scheduled) {
@@ -4661,6 +4880,8 @@ export default class AssignmentMatcher implements WorkflowHost {
             slaExpiries,
             scheduleActivations,
             scheduleMisses,
+            recurrenceMaterializations,
+            recurrenceRetirements,
             tookMs: Date.now() - startedAt,
         };
     }
@@ -4709,6 +4930,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             completionDeadlines: options?.completionDeadlines ?? true,
             slaExpiries: options?.slaExpiries ?? true,
             scheduled: options?.scheduled ?? true,
+            recurrence: options?.recurrence ?? true,
             workflowStepTimeouts: options?.workflowStepTimeouts ?? this.enableWorkflows,
             idleUsers: options?.idleUsers ?? this.idleUserTimeoutMs !== null,
         };

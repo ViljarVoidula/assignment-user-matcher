@@ -26,9 +26,9 @@ Failing rules only, for a compact "why not" list.
 
 #### Defined in
 
-[src/scheduling/operations.ts:148](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L148)
+[src/scheduling/operations.ts:148](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L148)
 
----
+___
 
 ### eligible
 
@@ -36,9 +36,9 @@ Failing rules only, for a compact "why not" list.
 
 #### Defined in
 
-[src/scheduling/operations.ts:145](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L145)
+[src/scheduling/operations.ts:145](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L145)
 
----
+___
 
 ### employeeId
 
@@ -46,9 +46,9 @@ Failing rules only, for a compact "why not" list.
 
 #### Defined in
 
-[src/scheduling/operations.ts:143](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L143)
+[src/scheduling/operations.ts:143](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L143)
 
----
+___
 
 ### fairnessDebt
 
@@ -58,9 +58,9 @@ How far below their fair share of extra work this person is. Higher means more o
 
 #### Defined in
 
-[src/scheduling/operations.ts:151](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L151)
+[src/scheduling/operations.ts:151](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L151)
 
----
+___
 
 ### marginalCostCents
 
@@ -68,9 +68,9 @@ How far below their fair share of extra work this person is. Higher means more o
 
 #### Defined in
 
-[src/scheduling/operations.ts:149](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L149)
+[src/scheduling/operations.ts:149](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L149)
 
----
+___
 
 ### rank
 
@@ -80,9 +80,9 @@ Lower is a better call.
 
 #### Defined in
 
-[src/scheduling/operations.ts:153](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L153)
+[src/scheduling/operations.ts:153](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L153)
 
----
+___
 
 ### rationale
 
@@ -90,9 +90,9 @@ Lower is a better call.
 
 #### Defined in
 
-[src/scheduling/operations.ts:154](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L154)
+[src/scheduling/operations.ts:154](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L154)
 
----
+___
 
 ### shiftInstanceId
 
@@ -100,9 +100,9 @@ Lower is a better call.
 
 #### Defined in
 
-[src/scheduling/operations.ts:144](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L144)
+[src/scheduling/operations.ts:144](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L144)
 
----
+___
 
 ### verdicts
 
@@ -110,4 +110,4 @@ Lower is a better call.
 
 #### Defined in
 
-[src/scheduling/operations.ts:146](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L146)
+[src/scheduling/operations.ts:146](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L146)

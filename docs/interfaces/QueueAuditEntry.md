@@ -23,9 +23,9 @@ One queued assignment's stuck-analysis from `auditQueue()`.
 
 #### Defined in
 
-[src/types/matcher.ts:551](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L551)
+[src/types/matcher.ts:720](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L720)
 
----
+___
 
 ### blockers
 
@@ -37,9 +37,9 @@ by tag/weight mismatch are counted under `noTagMatch`.
 
 #### Defined in
 
-[src/types/matcher.ts:564](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L564)
+[src/types/matcher.ts:733](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L733)
 
----
+___
 
 ### eligibleUserCount
 
@@ -49,9 +49,9 @@ Users eligible right now under the full hard rules
 
 #### Defined in
 
-[src/types/matcher.ts:556](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L556)
+[src/types/matcher.ts:725](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L725)
 
----
+___
 
 ### tags
 
@@ -59,9 +59,9 @@ Users eligible right now under the full hard rules
 
 #### Defined in
 
-[src/types/matcher.ts:552](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L552)
+[src/types/matcher.ts:721](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L721)
 
----
+___
 
 ### uncoveredTags
 
@@ -71,16 +71,16 @@ Assignment tags no active (non-paused) user can currently serve
 
 #### Defined in
 
-[src/types/matcher.ts:558](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L558)
+[src/types/matcher.ts:727](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L727)
 
----
+___
 
 ### waitingMs
 
-• **waitingMs**: `null` \| `number`
+• **waitingMs**: ``null`` \| `number`
 
 Ms since first enqueue; null when the wait-clock entry is missing
 
 #### Defined in
 
-[src/types/matcher.ts:554](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L554)
+[src/types/matcher.ts:723](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L723)

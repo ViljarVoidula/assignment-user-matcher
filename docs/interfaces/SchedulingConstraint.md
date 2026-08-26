@@ -34,9 +34,9 @@ Legal source, echoed into every violation and verdict this rule produces.
 
 #### Defined in
 
-[src/scheduling/types.ts:898](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L898)
+[src/scheduling/types.ts:904](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L904)
 
----
+___
 
 ### hardness
 
@@ -47,9 +47,9 @@ Lexicographic level. `'hard'` breaches are never accepted by construction;
 
 #### Defined in
 
-[src/scheduling/types.ts:894](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L894)
+[src/scheduling/types.ts:900](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L900)
 
----
+___
 
 ### id
 
@@ -57,9 +57,9 @@ Lexicographic level. `'hard'` breaches are never accepted by construction;
 
 #### Defined in
 
-[src/scheduling/types.ts:889](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L889)
+[src/scheduling/types.ts:895](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L895)
 
----
+___
 
 ### weight
 
@@ -69,7 +69,7 @@ Drives soft/medium score contribution, violation severity and repair priority.
 
 #### Defined in
 
-[src/scheduling/types.ts:896](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L896)
+[src/scheduling/types.ts:902](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L902)
 
 ## Methods
 
@@ -80,17 +80,17 @@ Drives soft/medium score contribution, violation severity and repair priority.
 Breach magnitude of assigning `pair` in `state`: 0 when compliant,
 positive otherwise.
 
-Return _how far_ over the line the assignment is, not a 0/1 flag, where
+Return *how far* over the line the assignment is, not a 0/1 flag, where
 that is meaningful — a rest gap 10 minutes short and one 6 hours short are
 both breaches, but only a graded signal lets local search climb out of an
 infeasible region instead of sitting on a plateau.
 
 #### Parameters
 
-| Name    | Type                                  |
-| :------ | :------------------------------------ |
-| `state` | [`SearchState`](SearchState.md)       |
-| `pair`  | [`AssignmentPair`](AssignmentPair.md) |
+| Name | Type |
+| :------ | :------ |
+| `state` | [`SearchState`](SearchState.md) |
+| `pair` | [`AssignmentPair`](AssignmentPair.md) |
 
 #### Returns
 
@@ -98,24 +98,24 @@ infeasible region instead of sitting on a plateau.
 
 #### Defined in
 
-[src/scheduling/types.ts:910](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L910)
+[src/scheduling/types.ts:916](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L916)
 
----
+___
 
 ### deltaRemove
 
 ▸ **deltaRemove**(`state`, `pair`): `number`
 
-Breach magnitude _removed_ by unassigning `pair`. Defaults to `delta` when
+Breach magnitude *removed* by unassigning `pair`. Defaults to `delta` when
 absent, which is right for symmetric rules; rules whose breach depends on
 the surrounding sequence should implement it.
 
 #### Parameters
 
-| Name    | Type                                  |
-| :------ | :------------------------------------ |
-| `state` | [`SearchState`](SearchState.md)       |
-| `pair`  | [`AssignmentPair`](AssignmentPair.md) |
+| Name | Type |
+| :------ | :------ |
+| `state` | [`SearchState`](SearchState.md) |
+| `pair` | [`AssignmentPair`](AssignmentPair.md) |
 
 #### Returns
 
@@ -123,9 +123,9 @@ the surrounding sequence should implement it.
 
 #### Defined in
 
-[src/scheduling/types.ts:916](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L916)
+[src/scheduling/types.ts:922](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L922)
 
----
+___
 
 ### evaluate
 
@@ -137,8 +137,8 @@ cannot see these.
 
 #### Parameters
 
-| Name    | Type                            |
-| :------ | :------------------------------ |
+| Name | Type |
+| :------ | :------ |
 | `state` | [`SearchState`](SearchState.md) |
 
 #### Returns
@@ -147,32 +147,32 @@ cannot see these.
 
 #### Defined in
 
-[src/scheduling/types.ts:922](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L922)
+[src/scheduling/types.ts:928](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L928)
 
----
+___
 
 ### explain
 
-▸ **explain**(`state`, `pair`): `null` \| `string`
+▸ **explain**(`state`, `pair`): ``null`` \| `string`
 
 Human-readable breach description for the violation report, or null when compliant.
 
 #### Parameters
 
-| Name    | Type                                  |
-| :------ | :------------------------------------ |
-| `state` | [`SearchState`](SearchState.md)       |
-| `pair`  | [`AssignmentPair`](AssignmentPair.md) |
+| Name | Type |
+| :------ | :------ |
+| `state` | [`SearchState`](SearchState.md) |
+| `pair` | [`AssignmentPair`](AssignmentPair.md) |
 
 #### Returns
 
-`null` \| `string`
+``null`` \| `string`
 
 #### Defined in
 
-[src/scheduling/types.ts:926](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L926)
+[src/scheduling/types.ts:932](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L932)
 
----
+___
 
 ### prune
 
@@ -182,9 +182,9 @@ Prune ineligible (employee, shiftInstance) pairs before search, in place on `eli
 
 #### Parameters
 
-| Name          | Type                                 |
-| :------------ | :----------------------------------- |
-| `ctx`         | [`ModelContext`](ModelContext.md)    |
+| Name | Type |
+| :------ | :------ |
+| `ctx` | [`ModelContext`](ModelContext.md) |
 | `eligibility` | `Map`\<`string`, `Set`\<`string`\>\> |
 
 #### Returns
@@ -193,9 +193,9 @@ Prune ineligible (employee, shiftInstance) pairs before search, in place on `eli
 
 #### Defined in
 
-[src/scheduling/types.ts:900](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L900)
+[src/scheduling/types.ts:906](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L906)
 
----
+___
 
 ### verdict
 
@@ -205,10 +205,10 @@ Structured judgement for explanations and swap validation.
 
 #### Parameters
 
-| Name    | Type                                  |
-| :------ | :------------------------------------ |
-| `state` | [`SearchState`](SearchState.md)       |
-| `pair`  | [`AssignmentPair`](AssignmentPair.md) |
+| Name | Type |
+| :------ | :------ |
+| `state` | [`SearchState`](SearchState.md) |
+| `pair` | [`AssignmentPair`](AssignmentPair.md) |
 
 #### Returns
 
@@ -216,4 +216,4 @@ Structured judgement for explanations and swap validation.
 
 #### Defined in
 
-[src/scheduling/types.ts:924](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L924)
+[src/scheduling/types.ts:930](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L930)

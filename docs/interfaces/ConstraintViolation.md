@@ -28,9 +28,9 @@ The measured value and the bound it broke, for machine-readable reports.
 
 #### Defined in
 
-[src/scheduling/types.ts:673](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L673)
+[src/scheduling/types.ts:673](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L673)
 
----
+___
 
 ### citation
 
@@ -40,9 +40,9 @@ Legal source, echoed from the rule that produced it.
 
 #### Defined in
 
-[src/scheduling/types.ts:671](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L671)
+[src/scheduling/types.ts:671](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L671)
 
----
+___
 
 ### constraintId
 
@@ -50,9 +50,9 @@ Legal source, echoed from the rule that produced it.
 
 #### Defined in
 
-[src/scheduling/types.ts:665](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L665)
+[src/scheduling/types.ts:665](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L665)
 
----
+___
 
 ### employeeId
 
@@ -60,9 +60,9 @@ Legal source, echoed from the rule that produced it.
 
 #### Defined in
 
-[src/scheduling/types.ts:669](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L669)
+[src/scheduling/types.ts:669](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L669)
 
----
+___
 
 ### message
 
@@ -70,9 +70,9 @@ Legal source, echoed from the rule that produced it.
 
 #### Defined in
 
-[src/scheduling/types.ts:667](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L667)
+[src/scheduling/types.ts:667](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L667)
 
----
+___
 
 ### required
 
@@ -80,9 +80,9 @@ Legal source, echoed from the rule that produced it.
 
 #### Defined in
 
-[src/scheduling/types.ts:674](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L674)
+[src/scheduling/types.ts:674](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L674)
 
----
+___
 
 ### severity
 
@@ -90,9 +90,9 @@ Legal source, echoed from the rule that produced it.
 
 #### Defined in
 
-[src/scheduling/types.ts:666](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L666)
+[src/scheduling/types.ts:666](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L666)
 
----
+___
 
 ### shiftInstanceId
 
@@ -100,9 +100,9 @@ Legal source, echoed from the rule that produced it.
 
 #### Defined in
 
-[src/scheduling/types.ts:668](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L668)
+[src/scheduling/types.ts:668](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L668)
 
----
+___
 
 ### unit
 
@@ -110,4 +110,4 @@ Legal source, echoed from the rule that produced it.
 
 #### Defined in
 
-[src/scheduling/types.ts:675](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L675)
+[src/scheduling/types.ts:675](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L675)

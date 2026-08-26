@@ -67,6 +67,18 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         // sla.expireAfterMs and schedule.notAfter.
         scheduleNotAfter: () => `${prefix}assignments:schedule:notAfter`,
 
+        // Recurrence keys
+        // Standing recurring templates: raw JSON records ({template, nextAt,
+        // occurrences}). Never matchable themselves — the recurrence sweep
+        // cuts ordinary assignments from them.
+        recurringAssignments: () => `${prefix}assignments:recurring`,
+        // Sweep index: template id scored by when the next materialization is
+        // due (one interval before the occurrence opens). One-shot zRem
+        // claims, like scheduledActivateAt; the sweep re-indexes templates
+        // that fell out (a crashed pass), so an entry here is a cache, not
+        // the source of truth.
+        recurringDueAt: () => `${prefix}assignments:recurring:dueAt`,
+
         // SLA keys
         // Accepted assignments with a completion deadline (sla.completeWithinMs),
         // scored by deadline epoch ms. Only SLA-bearing assignments appear here.

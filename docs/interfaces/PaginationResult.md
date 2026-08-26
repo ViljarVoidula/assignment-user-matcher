@@ -19,9 +19,9 @@
 
 #### Defined in
 
-[src/queries/pagination.ts:16](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/queries/pagination.ts#L16)
+[src/queries/pagination.ts:16](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/queries/pagination.ts#L16)
 
----
+___
 
 ### hasMore
 
@@ -29,19 +29,19 @@
 
 #### Defined in
 
-[src/queries/pagination.ts:18](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/queries/pagination.ts#L18)
+[src/queries/pagination.ts:18](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/queries/pagination.ts#L18)
 
----
+___
 
 ### nextCursor
 
-• **nextCursor**: `null` \| `string`
+• **nextCursor**: ``null`` \| `string`
 
 #### Defined in
 
-[src/queries/pagination.ts:17](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/queries/pagination.ts#L17)
+[src/queries/pagination.ts:17](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/queries/pagination.ts#L17)
 
----
+___
 
 ### total
 
@@ -49,4 +49,4 @@
 
 #### Defined in
 
-[src/queries/pagination.ts:19](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/queries/pagination.ts#L19)
+[src/queries/pagination.ts:19](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/queries/pagination.ts#L19)

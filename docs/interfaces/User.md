@@ -30,9 +30,9 @@
 
 #### Defined in
 
-[src/types/matcher.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L6)
+[src/types/matcher.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L6)
 
----
+___
 
 ### ip
 
@@ -40,9 +40,9 @@
 
 #### Defined in
 
-[src/types/matcher.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L13)
+[src/types/matcher.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L13)
 
----
+___
 
 ### latitude
 
@@ -50,9 +50,9 @@
 
 #### Defined in
 
-[src/types/matcher.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L15)
+[src/types/matcher.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L15)
 
----
+___
 
 ### learnedRoutingWeights
 
@@ -62,9 +62,9 @@ The weights last applied by syncLearnedRoutingWeights(); for observability only.
 
 #### Defined in
 
-[src/types/matcher.ts:29](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L29)
+[src/types/matcher.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L33)
 
----
+___
 
 ### learnedRoutingWeightsSyncedAt
 
@@ -74,9 +74,9 @@ Unix epoch ms of the last learned routing-weights sync for this user.
 
 #### Defined in
 
-[src/types/matcher.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L27)
+[src/types/matcher.ts:31](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L31)
 
----
+___
 
 ### longitude
 
@@ -84,9 +84,9 @@ Unix epoch ms of the last learned routing-weights sync for this user.
 
 #### Defined in
 
-[src/types/matcher.ts:16](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L16)
+[src/types/matcher.ts:16](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L16)
 
----
+___
 
 ### maxBacklogSize
 
@@ -94,9 +94,9 @@ Unix epoch ms of the last learned routing-weights sync for this user.
 
 #### Defined in
 
-[src/types/matcher.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L23)
+[src/types/matcher.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L23)
 
----
+___
 
 ### maxTravelDistanceKm
 
@@ -104,9 +104,9 @@ Unix epoch ms of the last learned routing-weights sync for this user.
 
 #### Defined in
 
-[src/types/matcher.ts:18](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L18)
+[src/types/matcher.ts:18](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L18)
 
----
+___
 
 ### routingWeights
 
@@ -114,21 +114,23 @@ Unix epoch ms of the last learned routing-weights sync for this user.
 
 #### Defined in
 
-[src/types/matcher.ts:10](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L10)
+[src/types/matcher.ts:10](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L10)
 
----
+___
 
 ### routingWeightsSnapshot
 
-• `Optional` **routingWeightsSnapshot**: `Record`\<`string`, `number`\>
+• `Optional` **routingWeightsSnapshot**: ``null`` \| `Record`\<`string`, `number`\>
 
-Snapshot of routingWeights before the last learned sync; used by revertLearnedRoutingWeights().
+Snapshot of routingWeights before the last learned sync; used by
+revertLearnedRoutingWeights(). `null` records "had no routingWeights"
+(tag-based matching), so that state is restorable too.
 
 #### Defined in
 
-[src/types/matcher.ts:25](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L25)
+[src/types/matcher.ts:29](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L29)
 
----
+___
 
 ### tags
 
@@ -136,4 +138,4 @@ Snapshot of routingWeights before the last learned sync; used by revertLearnedRo
 
 #### Defined in
 
-[src/types/matcher.ts:7](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L7)
+[src/types/matcher.ts:7](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L7)

@@ -4,7 +4,7 @@
 
 The ordinary-vs-overtime split.
 
-`WorkingTimeLimits` caps _total_ working time; several member states also
+`WorkingTimeLimits` caps *total* working time; several member states also
 regulate the overtime portion by itself — Estonia makes overtime conditional
 on agreement and compensates it primarily in time off, Germany's ArbZG builds
 the 10h day out of 8 ordinary + 2 averaged, Austria caps overtime separately
@@ -34,26 +34,26 @@ Legal source echoed into verdicts and violations.
 
 #### Defined in
 
-[src/scheduling/types.ts:320](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L320)
+[src/scheduling/types.ts:320](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L320)
 
----
+___
 
 ### compensation
 
-• `Optional` **compensation**: `"timeOff"` \| `"pay"`
+• `Optional` **compensation**: ``"timeOff"`` \| ``"pay"``
 
 How overtime is compensated. `'timeOff'` accrues a `timeOffInLieu` ledger
 entry per employee; `'pay'` leaves compensation to the cost model.
 
 #### Defined in
 
-[src/scheduling/types.ts:318](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L318)
+[src/scheduling/types.ts:318](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L318)
 
----
+___
 
 ### maxOvertimeInWindow
 
-• `Optional` **maxOvertimeInWindow**: \{ `label?`: `string` ; `maxMinutes`: `number` ; `windowDays`: `number` }[]
+• `Optional` **maxOvertimeInWindow**: \{ `label?`: `string` ; `maxMinutes`: `number` ; `windowDays`: `number`  }[]
 
 Caps on overtime minutes over rolling windows, each measured against the
 weekly ordinary baseline pro-rated to the window. Requires a weekly
@@ -61,9 +61,9 @@ baseline (`ordinaryPerWeekMinutes` or per-person contract minutes).
 
 #### Defined in
 
-[src/scheduling/types.ts:308](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L308)
+[src/scheduling/types.ts:308](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L308)
 
----
+___
 
 ### maxOvertimePerDayMinutes
 
@@ -73,9 +73,9 @@ Cap on overtime minutes in any rolling 24h. Requires `ordinaryPerDayMinutes`.
 
 #### Defined in
 
-[src/scheduling/types.ts:302](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L302)
+[src/scheduling/types.ts:302](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L302)
 
----
+___
 
 ### ordinaryPerDayMinutes
 
@@ -85,9 +85,9 @@ Working minutes per rolling 24h beyond which time is overtime.
 
 #### Defined in
 
-[src/scheduling/types.ts:294](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L294)
+[src/scheduling/types.ts:294](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L294)
 
----
+___
 
 ### ordinaryPerWeekMinutes
 
@@ -99,9 +99,9 @@ overtime starts at their agreed hours, not at full time.
 
 #### Defined in
 
-[src/scheduling/types.ts:300](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L300)
+[src/scheduling/types.ts:300](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L300)
 
----
+___
 
 ### requiresConsent
 
@@ -112,4 +112,4 @@ Without recorded consent, any overtime at all is a hard breach.
 
 #### Defined in
 
-[src/scheduling/types.ts:313](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L313)
+[src/scheduling/types.ts:313](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L313)

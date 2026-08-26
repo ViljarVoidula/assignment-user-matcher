@@ -32,8 +32,8 @@ Solve a scheduling problem synchronously. Throws `ScheduleValidationError` on ma
 
 #### Parameters
 
-| Name    | Type                                              |
-| :------ | :------------------------------------------------ |
+| Name | Type |
+| :------ | :------ |
 | `input` | [`ScheduleInput`](../interfaces/ScheduleInput.md) |
 
 #### Returns
@@ -42,4 +42,4 @@ Solve a scheduling problem synchronously. Throws `ScheduleValidationError` on ma
 
 #### Defined in
 
-[src/scheduling/scheduler.class.ts:40](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/scheduler.class.ts#L40)
+[src/scheduling/scheduler.class.ts:40](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/scheduler.class.ts#L40)

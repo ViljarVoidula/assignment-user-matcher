@@ -26,9 +26,9 @@ ISO date the duty started on; may precede `period.startDate`.
 
 #### Defined in
 
-[src/scheduling/types.ts:632](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L632)
+[src/scheduling/types.ts:632](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L632)
 
----
+___
 
 ### employeeId
 
@@ -36,9 +36,9 @@ ISO date the duty started on; may precede `period.startDate`.
 
 #### Defined in
 
-[src/scheduling/types.ts:630](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L630)
+[src/scheduling/types.ts:630](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L630)
 
----
+___
 
 ### endTime
 
@@ -46,9 +46,9 @@ ISO date the duty started on; may precede `period.startDate`.
 
 #### Defined in
 
-[src/scheduling/types.ts:634](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L634)
+[src/scheduling/types.ts:634](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L634)
 
----
+___
 
 ### id
 
@@ -56,9 +56,9 @@ ISO date the duty started on; may precede `period.startDate`.
 
 #### Defined in
 
-[src/scheduling/types.ts:638](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L638)
+[src/scheduling/types.ts:638](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L638)
 
----
+___
 
 ### shiftTypeTag
 
@@ -66,9 +66,9 @@ ISO date the duty started on; may precede `period.startDate`.
 
 #### Defined in
 
-[src/scheduling/types.ts:637](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L637)
+[src/scheduling/types.ts:637](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L637)
 
----
+___
 
 ### startTime
 
@@ -76,9 +76,9 @@ ISO date the duty started on; may precede `period.startDate`.
 
 #### Defined in
 
-[src/scheduling/types.ts:633](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L633)
+[src/scheduling/types.ts:633](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L633)
 
----
+___
 
 ### workingMinutes
 
@@ -88,4 +88,4 @@ Working minutes, if they differ from the elapsed span.
 
 #### Defined in
 
-[src/scheduling/types.ts:636](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L636)
+[src/scheduling/types.ts:636](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L636)

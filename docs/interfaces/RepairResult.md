@@ -19,9 +19,9 @@
 
 #### Defined in
 
-[src/scheduling/operations.ts:159](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L159)
+[src/scheduling/operations.ts:159](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L159)
 
----
+___
 
 ### diff
 
@@ -29,16 +29,16 @@
 
 #### Type declaration
 
-| Name      | Type                                    |
-| :-------- | :-------------------------------------- |
-| `added`   | [`AssignmentPair`](AssignmentPair.md)[] |
+| Name | Type |
+| :------ | :------ |
+| `added` | [`AssignmentPair`](AssignmentPair.md)[] |
 | `removed` | [`AssignmentPair`](AssignmentPair.md)[] |
 
 #### Defined in
 
-[src/scheduling/operations.ts:158](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L158)
+[src/scheduling/operations.ts:158](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L158)
 
----
+___
 
 ### perturbation
 
@@ -46,16 +46,16 @@
 
 #### Type declaration
 
-| Name                 | Type     |
-| :------------------- | :------- |
-| `affectedEmployees`  | `number` |
+| Name | Type |
+| :------ | :------ |
+| `affectedEmployees` | `number` |
 | `changedAssignments` | `number` |
 
 #### Defined in
 
-[src/scheduling/operations.ts:161](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L161)
+[src/scheduling/operations.ts:161](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L161)
 
----
+___
 
 ### violationsIntroduced
 
@@ -63,4 +63,4 @@
 
 #### Defined in
 
-[src/scheduling/operations.ts:160](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L160)
+[src/scheduling/operations.ts:160](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L160)

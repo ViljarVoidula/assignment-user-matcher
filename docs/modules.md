@@ -65,6 +65,8 @@
 - [QueueAuditEntry](interfaces/QueueAuditEntry.md)
 - [QueueAuditOptions](interfaces/QueueAuditOptions.md)
 - [QueueAuditReport](interfaces/QueueAuditReport.md)
+- [RecurrencePolicy](interfaces/RecurrencePolicy.md)
+- [RecurringAssignmentRecord](interfaces/RecurringAssignmentRecord.md)
 - [RedisKeyConfig](interfaces/RedisKeyConfig.md)
 - [ReliabilityMetrics](interfaces/ReliabilityMetrics.md)
 - [RepairCandidate](interfaces/RepairCandidate.md)
@@ -101,6 +103,7 @@
 
 ### Type Aliases
 
+- [ActiveAssignmentInfo](modules.md#activeassignmentinfo)
 - [Assignment](modules.md#assignment)
 - [AssignmentLifecycleEvent](modules.md#assignmentlifecycleevent)
 - [AssignmentStatus](modules.md#assignmentstatus)
@@ -125,11 +128,17 @@
 - [MatcherOptions](modules.md#matcheroptions)
 - [PendingAssignmentInfo](modules.md#pendingassignmentinfo)
 - [QueueStats](modules.md#queuestats)
+- [RecurrenceSweepResult](modules.md#recurrencesweepresult)
+- [RecurringAssignment](modules.md#recurringassignment)
 - [ScheduleSweepResult](modules.md#schedulesweepresult)
 - [Severity](modules.md#severity)
 - [SlaExpirySweepResult](modules.md#slaexpirysweepresult)
 - [Stats](modules.md#stats)
 - [UserLoadInfo](modules.md#userloadinfo)
+- [UserQueryOptions](modules.md#userqueryoptions)
+- [UserQueryResult](modules.md#userqueryresult)
+- [UserStatusFilter](modules.md#userstatusfilter)
+- [UserSummary](modules.md#usersummary)
 - [WorkflowEngineMetrics](modules.md#workflowenginemetrics)
 - [WorkflowEventType](modules.md#workfloweventtype)
 - [WorkflowInstanceStatus](modules.md#workflowinstancestatus)
@@ -140,8 +149,8 @@
 
 ### Variables
 
-- [DEFAULT_AUTO_WEIGHTS_OPTIONS](modules.md#default_auto_weights_options)
-- [DEFAULT_MIN_REST_MINUTES](modules.md#default_min_rest_minutes)
+- [DEFAULT\_AUTO\_WEIGHTS\_OPTIONS](modules.md#default_auto_weights_options)
+- [DEFAULT\_MIN\_REST\_MINUTES](modules.md#default_min_rest_minutes)
 
 ### Functions
 
@@ -186,6 +195,25 @@ Renames and re-exports [AssignmentMatcher](classes/AssignmentMatcher.md)
 
 ## Type Aliases
 
+### ActiveAssignmentInfo
+
+Ƭ **ActiveAssignmentInfo**: `Object`
+
+One accepted (in-progress) assignment of a user, newest first.
+
+#### Type declaration
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `acceptedAt` | `number` | Accept epoch ms (score of the accepted index entry) |
+| `assignmentId` | `string` | - |
+
+#### Defined in
+
+[src/types/matcher.ts:506](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L506)
+
+___
+
 ### Assignment
 
 Ƭ **Assignment**: `Object`
@@ -196,59 +224,59 @@ Renames and re-exports [AssignmentMatcher](classes/AssignmentMatcher.md)
 
 #### Type declaration
 
-| Name               | Type                                                 |
-| :----------------- | :--------------------------------------------------- |
-| `allowedCidrs?`    | `string`[]                                           |
-| `escalation?`      | [`EscalationPolicy`](interfaces/EscalationPolicy.md) |
-| `id`               | `string`                                             |
-| `latitude?`        | `number`                                             |
-| `longitude?`       | `number`                                             |
-| `maxDistanceKm?`   | `number`                                             |
-| `priority?`        | `number`                                             |
-| `requireGeo?`      | `boolean`                                            |
-| `schedule?`        | [`SchedulePolicy`](interfaces/SchedulePolicy.md)     |
-| `skillThresholds?` | `Record`\<`string`, `number`\>                       |
-| `sla?`             | [`SlaPolicy`](interfaces/SlaPolicy.md)               |
-| `tags`             | `string`[]                                           |
-| `vetoedUsers?`     | `string`[]                                           |
+| Name | Type |
+| :------ | :------ |
+| `allowedCidrs?` | `string`[] |
+| `escalation?` | [`EscalationPolicy`](interfaces/EscalationPolicy.md) |
+| `id` | `string` |
+| `latitude?` | `number` |
+| `longitude?` | `number` |
+| `maxDistanceKm?` | `number` |
+| `priority?` | `number` |
+| `requireGeo?` | `boolean` |
+| `schedule?` | [`SchedulePolicy`](interfaces/SchedulePolicy.md) |
+| `skillThresholds?` | `Record`\<`string`, `number`\> |
+| `sla?` | [`SlaPolicy`](interfaces/SlaPolicy.md) |
+| `tags` | `string`[] |
+| `vetoedUsers?` | `string`[] |
 
 #### Defined in
 
-[src/types/matcher.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L33)
+[src/types/matcher.ts:37](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L37)
 
----
+___
 
 ### AssignmentLifecycleEvent
 
-Ƭ **AssignmentLifecycleEvent**: \{ `expiresAt`: `number` ; `kind`: `"pending"` ; `matchedAt`: `number` ; `taskId`: `string` ; `workerId`: `string` } \| \{ `expiredAt`: `number` ; `kind`: `"expired"` ; `taskId`: `string` ; `workerId`: `string` \| `null` } \| \{ `kind`: `"released"` ; `reason`: `"idle"` \| `"operator"` ; `releasedAt`: `number` ; `taskId`: `string` ; `workerId`: `string` } \| \{ `acceptedAt`: `number` ; `kind`: `"accepted"` ; `taskId`: `string` ; `workerId`: `string` } \| \{ `kind`: `"rejected"` ; `rejectedAt`: `number` ; `taskId`: `string` ; `workerId`: `string` } \| \{ `completedAt`: `number` ; `kind`: `"completed"` ; `taskId`: `string` ; `workerId`: `string` } \| \{ `failedAt`: `number` ; `kind`: `"failed"` ; `reason?`: `string` ; `taskId`: `string` ; `workerId`: `string` } \| \{ `blockedPreviousOwner`: `boolean` ; `escalatedAt`: `number` ; `fromWorkerId`: `string` \| `null` ; `kind`: `"escalated"` ; `level`: `number` ; `reason`: `"no-response"` ; `taskId`: `string` } \| \{ `at`: `number` ; `kind`: `"escalationExhausted"` ; `level`: `number` ; `parked`: `boolean` ; `taskId`: `string` } \| \{ `action`: `"notify"` \| `"requeue"` \| `"fail"` \| `"park"` ; `assignment`: [`Assignment`](modules.md#assignment) ; `at`: `number` ; `kind`: `"completionBreached"` ; `taskId`: `string` ; `workerId`: `string` \| `null` } \| \{ `action`: `"drop"` \| `"park"` ; `assignment`: [`Assignment`](modules.md#assignment) ; `at`: `number` ; `kind`: `"slaExpired"` ; `ownerId`: `string` \| `null` ; `taskId`: `string` } \| \{ `action`: `"park"` \| `"fail"` ; `assignment`: [`Assignment`](modules.md#assignment) ; `at`: `number` ; `kind`: `"rejectionBudgetExhausted"` ; `rejections`: `number` ; `taskId`: `string` } \| \{ `at`: `number` ; `kind`: `"scheduleActivated"` ; `taskId`: `string` } \| \{ `action`: `"park"` \| `"drop"` ; `assignment`: [`Assignment`](modules.md#assignment) ; `at`: `number` ; `kind`: `"scheduleMissed"` ; `ownerId`: `string` \| `null` ; `state`: `"scheduled"` \| `"queued"` \| `"pending"` ; `taskId`: `string` }
+Ƭ **AssignmentLifecycleEvent**: \{ `expiresAt`: `number` ; `kind`: ``"pending"`` ; `matchedAt`: `number` ; `taskId`: `string` ; `workerId`: `string`  } \| \{ `expiredAt`: `number` ; `kind`: ``"expired"`` ; `taskId`: `string` ; `workerId`: `string` \| ``null``  } \| \{ `kind`: ``"released"`` ; `reason`: ``"idle"`` \| ``"operator"`` ; `releasedAt`: `number` ; `taskId`: `string` ; `workerId`: `string`  } \| \{ `acceptedAt`: `number` ; `kind`: ``"accepted"`` ; `taskId`: `string` ; `workerId`: `string`  } \| \{ `kind`: ``"rejected"`` ; `rejectedAt`: `number` ; `taskId`: `string` ; `workerId`: `string`  } \| \{ `completedAt`: `number` ; `kind`: ``"completed"`` ; `taskId`: `string` ; `workerId`: `string`  } \| \{ `failedAt`: `number` ; `kind`: ``"failed"`` ; `reason?`: `string` ; `taskId`: `string` ; `workerId`: `string`  } \| \{ `blockedPreviousOwner`: `boolean` ; `escalatedAt`: `number` ; `fromWorkerId`: `string` \| ``null`` ; `kind`: ``"escalated"`` ; `level`: `number` ; `reason`: ``"no-response"`` ; `taskId`: `string`  } \| \{ `at`: `number` ; `kind`: ``"escalationExhausted"`` ; `level`: `number` ; `parked`: `boolean` ; `taskId`: `string`  } \| \{ `action`: ``"notify"`` \| ``"requeue"`` \| ``"fail"`` \| ``"park"`` ; `assignment`: [`Assignment`](modules.md#assignment) ; `at`: `number` ; `kind`: ``"completionBreached"`` ; `taskId`: `string` ; `workerId`: `string` \| ``null``  } \| \{ `action`: ``"drop"`` \| ``"park"`` ; `assignment`: [`Assignment`](modules.md#assignment) ; `at`: `number` ; `kind`: ``"slaExpired"`` ; `ownerId`: `string` \| ``null`` ; `taskId`: `string`  } \| \{ `action`: ``"park"`` \| ``"fail"`` ; `assignment`: [`Assignment`](modules.md#assignment) ; `at`: `number` ; `kind`: ``"rejectionBudgetExhausted"`` ; `rejections`: `number` ; `taskId`: `string`  } \| \{ `at`: `number` ; `kind`: ``"scheduleActivated"`` ; `taskId`: `string`  } \| \{ `action`: ``"park"`` \| ``"drop"`` ; `assignment`: [`Assignment`](modules.md#assignment) ; `at`: `number` ; `kind`: ``"scheduleMissed"`` ; `ownerId`: `string` \| ``null`` ; `state`: ``"scheduled"`` \| ``"queued"`` \| ``"pending"`` ; `taskId`: `string`  } \| \{ `at`: `number` ; `kind`: ``"recurrenceMaterialized"`` ; `occurrence`: `number` ; `opensAt`: `number` ; `recurringId`: `string` ; `taskId`: `string`  } \| \{ `at`: `number` ; `kind`: ``"recurrenceRetired"`` ; `occurrences`: `number` ; `reason`: ``"until"`` \| ``"maxOccurrences"`` ; `recurringId`: `string`  }
 
 #### Defined in
 
-[src/types/matcher.ts:598](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L598)
+[src/types/matcher.ts:767](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L767)
 
----
+___
 
 ### AssignmentStatus
 
-Ƭ **AssignmentStatus**: `"queued"` \| `"pending"` \| `"accepted"`
+Ƭ **AssignmentStatus**: ``"queued"`` \| ``"pending"`` \| ``"accepted"``
 
 #### Defined in
 
-[src/queries/pagination.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/queries/pagination.ts#L6)
+[src/queries/pagination.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/queries/pagination.ts#L6)
 
----
+___
 
 ### AutoRoutingWeightsPolicy
 
-Ƭ **AutoRoutingWeightsPolicy**: `"ucb1"` \| `"confidence"` \| `"thompson"`
+Ƭ **AutoRoutingWeightsPolicy**: ``"ucb1"`` \| ``"confidence"`` \| ``"thompson"``
 
 Synthesis policy for automatic routing weights.
 
 #### Defined in
 
-[src/types/matcher.ts:1490](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1490)
+[src/types/matcher.ts:1691](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1691)
 
----
+___
 
 ### CompletionDeadlineSweepResult
 
@@ -258,25 +286,25 @@ Outcome of one `processCompletionDeadlines()` sweep.
 
 #### Type declaration
 
-| Name       | Type     | Description                                            |
-| :--------- | :------- | :----------------------------------------------------- |
+| Name | Type | Description |
+| :------ | :------ | :------ |
 | `breached` | `number` | Accepted assignments whose completion deadline elapsed |
 
 #### Defined in
 
-[src/types/matcher.ts:714](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L714)
+[src/types/matcher.ts:909](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L909)
 
----
+___
 
 ### Disruption
 
-Ƭ **Disruption**: \{ `employeeId`: `string` ; `from`: `string` ; `kind`: `"absence"` ; `to?`: `string` } \| \{ `employeeId`: `string` ; `kind`: `"noShow"` ; `shiftInstanceId`: `string` } \| \{ `kind`: `"cancelShift"` ; `shiftInstanceId`: `string` }
+Ƭ **Disruption**: \{ `employeeId`: `string` ; `from`: `string` ; `kind`: ``"absence"`` ; `to?`: `string`  } \| \{ `employeeId`: `string` ; `kind`: ``"noShow"`` ; `shiftInstanceId`: `string`  } \| \{ `kind`: ``"cancelShift"`` ; `shiftInstanceId`: `string`  }
 
 #### Defined in
 
-[src/scheduling/operations.ts:137](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L137)
+[src/scheduling/operations.ts:137](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L137)
 
----
+___
 
 ### EscalationSweepResult
 
@@ -286,30 +314,30 @@ Outcome of one `processResponseDeadlines()` sweep.
 
 #### Type declaration
 
-| Name          | Type     | Description                                                  |
-| :------------ | :------- | :----------------------------------------------------------- |
+| Name | Type | Description |
+| :------ | :------ | :------ |
 | `escalations` | `number` | How many of those an escalation policy moved to the next hop |
-| `expired`     | `number` | Pending assignments whose response deadline elapsed          |
-| `parked`      | `number` | How many exhausted their ladder and were parked              |
+| `expired` | `number` | Pending assignments whose response deadline elapsed |
+| `parked` | `number` | How many exhausted their ladder and were parked |
 
 #### Defined in
 
-[src/types/matcher.ts:704](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L704)
+[src/types/matcher.ts:899](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L899)
 
----
+___
 
 ### FairnessMode
 
-Ƭ **FairnessMode**: `"first-come"` \| `"best-match"` \| `"balanced"` \| `"spread-work"`
+Ƭ **FairnessMode**: ``"first-come"`` \| ``"best-match"`` \| ``"balanced"`` \| ``"spread-work"``
 
 Bulk-matching fairness policy. See `MatcherOptions.fairness` for what each
 value does.
 
 #### Defined in
 
-[src/types/matcher.ts:347](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L347)
+[src/types/matcher.ts:516](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L516)
 
----
+___
 
 ### GeoMatchResult
 
@@ -317,21 +345,21 @@ value does.
 
 #### Type declaration
 
-| Name                      | Type      |
-| :------------------------ | :-------- |
-| `distanceKm?`             | `number`  |
-| `effectiveMaxDistanceKm?` | `number`  |
-| `eligible`                | `boolean` |
+| Name | Type |
+| :------ | :------ |
+| `distanceKm?` | `number` |
+| `effectiveMaxDistanceKm?` | `number` |
+| `eligible` | `boolean` |
 
 #### Defined in
 
-[src/types/matcher.ts:291](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L291)
+[src/types/matcher.ts:390](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L390)
 
----
+___
 
 ### GeoMatchingFunction
 
-Ƭ **GeoMatchingFunction**: (`args`: \{ `assignment`: [`Assignment`](modules.md#assignment) ; `defaultMaxDistanceKm?`: `number` ; `user`: [`User`](interfaces/User.md) }) => `Promise`\<[`GeoMatchResult`](modules.md#geomatchresult)\>
+Ƭ **GeoMatchingFunction**: (`args`: \{ `assignment`: [`Assignment`](modules.md#assignment) ; `defaultMaxDistanceKm?`: `number` ; `user`: [`User`](interfaces/User.md)  }) => `Promise`\<[`GeoMatchResult`](modules.md#geomatchresult)\>
 
 #### Type declaration
 
@@ -339,12 +367,12 @@ value does.
 
 ##### Parameters
 
-| Name                         | Type                                  |
-| :--------------------------- | :------------------------------------ |
-| `args`                       | `Object`                              |
-| `args.assignment`            | [`Assignment`](modules.md#assignment) |
-| `args.defaultMaxDistanceKm?` | `number`                              |
-| `args.user`                  | [`User`](interfaces/User.md)          |
+| Name | Type |
+| :------ | :------ |
+| `args` | `Object` |
+| `args.assignment` | [`Assignment`](modules.md#assignment) |
+| `args.defaultMaxDistanceKm?` | `number` |
+| `args.user` | [`User`](interfaces/User.md) |
 
 ##### Returns
 
@@ -352,9 +380,9 @@ value does.
 
 #### Defined in
 
-[src/types/matcher.ts:297](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L297)
+[src/types/matcher.ts:396](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L396)
 
----
+___
 
 ### KeyBuilders
 
@@ -362,9 +390,9 @@ value does.
 
 #### Defined in
 
-[src/utils/keys.ts:142](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/keys.ts#L142)
+[src/utils/keys.ts:160](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/keys.ts#L160)
 
----
+___
 
 ### LearningFeatureExtractor
 
@@ -378,9 +406,9 @@ Pluggable feature extractor for the learning layer
 
 ##### Parameters
 
-| Name         | Type                                                                   |
-| :----------- | :--------------------------------------------------------------------- |
-| `user`       | [`User`](interfaces/User.md)                                           |
+| Name | Type |
+| :------ | :------ |
+| `user` | [`User`](interfaces/User.md) |
 | `assignment` | [`LearningAssignmentContext`](interfaces/LearningAssignmentContext.md) |
 
 ##### Returns
@@ -389,9 +417,9 @@ Pluggable feature extractor for the learning layer
 
 #### Defined in
 
-[src/types/matcher.ts:1436](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1436)
+[src/types/matcher.ts:1637](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1637)
 
----
+___
 
 ### LearningFeatures
 
@@ -401,21 +429,21 @@ Sparse feature vector describing a user/assignment match context
 
 #### Defined in
 
-[src/types/matcher.ts:1426](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1426)
+[src/types/matcher.ts:1627](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1627)
 
----
+___
 
 ### LearningOutcome
 
-Ƭ **LearningOutcome**: `"accept"` \| `"complete"` \| `"reject"` \| `"expire"` \| `"fail"`
+Ƭ **LearningOutcome**: ``"accept"`` \| ``"complete"`` \| ``"reject"`` \| ``"expire"`` \| ``"fail"``
 
 Assignment lifecycle outcomes that generate learning rewards
 
 #### Defined in
 
-[src/types/matcher.ts:1420](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1420)
+[src/types/matcher.ts:1621](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1621)
 
----
+___
 
 ### LearningRewards
 
@@ -425,9 +453,9 @@ Reward values per lifecycle outcome
 
 #### Defined in
 
-[src/types/matcher.ts:1423](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1423)
+[src/types/matcher.ts:1624](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1624)
 
----
+___
 
 ### LearningSignals
 
@@ -437,13 +465,13 @@ Named external signal values (e.g. { accuracy: 0.95, csat: 0.8 })
 
 #### Defined in
 
-[src/types/matcher.ts:1462](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1462)
+[src/types/matcher.ts:1663](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1663)
 
----
+___
 
 ### MachineTaskHandler
 
-Ƭ **MachineTaskHandler**: (`args`: \{ `definition`: [`WorkflowDefinition`](interfaces/WorkflowDefinition.md) ; `instance`: [`WorkflowInstance`](interfaces/WorkflowInstance.md) ; `step`: [`WorkflowStep`](interfaces/WorkflowStep.md) }) => `Promise`\<`Record`\<`string`, `any`\> \| `void`\>
+Ƭ **MachineTaskHandler**: (`args`: \{ `definition`: [`WorkflowDefinition`](interfaces/WorkflowDefinition.md) ; `instance`: [`WorkflowInstance`](interfaces/WorkflowInstance.md) ; `step`: [`WorkflowStep`](interfaces/WorkflowStep.md)  }) => `Promise`\<`Record`\<`string`, `any`\> \| `void`\>
 
 Signature for machine task handlers registered via registerMachineHandler().
 
@@ -453,12 +481,12 @@ Signature for machine task handlers registered via registerMachineHandler().
 
 ##### Parameters
 
-| Name              | Type                                                     |
-| :---------------- | :------------------------------------------------------- |
-| `args`            | `Object`                                                 |
+| Name | Type |
+| :------ | :------ |
+| `args` | `Object` |
 | `args.definition` | [`WorkflowDefinition`](interfaces/WorkflowDefinition.md) |
-| `args.instance`   | [`WorkflowInstance`](interfaces/WorkflowInstance.md)     |
-| `args.step`       | [`WorkflowStep`](interfaces/WorkflowStep.md)             |
+| `args.instance` | [`WorkflowInstance`](interfaces/WorkflowInstance.md) |
+| `args.step` | [`WorkflowStep`](interfaces/WorkflowStep.md) |
 
 ##### Returns
 
@@ -466,9 +494,9 @@ Signature for machine task handlers registered via registerMachineHandler().
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:42](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/managers/WorkflowManager.ts#L42)
+[src/managers/WorkflowManager.ts:42](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/managers/WorkflowManager.ts#L42)
 
----
+___
 
 ### MaintenanceOptions
 
@@ -478,21 +506,22 @@ Which sweeps `startMaintenance()` runs, and how often.
 
 #### Type declaration
 
-| Name                    | Type      | Description                                                                        |
-| :---------------------- | :-------- | :--------------------------------------------------------------------------------- |
-| `completionDeadlines?`  | `boolean` | Completion deadlines (SLA `completeWithinMs`). **`Default`** `ts true `            |
-| `idleUsers?`            | `boolean` | Idle-user release. **`Default`** true when `idleUserTimeoutMs` is set              |
-| `intervalMs?`           | `number`  | Master tick interval for every enabled sweep. **`Default`** `ts 5000 `             |
-| `responseDeadlines?`    | `boolean` | Response deadlines / escalation. **`Default`** `ts true `                          |
-| `scheduled?`            | `boolean` | Scheduled-assignment activations and offer-window misses. **`Default`** `ts true ` |
-| `slaExpiries?`          | `boolean` | Freshness TTL expiries (SLA `expireAfterMs`). **`Default`** `ts true `             |
-| `workflowStepTimeouts?` | `boolean` | Workflow step timeouts. **`Default`** true when `enableWorkflows`                  |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `completionDeadlines?` | `boolean` | Completion deadlines (SLA `completeWithinMs`). **`Default`** ```ts true ``` |
+| `idleUsers?` | `boolean` | Idle-user release. **`Default`** true when `idleUserTimeoutMs` is set |
+| `intervalMs?` | `number` | Master tick interval for every enabled sweep. **`Default`** ```ts 5000 ``` |
+| `recurrence?` | `boolean` | Recurring-assignment materialization. **`Default`** ```ts true ``` |
+| `responseDeadlines?` | `boolean` | Response deadlines / escalation. **`Default`** ```ts true ``` |
+| `scheduled?` | `boolean` | Scheduled-assignment activations and offer-window misses. **`Default`** ```ts true ``` |
+| `slaExpiries?` | `boolean` | Freshness TTL expiries (SLA `expireAfterMs`). **`Default`** ```ts true ``` |
+| `workflowStepTimeouts?` | `boolean` | Workflow step timeouts. **`Default`** true when `enableWorkflows` |
 
 #### Defined in
 
-[src/types/matcher.ts:758](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L758)
+[src/types/matcher.ts:957](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L957)
 
----
+___
 
 ### MaintenanceReport
 
@@ -502,40 +531,42 @@ One pass of `runMaintenanceOnce()`. Counts are per pass, not cumulative.
 
 #### Type declaration
 
-| Name                  | Type     | Description                                                  |
-| :-------------------- | :------- | :----------------------------------------------------------- |
-| `completionBreaches`  | `number` | Accepted assignments whose completion deadline elapsed (SLA) |
-| `escalations`         | `number` | How many of those an escalation policy moved on              |
-| `expiredMatches`      | `number` | Pending assignments whose response deadline elapsed          |
-| `expiredSteps`        | `number` | Workflow steps whose timeout fired                           |
-| `parked`              | `number` | How many exhausted their ladder and were parked              |
-| `releasedIdleUsers`   | `number` | Idle users removed from the pool (see `idleUserTimeoutMs`)   |
-| `scheduleActivations` | `number` | Held assignments enqueued by the scheduled sweep             |
-| `scheduleMisses`      | `number` | Assignments whose offer window (`schedule.notAfter`) elapsed |
-| `slaExpiries`         | `number` | Assignments whose freshness TTL elapsed (SLA)                |
-| `tookMs`              | `number` | Wall-clock duration of the pass                              |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `completionBreaches` | `number` | Accepted assignments whose completion deadline elapsed (SLA) |
+| `escalations` | `number` | How many of those an escalation policy moved on |
+| `expiredMatches` | `number` | Pending assignments whose response deadline elapsed |
+| `expiredSteps` | `number` | Workflow steps whose timeout fired |
+| `parked` | `number` | How many exhausted their ladder and were parked |
+| `recurrenceMaterializations` | `number` | Occurrences materialized from recurring assignments |
+| `recurrenceRetirements` | `number` | Recurring templates retired (bound reached) |
+| `releasedIdleUsers` | `number` | Idle users removed from the pool (see `idleUserTimeoutMs`) |
+| `scheduleActivations` | `number` | Held assignments enqueued by the scheduled sweep |
+| `scheduleMisses` | `number` | Assignments whose offer window (`schedule.notAfter`) elapsed |
+| `slaExpiries` | `number` | Assignments whose freshness TTL elapsed (SLA) |
+| `tookMs` | `number` | Wall-clock duration of the pass |
 
 #### Defined in
 
-[src/types/matcher.ts:734](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L734)
+[src/types/matcher.ts:929](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L929)
 
----
+___
 
 ### MatchDecisionMode
 
-Ƭ **MatchDecisionMode**: [`FairnessMode`](modules.md#fairnessmode) \| `"direct"` \| `"workflow"` \| `"manual"`
+Ƭ **MatchDecisionMode**: [`FairnessMode`](modules.md#fairnessmode) \| ``"direct"`` \| ``"workflow"`` \| ``"manual"``
 
 How the winning user of a decision was arbitrated.
 
 #### Defined in
 
-[src/types/matcher.ts:432](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L432)
+[src/types/matcher.ts:601](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L601)
 
----
+___
 
 ### MatchTraceReason
 
-Ƭ **MatchTraceReason**: \{ `kind`: `"tagWeight"` ; `pattern?`: `string` ; `tag`: `string` ; `weight`: `number` } \| \{ `kind`: `"defaultTag"` ; `weight`: `number` } \| \{ `kind`: `"tagOverlap"` ; `matchedTags`: `string`[] ; `overlapRatio`: `number` } \| \{ `kind`: `"customScore"` ; `score`: `number` } \| \{ `kind`: `"veto"` ; `pattern`: `string` ; `source?`: `"manual"` \| `"learned"` ; `tag`: `string` } \| \{ `kind`: `"assignmentVeto"` } \| \{ `kind`: `"rejectedPreviously"` } \| \{ `kind`: `"noPositiveWeights"` } \| \{ `actual`: `number` ; `kind`: `"skillThreshold"` ; `required`: `number` ; `skill`: `string` } \| \{ `ip?`: `string` ; `kind`: `"cidrMismatch"` } \| \{ `distanceKm?`: `number` ; `kind`: `"geoDistance"` ; `maxDistanceKm?`: `number` ; `withinRange`: `boolean` } \| \{ `boost`: `number` ; `kind`: `"geoBoost"` } \| \{ `backlog`: `number` ; `kind`: `"backlogFull"` ; `limit`: `number` } \| \{ `kind`: `"paused"` } \| \{ `boost`: `number` ; `kind`: `"learningBoost"` ; `predicted`: `number` ; `shadowMode`: `boolean` } \| \{ `kind`: `"workflowTargeted"` } \| \{ `force`: `boolean` ; `kind`: `"manualAssignment"` ; `previousOwnerId`: `string` \| `null` }
+Ƭ **MatchTraceReason**: \{ `kind`: ``"tagWeight"`` ; `pattern?`: `string` ; `tag`: `string` ; `weight`: `number`  } \| \{ `kind`: ``"defaultTag"`` ; `weight`: `number`  } \| \{ `kind`: ``"tagOverlap"`` ; `matchedTags`: `string`[] ; `overlapRatio`: `number`  } \| \{ `kind`: ``"customScore"`` ; `score`: `number`  } \| \{ `kind`: ``"veto"`` ; `pattern`: `string` ; `source?`: ``"manual"`` \| ``"learned"`` ; `tag`: `string`  } \| \{ `kind`: ``"assignmentVeto"``  } \| \{ `kind`: ``"rejectedPreviously"``  } \| \{ `kind`: ``"noPositiveWeights"``  } \| \{ `actual`: `number` ; `kind`: ``"skillThreshold"`` ; `required`: `number` ; `skill`: `string`  } \| \{ `ip?`: `string` ; `kind`: ``"cidrMismatch"``  } \| \{ `distanceKm?`: `number` ; `kind`: ``"geoDistance"`` ; `maxDistanceKm?`: `number` ; `withinRange`: `boolean`  } \| \{ `boost`: `number` ; `kind`: ``"geoBoost"``  } \| \{ `backlog`: `number` ; `kind`: ``"backlogFull"`` ; `limit`: `number`  } \| \{ `kind`: ``"paused"``  } \| \{ `boost`: `number` ; `kind`: ``"learningBoost"`` ; `predicted`: `number` ; `shadowMode`: `boolean`  } \| \{ `kind`: ``"workflowTargeted"``  } \| \{ `force`: `boolean` ; `kind`: ``"manualAssignment"`` ; `previousOwnerId`: `string` \| ``null``  }
 
 One factor that contributed to (or excluded) a candidate in a routing
 decision. Discriminated on `kind` so consumers can render/aggregate without
@@ -544,9 +575,9 @@ the rule that fired and the values it compared.
 
 #### Defined in
 
-[src/types/matcher.ts:377](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L377)
+[src/types/matcher.ts:546](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L546)
 
----
+___
 
 ### MatcherOptions
 
@@ -554,82 +585,82 @@ the rule that fired and the values it compared.
 
 #### Type declaration
 
-| Name                                | Type                                                                                                                                                                                                                               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| :---------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `autoRoutingWeights?`               | [`AutoRoutingWeightsOptions`](interfaces/AutoRoutingWeightsOptions.md)                                                                                                                                                             | Tuning for automatic routing-weight synthesis (UCB1 policy)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `autoRoutingWeightsSyncIntervalMs?` | `number`                                                                                                                                                                                                                           | Milliseconds between automatic learned routing-weight syncs for all tracked users. When unset (default), sync remains operator-driven. Set on at most one replica per deployment; a Redis lock prevents overlapping runs.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `circuitBreakerPersistState?`       | `boolean`                                                                                                                                                                                                                          | Persist circuit breaker state to Redis for distributed awareness (default: false)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `circuitBreakerShared?`             | `boolean`                                                                                                                                                                                                                          | Share circuit breaker failure counts across replicas via Redis so breakers converge in multi-orchestrator deployments (default: false).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `deadLetterQueueAlertThreshold?`    | `number`                                                                                                                                                                                                                           | Alert threshold for Dead Letter Queue size (default: 100)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `decisionTraceMaxCandidates?`       | `number`                                                                                                                                                                                                                           | Maximum candidates stored per trace (default: 25). The chosen candidate is always kept; remaining slots go to the highest-ranked candidates.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `decisionTraceMaxEntries?`          | `number`                                                                                                                                                                                                                           | Maximum decision traces retained in the Redis stream (default: 1000, approximate trim)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `enableAutoRoutingWeights?`         | `boolean`                                                                                                                                                                                                                          | Track per-user, per-tag reward statistics and enable automatic routingWeights generation from RL outcomes (requires enableLearning). Default: false.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `enableDecisionTraces?`             | `boolean`                                                                                                                                                                                                                          | Persist an auditable decision trace for every routing decision (default: false). Each matched assignment gets a `MatchDecisionTrace` — winner, arbitration mode, and every evaluated candidate with score breakdown and exclusion reasons — appended to a capped Redis stream and queryable via `getDecisionTraces()`. Capture happens during the matching pass itself, so the record reflects what the engine actually did rather than a reconstruction. Toggleable at runtime via `setDecisionTraces()`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `enableDefaultMatching?`            | `boolean`                                                                                                                                                                                                                          | -                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `enableFairTiebreaker?`             | `boolean`                                                                                                                                                                                                                          | Opt-in global best-match arbitration for bulk matching (default: false, preserving existing behavior). When `matchUsersAssignments()` is called with no userId, every eligible user is normally evaluated in parallel and independently claims every assignment they qualify for — when two or more users are eligible for the same assignment, whichever user's claim reaches Redis first wins, regardless of their relative score. With this enabled, candidates are instead collected across _all_ users first, sorted by score descending, and claimed greedily in that order — so the best-fit eligible candidate wins each assignment deterministically. Uses plain weighted-tag/geo score (the same formula as the non-learning path) as the fairness comparator; the contextual-bandit learning layer, if enabled, still re-ranks each user's own accepted backlog ordering but does not influence which user wins a contested assignment in this mode.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `enableGeoMatching?`                | `boolean`                                                                                                                                                                                                                          | Enable distance-based geolocation matching (default: false)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `enableGracefulDegradation?`        | `boolean`                                                                                                                                                                                                                          | Enable graceful degradation mode when Redis is unavailable (default: false)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `enableLearning?`                   | `boolean`                                                                                                                                                                                                                          | Enable the contextual-bandit learning layer (default: false)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `enableOpenTelemetry?`              | `boolean`                                                                                                                                                                                                                          | Enable OpenTelemetry tracing (default: false)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `enableReliabilityMetrics?`         | `boolean`                                                                                                                                                                                                                          | Enable circuit breaker and reliability metrics (default: true when telemetry enabled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `enableWorkflows?`                  | `boolean`                                                                                                                                                                                                                          | Enable workflow orchestration features                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `fairness?`                         | [`FairnessMode`](modules.md#fairnessmode)                                                                                                                                                                                          | One-word fairness policy for bulk matching — the friendly alternative to tuning `enableFairTiebreaker` / `fairnessLoadPenalty` / `fairnessTieBand` by hand: - `'first-come'` (default): whoever's claim reaches Redis first wins a contested assignment — fastest, but the winner is arbitrary. - `'best-match'`: the highest-scoring eligible user wins every contested assignment, deterministically. - `'balanced'`: best match wins, but near-ties (scores within ~5% of the typical candidate score) go to whoever is carrying less work. - `'spread-work'`: work is spread as evenly as skills allow — each assignment already on someone's plate discounts their next bid by half the typical candidate score, so being good (and fast) doesn't mean drowning in work while capable teammates sit idle. The underlying numbers are derived automatically from the candidate scores of each matching pass, so there is nothing to calibrate. `'balanced'` and `'spread-work'` also include a rolling-window guardrail by default: nobody receives at more than double the team's average grant rate over `fairnessWindowMs` (one hour unless changed) — see `fairnessMaxPerWindow` to set an explicit ceiling instead, or pass `Infinity` there to opt out. Setting `fairnessLoadPenalty` / `fairnessTieBand` explicitly overrides the derived values; setting `fairness` overrides `enableFairTiebreaker`. Switchable at runtime via `setFairness(mode)`; every fairness knob (not just the mode) can be retuned live with `setFairnessConfig(config)`. |
-| `fairnessLoadPenalty?`              | `number`                                                                                                                                                                                                                           | Load-penalized scoring for fair-tiebreaker arbitration (default: 0, disabled; requires `enableFairTiebreaker`). Each assignment already on a user's backlog — including ones won earlier in the same matching pass — subtracts this amount from their effective score when competing for the next contested assignment. Pure best-score-wins arbitration otherwise saturates the top scorer to `maxUserBacklogSize` every pass; a penalty makes distribution progressive: the specialist still wins their first picks, but once loaded they lose marginal contests to an idle, still-capable candidate. Pick a value relative to your score scale (base priority + summed routing weights).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `fairnessMaxPerWindow?`             | `number`                                                                                                                                                                                                                           | Hard cap on how many assignments a single user may be granted within a rolling time window (default: undefined, disabled; applies in any `fairness` mode other than `'first-come'`). The backlog cap alone can't protect diligent users: someone who accepts and completes work quickly keeps freeing backlog slots and keeps winning, so speed is rewarded with ever more work. This cap counts _granted_ assignments over `fairnessWindowMs` regardless of how fast they were cleared; once a user hits it, contested assignments spill to the next-best eligible user (or stay queued) until the window rolls. Workflow-targeted assignments are direct handoffs and bypass the cap so workflows never stall. When left undefined, the `'balanced'` / `'spread-work'` presets supply a team-relative guardrail automatically: `max(maxUserBacklogSize, 2 x the team's average grants in the window)`, recomputed each pass, so it adapts to any deployment's volume without configuration. Set an explicit number to pin the ceiling, or `Infinity` to disable the window cap entirely.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `fairnessTieBand?`                  | `number`                                                                                                                                                                                                                           | Tie-band arbitration for fair-tiebreaker mode (default: 0, disabled; requires `enableFairTiebreaker`). Candidate scores falling in the same band-sized bucket (`floor(score / fairnessTieBand)`) are treated as tied, and the tie goes to the user currently carrying the least work. Scores in different buckets still resolve strictly by score, so clear skill differences always dominate — only near-ties get load-balanced. Note the bucket boundaries are fixed, so two scores less than a band apart can still straddle a boundary and resolve by score.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `fairnessWindowMs?`                 | `number`                                                                                                                                                                                                                           | Rolling window length in milliseconds for `fairnessMaxPerWindow` (default: 3600000 — one hour).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `geoDefaultMaxDistanceKm?`          | `number`                                                                                                                                                                                                                           | Global fallback cap in kilometers when assignment/user-specific caps are absent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `geoMatchingFunction?`              | [`GeoMatchingFunction`](modules.md#geomatchingfunction)                                                                                                                                                                            | Custom geolocation matcher override                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `geoScoreWeight?`                   | `number`                                                                                                                                                                                                                           | Proximity boost weight added to combined priority (default: 0)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `idleUserTimeoutMs?`                | `number`                                                                                                                                                                                                                           | Opt-in idle user auto-rejection. When set, users that have pending (not yet accepted/rejected) assignments and show no activity for this many milliseconds are removed from the matching pool by processIdleUsers(), and their pending assignments are requeued. Disabled when undefined (default), preserving existing behavior.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `learningBoostFactor?`              | `number`                                                                                                                                                                                                                           | Multiplier applied to predicted reward when re-ranking candidates (default: 1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `learningDecisionTtlMs?`            | `number`                                                                                                                                                                                                                           | TTL for stored decision contexts in ms (default: 604800000 = 7 days)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `learningExplorationRate?`          | `number`                                                                                                                                                                                                                           | Epsilon-greedy exploration rate in [0, 1] (default: 0.05)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `learningFeatureExtractor?`         | [`LearningFeatureExtractor`](modules.md#learningfeatureextractor)                                                                                                                                                                  | Custom feature extractor; defaults to tag/skill/overlap/embedding features                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `learningFeedbackTtlMs?`            | `number`                                                                                                                                                                                                                           | TTL for archived episodes awaiting external feedback in ms (default: 604800000 = 7 days)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `learningRate?`                     | `number`                                                                                                                                                                                                                           | SGD learning rate for online model updates (default: 0.1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `learningRewards?`                  | `Partial`\<[`LearningRewards`](modules.md#learningrewards)\>                                                                                                                                                                       | Override rewards per lifecycle outcome (merged with defaults)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `learningShadowMode?`               | `boolean`                                                                                                                                                                                                                          | Shadow mode: record decisions and learn, but never alter ranking (default: false)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `learningSignalWeights?`            | `Record`\<`string`, `number`\>                                                                                                                                                                                                     | Weights applied to named external feedback signals when computing rewards (default weight: 1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `learningSlaTightnessReferenceMs?`  | `number`                                                                                                                                                                                                                           | Reference duration (ms) used to normalize the `sla:tightness` learning feature (default: 3600000 = 1 hour). An assignment with `sla.completeWithinMs` equal to this value gets tightness 0; shorter deadlines approach 1. Only used by the default feature extractor.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `matchExpirationMs?`                | `number`                                                                                                                                                                                                                           | -                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `matchingFunction?`                 | (`user`: [`User`](interfaces/User.md), `assignmentTags`: `string`, `assignmentPriority`: `number` \| `string`, `assignmentId?`: `string`, `skillThresholds?`: `Record`\<`string`, `number`\>) => `Promise`\<[`number`, `number`]\> | -                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `maxUserBacklogSize?`               | `number`                                                                                                                                                                                                                           | -                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `onAssignmentLifecycle?`            | (`event`: [`AssignmentLifecycleEvent`](modules.md#assignmentlifecycleevent)) => `void`                                                                                                                                             | -                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `onMatchDecision?`                  | (`trace`: [`MatchDecisionTrace`](interfaces/MatchDecisionTrace.md)) => `void`                                                                                                                                                      | -                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `onWorkflowEvent?`                  | (`transition`: [`WorkflowTransition`](modules.md#workflowtransition)) => `void`                                                                                                                                                    | -                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `prioritizationFunction?`           | (...`args`: ([`Assignment`](modules.md#assignment) \| `undefined`)[]) => `Promise`\<`number`\>                                                                                                                                     | -                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `redisCommandTimeout?`              | `number`                                                                                                                                                                                                                           | Command timeout in ms (default: 3000)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `redisConnectTimeout?`              | `number`                                                                                                                                                                                                                           | Connection timeout in ms (default: 10000)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `redisEnableOfflineQueue?`          | `boolean`                                                                                                                                                                                                                          | Enable offline queue for commands during disconnect (default: true)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `redisEnableReadyCheck?`            | `boolean`                                                                                                                                                                                                                          | Enable ready check before considering connection successful (default: true)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `redisHealthCheckInterval?`         | `number`                                                                                                                                                                                                                           | Health check interval in ms (default: 30000)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `redisInitialRetryDelay?`           | `number`                                                                                                                                                                                                                           | Initial delay between retries in ms (default: 50)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `redisMaxRetries?`                  | `number`                                                                                                                                                                                                                           | Maximum number of reconnection attempts (default: 10)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `redisMaxRetryDelay?`               | `number`                                                                                                                                                                                                                           | Maximum delay between retries in ms (default: 2000)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `redisPrefix?`                      | `string`                                                                                                                                                                                                                           | -                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `relevantBatchSize?`                | `number`                                                                                                                                                                                                                           | -                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `streamConsumerGroup?`              | `string`                                                                                                                                                                                                                           | Consumer group name for Redis Streams (defaults to 'orchestrator')                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `streamConsumerName?`               | `string`                                                                                                                                                                                                                           | Consumer name within the group (defaults to random UUID)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `workflowAuditEnabled?`             | `boolean`                                                                                                                                                                                                                          | Enable audit trail stream for compliance (default: false)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `workflowCircuitBreakerResetMs?`    | `number`                                                                                                                                                                                                                           | Time to wait before attempting to close circuit breaker in ms (default: 30000)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `workflowCircuitBreakerThreshold?`  | `number`                                                                                                                                                                                                                           | Number of failures before circuit breaker opens (default: 5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `workflowEventBatchSize?`           | `number`                                                                                                                                                                                                                           | Max stream entries read per orchestrator poll (XREADGROUP COUNT, default: 10)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `workflowIdempotencyTtlMs?`         | `number`                                                                                                                                                                                                                           | TTL for idempotency keys in milliseconds (default: 86400000 = 24h)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `workflowInstanceRetentionMs?`      | `number`                                                                                                                                                                                                                           | TTL applied to terminal (completed/failed/cancelled) workflow instances, including cleanup of registry, per-user, and active-index entries. When unset (default), terminal instances are kept forever.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `workflowMaxEventsPerSecond?`       | `number`                                                                                                                                                                                                                           | Per-replica throttle on workflow event processing (events per second). Applies to orchestrator stream consumption and scheduled-retry draining. When unset (default), events are processed as fast as possible.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `workflowMaxRetries?`               | `number`                                                                                                                                                                                                                           | Maximum retries for failed workflow events before moving to DLQ (default: 3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `workflowOrphanReclaimMs?`          | `number`                                                                                                                                                                                                                           | Minimum idle time before reclaiming orphaned messages in ms (default: 60000 = 1min)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `workflowPollBlockMs?`              | `number`                                                                                                                                                                                                                           | Blocking wait per orchestrator poll in ms (XREADGROUP BLOCK, default: 5000)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `workflowReclaimPollIntervalMs?`    | `number`                                                                                                                                                                                                                           | Polling interval for reclaim loop in ms (default: 5000)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `workflowRetryBackoffMs?`           | `number`                                                                                                                                                                                                                           | Initial backoff delay for scheduled workflow event retries in ms (default: 1000)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `workflowSnapshotDefinitions?`      | `boolean`                                                                                                                                                                                                                          | Snapshot workflow definitions at instance creation for versioning (default: true)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `autoRoutingWeights?` | [`AutoRoutingWeightsOptions`](interfaces/AutoRoutingWeightsOptions.md) | Tuning for automatic routing-weight synthesis (UCB1 policy) |
+| `autoRoutingWeightsSyncIntervalMs?` | `number` | Milliseconds between automatic learned routing-weight syncs for all tracked users. When unset (default), sync remains operator-driven. Set on at most one replica per deployment; a Redis lock prevents overlapping runs. |
+| `circuitBreakerPersistState?` | `boolean` | Persist circuit breaker state to Redis for distributed awareness (default: false) |
+| `circuitBreakerShared?` | `boolean` | Share circuit breaker failure counts across replicas via Redis so breakers converge in multi-orchestrator deployments (default: false). |
+| `deadLetterQueueAlertThreshold?` | `number` | Alert threshold for Dead Letter Queue size (default: 100) |
+| `decisionTraceMaxCandidates?` | `number` | Maximum candidates stored per trace (default: 25). The chosen candidate is always kept; remaining slots go to the highest-ranked candidates. |
+| `decisionTraceMaxEntries?` | `number` | Maximum decision traces retained in the Redis stream (default: 1000, approximate trim) |
+| `enableAutoRoutingWeights?` | `boolean` | Track per-user, per-tag reward statistics and enable automatic routingWeights generation from RL outcomes (requires enableLearning). Default: false. |
+| `enableDecisionTraces?` | `boolean` | Persist an auditable decision trace for every routing decision (default: false). Each matched assignment gets a `MatchDecisionTrace` — winner, arbitration mode, and every evaluated candidate with score breakdown and exclusion reasons — appended to a capped Redis stream and queryable via `getDecisionTraces()`. Capture happens during the matching pass itself, so the record reflects what the engine actually did rather than a reconstruction. Toggleable at runtime via `setDecisionTraces()`. |
+| `enableDefaultMatching?` | `boolean` | - |
+| `enableFairTiebreaker?` | `boolean` | Opt-in global best-match arbitration for bulk matching (default: false, preserving existing behavior). When `matchUsersAssignments()` is called with no userId, every eligible user is normally evaluated in parallel and independently claims every assignment they qualify for — when two or more users are eligible for the same assignment, whichever user's claim reaches Redis first wins, regardless of their relative score. With this enabled, candidates are instead collected across *all* users first, sorted by score descending, and claimed greedily in that order — so the best-fit eligible candidate wins each assignment deterministically. Uses plain weighted-tag/geo score (the same formula as the non-learning path) as the fairness comparator; the contextual-bandit learning layer, if enabled, still re-ranks each user's own accepted backlog ordering but does not influence which user wins a contested assignment in this mode. |
+| `enableGeoMatching?` | `boolean` | Enable distance-based geolocation matching (default: false) |
+| `enableGracefulDegradation?` | `boolean` | Enable graceful degradation mode when Redis is unavailable (default: false) |
+| `enableLearning?` | `boolean` | Enable the contextual-bandit learning layer (default: false) |
+| `enableOpenTelemetry?` | `boolean` | Enable OpenTelemetry tracing (default: false) |
+| `enableReliabilityMetrics?` | `boolean` | Enable circuit breaker and reliability metrics (default: true when telemetry enabled) |
+| `enableWorkflows?` | `boolean` | Enable workflow orchestration features |
+| `fairness?` | [`FairnessMode`](modules.md#fairnessmode) | One-word fairness policy for bulk matching — the friendly alternative to tuning `enableFairTiebreaker` / `fairnessLoadPenalty` / `fairnessTieBand` by hand: - `'first-come'` (default): whoever's claim reaches Redis first wins a contested assignment — fastest, but the winner is arbitrary. - `'best-match'`: the highest-scoring eligible user wins every contested assignment, deterministically. - `'balanced'`: best match wins, but near-ties (scores within ~5% of the typical candidate score) go to whoever is carrying less work. - `'spread-work'`: work is spread as evenly as skills allow — each assignment already on someone's plate discounts their next bid by half the typical candidate score, so being good (and fast) doesn't mean drowning in work while capable teammates sit idle. The underlying numbers are derived automatically from the candidate scores of each matching pass, so there is nothing to calibrate. `'balanced'` and `'spread-work'` also include a rolling-window guardrail by default: nobody receives at more than double the team's average grant rate over `fairnessWindowMs` (one hour unless changed) — see `fairnessMaxPerWindow` to set an explicit ceiling instead, or pass `Infinity` there to opt out. Setting `fairnessLoadPenalty` / `fairnessTieBand` explicitly overrides the derived values; setting `fairness` overrides `enableFairTiebreaker`. Switchable at runtime via `setFairness(mode)`; every fairness knob (not just the mode) can be retuned live with `setFairnessConfig(config)`. |
+| `fairnessLoadPenalty?` | `number` | Load-penalized scoring for fair-tiebreaker arbitration (default: 0, disabled; requires `enableFairTiebreaker`). Each assignment already on a user's backlog — including ones won earlier in the same matching pass — subtracts this amount from their effective score when competing for the next contested assignment. Pure best-score-wins arbitration otherwise saturates the top scorer to `maxUserBacklogSize` every pass; a penalty makes distribution progressive: the specialist still wins their first picks, but once loaded they lose marginal contests to an idle, still-capable candidate. Pick a value relative to your score scale (base priority + summed routing weights). |
+| `fairnessMaxPerWindow?` | `number` | Hard cap on how many assignments a single user may be granted within a rolling time window (default: undefined, disabled; applies in any `fairness` mode other than `'first-come'`). The backlog cap alone can't protect diligent users: someone who accepts and completes work quickly keeps freeing backlog slots and keeps winning, so speed is rewarded with ever more work. This cap counts *granted* assignments over `fairnessWindowMs` regardless of how fast they were cleared; once a user hits it, contested assignments spill to the next-best eligible user (or stay queued) until the window rolls. Workflow-targeted assignments are direct handoffs and bypass the cap so workflows never stall. When left undefined, the `'balanced'` / `'spread-work'` presets supply a team-relative guardrail automatically: `max(maxUserBacklogSize, 2 x the team's average grants in the window)`, recomputed each pass, so it adapts to any deployment's volume without configuration. Set an explicit number to pin the ceiling, or `Infinity` to disable the window cap entirely. |
+| `fairnessTieBand?` | `number` | Tie-band arbitration for fair-tiebreaker mode (default: 0, disabled; requires `enableFairTiebreaker`). Candidate scores falling in the same band-sized bucket (`floor(score / fairnessTieBand)`) are treated as tied, and the tie goes to the user currently carrying the least work. Scores in different buckets still resolve strictly by score, so clear skill differences always dominate — only near-ties get load-balanced. Note the bucket boundaries are fixed, so two scores less than a band apart can still straddle a boundary and resolve by score. |
+| `fairnessWindowMs?` | `number` | Rolling window length in milliseconds for `fairnessMaxPerWindow` (default: 3600000 — one hour). |
+| `geoDefaultMaxDistanceKm?` | `number` | Global fallback cap in kilometers when assignment/user-specific caps are absent |
+| `geoMatchingFunction?` | [`GeoMatchingFunction`](modules.md#geomatchingfunction) | Custom geolocation matcher override |
+| `geoScoreWeight?` | `number` | Proximity boost weight added to combined priority (default: 0) |
+| `idleUserTimeoutMs?` | `number` | Opt-in idle user auto-rejection. When set, users that have pending (not yet accepted/rejected) assignments and show no activity for this many milliseconds are removed from the matching pool by processIdleUsers(), and their pending assignments are requeued. Disabled when undefined (default), preserving existing behavior. |
+| `learningBoostFactor?` | `number` | Multiplier applied to predicted reward when re-ranking candidates (default: 1) |
+| `learningDecisionTtlMs?` | `number` | TTL for stored decision contexts in ms (default: 604800000 = 7 days) |
+| `learningExplorationRate?` | `number` | Epsilon-greedy exploration rate in [0, 1] (default: 0.05) |
+| `learningFeatureExtractor?` | [`LearningFeatureExtractor`](modules.md#learningfeatureextractor) | Custom feature extractor; defaults to tag/skill/overlap/embedding features |
+| `learningFeedbackTtlMs?` | `number` | TTL for archived episodes awaiting external feedback in ms (default: 604800000 = 7 days) |
+| `learningRate?` | `number` | SGD learning rate for online model updates (default: 0.1) |
+| `learningRewards?` | `Partial`\<[`LearningRewards`](modules.md#learningrewards)\> | Override rewards per lifecycle outcome (merged with defaults) |
+| `learningShadowMode?` | `boolean` | Shadow mode: record decisions and learn, but never alter ranking (default: false) |
+| `learningSignalWeights?` | `Record`\<`string`, `number`\> | Weights applied to named external feedback signals when computing rewards (default weight: 1) |
+| `learningSlaTightnessReferenceMs?` | `number` | Reference duration (ms) used to normalize the `sla:tightness` learning feature (default: 3600000 = 1 hour). An assignment with `sla.completeWithinMs` equal to this value gets tightness 0; shorter deadlines approach 1. Only used by the default feature extractor. |
+| `matchExpirationMs?` | `number` | - |
+| `matchingFunction?` | (`user`: [`User`](interfaces/User.md), `assignmentTags`: `string`, `assignmentPriority`: `number` \| `string`, `assignmentId?`: `string`, `skillThresholds?`: `Record`\<`string`, `number`\>) => `Promise`\<[`number`, `number`]\> | - |
+| `maxUserBacklogSize?` | `number` | - |
+| `onAssignmentLifecycle?` | (`event`: [`AssignmentLifecycleEvent`](modules.md#assignmentlifecycleevent)) => `void` | - |
+| `onMatchDecision?` | (`trace`: [`MatchDecisionTrace`](interfaces/MatchDecisionTrace.md)) => `void` | - |
+| `onWorkflowEvent?` | (`transition`: [`WorkflowTransition`](modules.md#workflowtransition)) => `void` | - |
+| `prioritizationFunction?` | (...`args`: ([`Assignment`](modules.md#assignment) \| `undefined`)[]) => `Promise`\<`number`\> | - |
+| `redisCommandTimeout?` | `number` | Command timeout in ms (default: 3000) |
+| `redisConnectTimeout?` | `number` | Connection timeout in ms (default: 10000) |
+| `redisEnableOfflineQueue?` | `boolean` | Enable offline queue for commands during disconnect (default: true) |
+| `redisEnableReadyCheck?` | `boolean` | Enable ready check before considering connection successful (default: true) |
+| `redisHealthCheckInterval?` | `number` | Health check interval in ms (default: 30000) |
+| `redisInitialRetryDelay?` | `number` | Initial delay between retries in ms (default: 50) |
+| `redisMaxRetries?` | `number` | Maximum number of reconnection attempts (default: 10) |
+| `redisMaxRetryDelay?` | `number` | Maximum delay between retries in ms (default: 2000) |
+| `redisPrefix?` | `string` | - |
+| `relevantBatchSize?` | `number` | - |
+| `streamConsumerGroup?` | `string` | Consumer group name for Redis Streams (defaults to 'orchestrator') |
+| `streamConsumerName?` | `string` | Consumer name within the group (defaults to random UUID) |
+| `workflowAuditEnabled?` | `boolean` | Enable audit trail stream for compliance (default: false) |
+| `workflowCircuitBreakerResetMs?` | `number` | Time to wait before attempting to close circuit breaker in ms (default: 30000) |
+| `workflowCircuitBreakerThreshold?` | `number` | Number of failures before circuit breaker opens (default: 5) |
+| `workflowEventBatchSize?` | `number` | Max stream entries read per orchestrator poll (XREADGROUP COUNT, default: 10) |
+| `workflowIdempotencyTtlMs?` | `number` | TTL for idempotency keys in milliseconds (default: 86400000 = 24h) |
+| `workflowInstanceRetentionMs?` | `number` | TTL applied to terminal (completed/failed/cancelled) workflow instances, including cleanup of registry, per-user, and active-index entries. When unset (default), terminal instances are kept forever. |
+| `workflowMaxEventsPerSecond?` | `number` | Per-replica throttle on workflow event processing (events per second). Applies to orchestrator stream consumption and scheduled-retry draining. When unset (default), events are processed as fast as possible. |
+| `workflowMaxRetries?` | `number` | Maximum retries for failed workflow events before moving to DLQ (default: 3) |
+| `workflowOrphanReclaimMs?` | `number` | Minimum idle time before reclaiming orphaned messages in ms (default: 60000 = 1min) |
+| `workflowPollBlockMs?` | `number` | Blocking wait per orchestrator poll in ms (XREADGROUP BLOCK, default: 5000) |
+| `workflowReclaimPollIntervalMs?` | `number` | Polling interval for reclaim loop in ms (default: 5000) |
+| `workflowRetryBackoffMs?` | `number` | Initial backoff delay for scheduled workflow event retries in ms (default: 1000) |
+| `workflowSnapshotDefinitions?` | `boolean` | Snapshot workflow definitions at instance creation for versioning (default: true) |
 
 #### Defined in
 
-[src/types/matcher.ts:775](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L775)
+[src/types/matcher.ts:976](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L976)
 
----
+___
 
 ### PendingAssignmentInfo
 
@@ -637,19 +668,19 @@ the rule that fired and the values it compared.
 
 #### Type declaration
 
-| Name           | Type                                  |
-| :------------- | :------------------------------------ |
-| `assignment`   | [`Assignment`](modules.md#assignment) |
-| `expiresAt`    | `number` \| `null`                    |
-| `ownerId`      | `string` \| `null`                    |
-| `pendingForMs` | `number` \| `null`                    |
-| `pendingSince` | `number` \| `null`                    |
+| Name | Type |
+| :------ | :------ |
+| `assignment` | [`Assignment`](modules.md#assignment) |
+| `expiresAt` | `number` \| ``null`` |
+| `ownerId` | `string` \| ``null`` |
+| `pendingForMs` | `number` \| ``null`` |
+| `pendingSince` | `number` \| ``null`` |
 
 #### Defined in
 
-[src/types/matcher.ts:335](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L335)
+[src/types/matcher.ts:434](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L434)
 
----
+___
 
 ### QueueStats
 
@@ -662,19 +693,53 @@ removal), and per-user load.
 
 #### Type declaration
 
-| Name              | Type                                        | Description                                                         |
-| :---------------- | :------------------------------------------ | :------------------------------------------------------------------ |
-| `oldestWaitingMs` | `number` \| `null`                          | Age in ms of the oldest not-yet-accepted assignment; null when none |
-| `pending`         | `number`                                    | -                                                                   |
-| `perUser`         | [`UserLoadInfo`](modules.md#userloadinfo)[] | -                                                                   |
-| `queued`          | `number`                                    | -                                                                   |
-| `scheduled`       | `number`                                    | Assignments held by `schedule.notBefore`, not yet in the queue      |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `oldestWaitingMs` | `number` \| ``null`` | Age in ms of the oldest not-yet-accepted assignment; null when none |
+| `pending` | `number` | - |
+| `perUser` | [`UserLoadInfo`](modules.md#userloadinfo)[] | - |
+| `queued` | `number` | - |
+| `scheduled` | `number` | Assignments held by `schedule.notBefore`, not yet in the queue |
 
 #### Defined in
 
-[src/types/matcher.ts:325](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L325)
+[src/types/matcher.ts:424](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L424)
 
----
+___
+
+### RecurrenceSweepResult
+
+Ƭ **RecurrenceSweepResult**: `Object`
+
+Outcome of one `processRecurringAssignments()` sweep.
+
+#### Type declaration
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `materialized` | `number` | Occurrences materialized as assignments this pass |
+| `retired` | `number` | Templates retired (`until` passed or `maxOccurrences` reached) |
+
+#### Defined in
+
+[src/types/matcher.ts:361](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L361)
+
+___
+
+### RecurringAssignment
+
+Ƭ **RecurringAssignment**: [`Assignment`](modules.md#assignment) & \{ `recurrence`: [`RecurrencePolicy`](interfaces/RecurrencePolicy.md) ; `schedule?`: `never`  }
+
+A standing template that repeats. Everything an `Assignment` carries —
+tags, priority, SLA, escalation, vetoes, geo — is inherited by every
+occurrence; `schedule` is generated per occurrence from `recurrence`, so
+the template itself cannot carry one.
+
+#### Defined in
+
+[src/types/matcher.ts:345](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L345)
+
+___
 
 ### ScheduleSweepResult
 
@@ -684,20 +749,20 @@ Outcome of one `processScheduledAssignments()` sweep.
 
 #### Type declaration
 
-| Name        | Type     | Description                                                          |
-| :---------- | :------- | :------------------------------------------------------------------- |
-| `activated` | `number` | Held assignments whose `notBefore` arrived and were enqueued         |
-| `missed`    | `number` | Un-accepted assignments whose `notAfter` elapsed (parked or dropped) |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `activated` | `number` | Held assignments whose `notBefore` arrived and were enqueued |
+| `missed` | `number` | Un-accepted assignments whose `notAfter` elapsed (parked or dropped) |
 
 #### Defined in
 
-[src/types/matcher.ts:726](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L726)
+[src/types/matcher.ts:921](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L921)
 
----
+___
 
 ### Severity
 
-Ƭ **Severity**: `"hard"` \| `"medium"` \| `"soft"`
+Ƭ **Severity**: ``"hard"`` \| ``"medium"`` \| ``"soft"``
 
 Lexicographic severity levels.
 
@@ -710,9 +775,9 @@ saving purchase a rest violation, which is not a trade the law permits.
 
 #### Defined in
 
-[src/scheduling/types.ts:661](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L661)
+[src/scheduling/types.ts:661](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L661)
 
----
+___
 
 ### SlaExpirySweepResult
 
@@ -722,15 +787,15 @@ Outcome of one `processSlaExpiries()` sweep.
 
 #### Type declaration
 
-| Name      | Type     | Description                             |
-| :-------- | :------- | :-------------------------------------- |
+| Name | Type | Description |
+| :------ | :------ | :------ |
 | `expired` | `number` | Assignments whose freshness TTL elapsed |
 
 #### Defined in
 
-[src/types/matcher.ts:720](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L720)
+[src/types/matcher.ts:915](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L915)
 
----
+___
 
 ### Stats
 
@@ -738,17 +803,17 @@ Outcome of one `processSlaExpiries()` sweep.
 
 #### Type declaration
 
-| Name                      | Type       |
-| :------------------------ | :--------- |
-| `remainingAssignments?`   | `number`   |
-| `users?`                  | `number`   |
+| Name | Type |
+| :------ | :------ |
+| `remainingAssignments?` | `number` |
+| `users?` | `number` |
 | `usersWithoutAssignment?` | `string`[] |
 
 #### Defined in
 
-[src/types/matcher.ts:303](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L303)
+[src/types/matcher.ts:402](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L402)
 
----
+___
 
 ### UserLoadInfo
 
@@ -758,18 +823,107 @@ One user's live load snapshot inside `QueueStats`.
 
 #### Type declaration
 
-| Name             | Type      | Description                                                           |
-| :--------------- | :-------- | :-------------------------------------------------------------------- |
-| `backlog`        | `number`  | Current pending-backlog depth                                         |
-| `maxBacklogSize` | `number`  | Effective cap (per-user `maxBacklogSize` or the matcher-wide default) |
-| `paused`         | `boolean` | -                                                                     |
-| `userId`         | `string`  | -                                                                     |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `backlog` | `number` | Current pending-backlog depth |
+| `maxBacklogSize` | `number` | Effective cap (per-user `maxBacklogSize` or the matcher-wide default) |
+| `paused` | `boolean` | - |
+| `userId` | `string` | - |
 
 #### Defined in
 
-[src/types/matcher.ts:310](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L310)
+[src/types/matcher.ts:409](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L409)
 
----
+___
+
+### UserQueryOptions
+
+Ƭ **UserQueryOptions**: `Object`
+
+Options for `getUsersPaginated()`. Filters compose (logical AND). Filtered
+pages may return fewer than `limit` users while `hasMore` is still true —
+keep consuming until `hasMore` is false.
+
+#### Type declaration
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `atCapacity?` | `boolean` | Keep only users whose backlog reached their effective cap |
+| `cursor?` | `string` \| ``null`` | Opaque cursor from a previous `UserQueryResult.nextCursor` |
+| `hasBacklog?` | `boolean` | Keep only users with a non-empty pending backlog |
+| `idleForMs?` | `number` | Idle threshold in ms; implied when `status: 'idle'`, ANDed otherwise |
+| `includeAssignments?` | `boolean` | Include pending/accepted assignment ids for the returned page |
+| `includeTotal?` | `boolean` | Include the total number of users in the pool (unfiltered) |
+| `limit?` | `number` | Page size after filtering, clamped to [1, 1000]; default 100 |
+| `status?` | [`UserStatusFilter`](modules.md#userstatusfilter) | Status filter; default 'all' |
+
+#### Defined in
+
+[src/types/matcher.ts:456](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L456)
+
+___
+
+### UserQueryResult
+
+Ƭ **UserQueryResult**: `Object`
+
+#### Type declaration
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `hasMore` | `boolean` | - |
+| `nextCursor` | `string` \| ``null`` | - |
+| `total?` | `number` | Total users in the pool (unfiltered); present only when requested |
+| `users` | [`UserSummary`](modules.md#usersummary)[] | - |
+
+#### Defined in
+
+[src/types/matcher.ts:497](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L497)
+
+___
+
+### UserStatusFilter
+
+Ƭ **UserStatusFilter**: ``"all"`` \| ``"active"`` \| ``"paused"`` \| ``"idle"``
+
+Status filter for `getUsersPaginated()`:
+- `all`: every user in the pool (default)
+- `active`: not paused
+- `paused`: currently paused via `pauseUser()`
+- `idle`: last activity older than `idleForMs` (requires `idleForMs`)
+
+#### Defined in
+
+[src/types/matcher.ts:449](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L449)
+
+___
+
+### UserSummary
+
+Ƭ **UserSummary**: `Object`
+
+One user's status/workload summary.
+
+#### Type declaration
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `acceptedAssignmentIds?` | `string`[] | Present only when requested via `includeAssignments`; newest first |
+| `acceptedCount` | `number` | Number of accepted (in-progress) assignments |
+| `atCapacity` | `boolean` | `backlog >= maxBacklogSize` |
+| `backlog` | `number` | Pending backlog depth |
+| `lastActiveAt` | `number` \| ``null`` | Last `touchUser()` epoch ms; null when never recorded |
+| `maxBacklogSize` | `number` | Effective cap (per-user `maxBacklogSize` or the matcher-wide default) |
+| `paused` | `boolean` | - |
+| `pendingAssignmentIds?` | `string`[] | Present only when requested via `includeAssignments` |
+| `user` | [`User`](interfaces/User.md) | The stored user record as written by `addUser()` |
+| `userId` | `string` | - |
+
+#### Defined in
+
+[src/types/matcher.ts:476](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L476)
+
+___
 
 ### WorkflowEngineMetrics
 
@@ -779,67 +933,67 @@ Operational metrics for the workflow engine
 
 #### Type declaration
 
-| Name                  | Type     | Description                                                          |
-| :-------------------- | :------- | :------------------------------------------------------------------- |
-| `activeInstances`     | `number` | Number of active workflow instances (from the active-instance index) |
-| `deadLetterQueueSize` | `number` | Number of events in the Dead Letter Queue                            |
-| `scheduledRetries`    | `number` | Number of events waiting in the delayed-retry queue                  |
-| `streamLength`        | `number` | Total length of the workflow event stream                            |
-| `streamPending`       | `number` | Number of pending (delivered but unacknowledged) stream messages     |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `activeInstances` | `number` | Number of active workflow instances (from the active-instance index) |
+| `deadLetterQueueSize` | `number` | Number of events in the Dead Letter Queue |
+| `scheduledRetries` | `number` | Number of events waiting in the delayed-retry queue |
+| `streamLength` | `number` | Total length of the workflow event stream |
+| `streamPending` | `number` | Number of pending (delivered but unacknowledged) stream messages |
 
 #### Defined in
 
-[src/types/matcher.ts:1070](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1070)
+[src/types/matcher.ts:1271](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1271)
 
----
+___
 
 ### WorkflowEventType
 
-Ƭ **WorkflowEventType**: `"STARTED"` \| `"COMPLETED"` \| `"REJECTED"` \| `"EXPIRED"` \| `"FAILED"`
+Ƭ **WorkflowEventType**: ``"STARTED"`` \| ``"COMPLETED"`` \| ``"REJECTED"`` \| ``"EXPIRED"`` \| ``"FAILED"``
 
 Event types for workflow lifecycle
 
 #### Defined in
 
-[src/types/matcher.ts:1088](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1088)
+[src/types/matcher.ts:1289](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1289)
 
----
+___
 
 ### WorkflowInstanceStatus
 
-Ƭ **WorkflowInstanceStatus**: `"active"` \| `"completed"` \| `"failed"` \| `"cancelled"`
+Ƭ **WorkflowInstanceStatus**: ``"active"`` \| ``"completed"`` \| ``"failed"`` \| ``"cancelled"``
 
 Status of a workflow instance
 
 #### Defined in
 
-[src/types/matcher.ts:1286](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1286)
+[src/types/matcher.ts:1487](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1487)
 
----
+___
 
 ### WorkflowTargetUser
 
-Ƭ **WorkflowTargetUser**: `"initiator"` \| `"previous"` \| `string` \| \{ `tag`: `string` }
+Ƭ **WorkflowTargetUser**: ``"initiator"`` \| ``"previous"`` \| `string` \| \{ `tag`: `string`  }
 
 Target user selector for workflow assignment steps
 
 #### Defined in
 
-[src/types/matcher.ts:1094](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1094)
+[src/types/matcher.ts:1295](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1295)
 
----
+___
 
 ### WorkflowTaskType
 
-Ƭ **WorkflowTaskType**: `"assignment"` \| `"machine"` \| `"external"`
+Ƭ **WorkflowTaskType**: ``"assignment"`` \| ``"machine"`` \| ``"external"``
 
 Step execution mode
 
 #### Defined in
 
-[src/types/matcher.ts:1091](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1091)
+[src/types/matcher.ts:1292](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1292)
 
----
+___
 
 ### WorkflowTransition
 
@@ -854,19 +1008,19 @@ affect workflow processing.
 
 #### Type declaration
 
-| Name            | Type                                                                                                                                                                             |
-| :-------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `assignmentId?` | `string`                                                                                                                                                                         |
-| `instance`      | [`WorkflowInstance`](interfaces/WorkflowInstance.md)                                                                                                                             |
-| `kind`          | `"run.started"` \| `"step.ready"` \| `"step.completed"` \| `"step.failed"` \| `"step.expired"` \| `"step.escalated"` \| `"run.completed"` \| `"run.failed"` \| `"run.cancelled"` |
-| `payload?`      | `Record`\<`string`, `any`\>                                                                                                                                                      |
-| `stepId?`       | `string`                                                                                                                                                                         |
+| Name | Type |
+| :------ | :------ |
+| `assignmentId?` | `string` |
+| `instance` | [`WorkflowInstance`](interfaces/WorkflowInstance.md) |
+| `kind` | ``"run.started"`` \| ``"step.ready"`` \| ``"step.completed"`` \| ``"step.failed"`` \| ``"step.expired"`` \| ``"step.escalated"`` \| ``"run.completed"`` \| ``"run.failed"`` \| ``"run.cancelled"`` |
+| `payload?` | `Record`\<`string`, `any`\> |
+| `stepId?` | `string` |
 
 #### Defined in
 
-[src/types/matcher.ts:1267](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1267)
+[src/types/matcher.ts:1468](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1468)
 
----
+___
 
 ### options
 
@@ -878,29 +1032,29 @@ Use MatcherOptions instead
 
 #### Defined in
 
-[src/types/matcher.ts:1067](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/types/matcher.ts#L1067)
+[src/types/matcher.ts:1268](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1268)
 
 ## Variables
 
-### DEFAULT_AUTO_WEIGHTS_OPTIONS
+### DEFAULT\_AUTO\_WEIGHTS\_OPTIONS
 
-• `Const` **DEFAULT_AUTO_WEIGHTS_OPTIONS**: `Required`\<`Omit`\<[`AutoRoutingWeightsOptions`](interfaces/AutoRoutingWeightsOptions.md), `"priorWeight"` \| `"maxDeltaPerSync"` \| `"decayHalfLifeMs"` \| `"rng"`\>\> & \{ `priorWeight`: `number` }
+• `Const` **DEFAULT\_AUTO\_WEIGHTS\_OPTIONS**: `Required`\<`Omit`\<[`AutoRoutingWeightsOptions`](interfaces/AutoRoutingWeightsOptions.md), ``"priorWeight"`` \| ``"maxDeltaPerSync"`` \| ``"decayHalfLifeMs"`` \| ``"rng"``\>\> & \{ `priorWeight`: `number`  }
 
 #### Defined in
 
-[src/learning/auto-weights.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/learning/auto-weights.ts#L27)
+[src/learning/auto-weights.ts:30](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/learning/auto-weights.ts#L30)
 
----
+___
 
-### DEFAULT_MIN_REST_MINUTES
+### DEFAULT\_MIN\_REST\_MINUTES
 
-• `Const` **DEFAULT_MIN_REST_MINUTES**: `660`
+• `Const` **DEFAULT\_MIN\_REST\_MINUTES**: ``660``
 
 EU floor: Directive 2003/88/EC Article 3 — 11 consecutive hours per 24-hour period.
 
 #### Defined in
 
-[src/scheduling/constraints/min-rest.ts:22](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/constraints/min-rest.ts#L22)
+[src/scheduling/constraints/min-rest.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/constraints/min-rest.ts#L23)
 
 ## Functions
 
@@ -912,17 +1066,17 @@ Create an approval workflow with submit -> review -> complete/rejected pattern.
 
 #### Parameters
 
-| Name                          | Type                                               |
-| :---------------------------- | :------------------------------------------------- |
-| `id`                          | `string`                                           |
-| `name`                        | `string`                                           |
-| `options`                     | `Object`                                           |
+| Name | Type |
+| :------ | :------ |
+| `id` | `string` |
+| `name` | `string` |
+| `options` | `Object` |
 | `options.completeAssignment?` | `Partial`\<[`Assignment`](modules.md#assignment)\> |
 | `options.rejectedAssignment?` | `Partial`\<[`Assignment`](modules.md#assignment)\> |
-| `options.reviewAssignment`    | `Partial`\<[`Assignment`](modules.md#assignment)\> |
-| `options.reviewTimeoutMs?`    | `number`                                           |
-| `options.reviewerTag?`        | `string`                                           |
-| `options.submitAssignment`    | `Partial`\<[`Assignment`](modules.md#assignment)\> |
+| `options.reviewAssignment` | `Partial`\<[`Assignment`](modules.md#assignment)\> |
+| `options.reviewTimeoutMs?` | `number` |
+| `options.reviewerTag?` | `string` |
+| `options.submitAssignment` | `Partial`\<[`Assignment`](modules.md#assignment)\> |
 
 #### Returns
 
@@ -930,9 +1084,9 @@ Create an approval workflow with submit -> review -> complete/rejected pattern.
 
 #### Defined in
 
-[src/workflow-builder.ts:393](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L393)
+[src/workflow-builder.ts:393](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/workflow-builder.ts#L393)
 
----
+___
 
 ### checkCidrMatch
 
@@ -943,9 +1097,9 @@ Returns true if no CIDRs are specified (open assignment) or if IP matches any CI
 
 #### Parameters
 
-| Name           | Type                      |
-| :------------- | :------------------------ |
-| `userIp`       | `undefined` \| `string`   |
+| Name | Type |
+| :------ | :------ |
+| `userIp` | `undefined` \| `string` |
 | `allowedCidrs` | `undefined` \| `string`[] |
 
 #### Returns
@@ -954,9 +1108,9 @@ Returns true if no CIDRs are specified (open assignment) or if IP matches any CI
 
 #### Defined in
 
-[src/utils/cidr.ts:139](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/cidr.ts#L139)
+[src/utils/cidr.ts:139](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/cidr.ts#L139)
 
----
+___
 
 ### checkCompliance
 
@@ -970,9 +1124,9 @@ the one nobody reads.
 
 #### Parameters
 
-| Name     | Type                                                         |
-| :------- | :----------------------------------------------------------- |
-| `input`  | [`ScheduleInput`](interfaces/ScheduleInput.md)               |
+| Name | Type |
+| :------ | :------ |
+| `input` | [`ScheduleInput`](interfaces/ScheduleInput.md) |
 | `roster` | [`ScheduledAssignment`](interfaces/ScheduledAssignment.md)[] |
 
 #### Returns
@@ -981,9 +1135,9 @@ the one nobody reads.
 
 #### Defined in
 
-[src/scheduling/operations.ts:59](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L59)
+[src/scheduling/operations.ts:59](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L59)
 
----
+___
 
 ### checkGeoMatch
 
@@ -1000,13 +1154,13 @@ an explicit, redundant-but-safe way to force denial in that case.
 
 #### Parameters
 
-| Name                            | Type                                  |
-| :------------------------------ | :------------------------------------ |
-| `user`                          | [`User`](interfaces/User.md)          |
-| `assignment`                    | [`Assignment`](modules.md#assignment) |
-| `options?`                      | `Object`                              |
-| `options.defaultMaxDistanceKm?` | `number`                              |
-| `options.enabled?`              | `boolean`                             |
+| Name | Type |
+| :------ | :------ |
+| `user` | [`User`](interfaces/User.md) |
+| `assignment` | [`Assignment`](modules.md#assignment) |
+| `options?` | `Object` |
+| `options.defaultMaxDistanceKm?` | `number` |
+| `options.enabled?` | `boolean` |
 
 #### Returns
 
@@ -1014,9 +1168,9 @@ an explicit, redundant-but-safe way to force denial in that case.
 
 #### Defined in
 
-[src/utils/geo.ts:49](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/geo.ts#L49)
+[src/utils/geo.ts:49](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/geo.ts#L49)
 
----
+___
 
 ### cosineSimilarity
 
@@ -1027,10 +1181,10 @@ Returns 0 for mismatched lengths or zero-magnitude vectors.
 
 #### Parameters
 
-| Name | Type       |
-| :--- | :--------- |
-| `a`  | `number`[] |
-| `b`  | `number`[] |
+| Name | Type |
+| :------ | :------ |
+| `a` | `number`[] |
+| `b` | `number`[] |
 
 #### Returns
 
@@ -1038,9 +1192,9 @@ Returns 0 for mismatched lengths or zero-magnitude vectors.
 
 #### Defined in
 
-[src/learning/features.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/learning/features.ts#L15)
+[src/learning/features.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/learning/features.ts#L15)
 
----
+___
 
 ### createKeyBuilders
 
@@ -1050,87 +1204,90 @@ Creates Redis key builder functions with a given prefix
 
 #### Parameters
 
-| Name     | Type                                             |
-| :------- | :----------------------------------------------- |
+| Name | Type |
+| :------ | :------ |
 | `config` | [`RedisKeyConfig`](interfaces/RedisKeyConfig.md) |
 
 #### Returns
 
 `Object`
 
-| Name                        | Type                                                     |
-| :-------------------------- | :------------------------------------------------------- |
-| `acceptedAssignments`       | () => `string`                                           |
-| `acceptedAssignmentsExpiry` | () => `string`                                           |
-| `allTags`                   | () => `string`                                           |
-| `assignmentOwner`           | () => `string`                                           |
-| `assignmentPriority`        | (`id`: `string`) => `string`                             |
-| `assignmentTags`            | (`id`: `string`) => `string`                             |
-| `assignmentVetoed`          | (`id`: `string`) => `string`                             |
-| `assignments`               | () => `string`                                           |
-| `assignmentsGeo`            | () => `string`                                           |
-| `assignmentsQueuedAt`       | () => `string`                                           |
-| `assignmentsRef`            | () => `string`                                           |
-| `assignmentsSlaExpiry`      | () => `string`                                           |
-| `autoWeightsSyncLock`       | () => `string`                                           |
-| `circuitBreakerFailures`    | () => `string`                                           |
-| `circuitBreakerState`       | () => `string`                                           |
-| `completedAssignments`      | () => `string`                                           |
-| `deadLetterQueue`           | () => `string`                                           |
-| `decisionTraces`            | () => `string`                                           |
-| `eventRetryCount`           | (`eventId`: `string`) => `string`                        |
-| `eventStream`               | () => `string`                                           |
-| `eventStreamDeadLetter`     | () => `string`                                           |
-| `eventsRetryScheduled`      | () => `string`                                           |
-| `learningDecision`          | (`assignmentId`: `string`) => `string`                   |
-| `learningEpisode`           | (`assignmentId`: `string`) => `string`                   |
-| `learningModel`             | () => `string`                                           |
-| `learningStats`             | () => `string`                                           |
-| `learningUserTagCounts`     | (`userId`: `string`) => `string`                         |
-| `learningUserTagRewardSq`   | (`userId`: `string`) => `string`                         |
-| `learningUserTagRewards`    | (`userId`: `string`) => `string`                         |
-| `learningUserTagTs`         | (`userId`: `string`) => `string`                         |
-| `learningUsers`             | () => `string`                                           |
-| `parkedAssignments`         | () => `string`                                           |
-| `pausedUsers`               | () => `string`                                           |
-| `pendingAssignmentsData`    | () => `string`                                           |
-| `pendingAssignmentsExpiry`  | () => `string`                                           |
-| `processedEvent`            | (`eventId`: `string`) => `string`                        |
-| `processedEvents`           | () => `string`                                           |
-| `reliabilityMetrics`        | () => `string`                                           |
-| `scheduleNotAfter`          | () => `string`                                           |
-| `scheduledActivateAt`       | () => `string`                                           |
-| `scheduledAssignments`      | () => `string`                                           |
-| `slaStats`                  | () => `string`                                           |
-| `slaTagStats`               | (`tag`: `string`) => `string`                            |
-| `tagAssignments`            | (`tag`: `string`) => `string`                            |
-| `tempUserCandidates`        | (`userId`: `string`) => `string`                         |
-| `tempUserExclude`           | (`userId`: `string`) => `string`                         |
-| `tempUserFinal`             | (`userId`: `string`) => `string`                         |
-| `userActivity`              | () => `string`                                           |
-| `userAssignments`           | (`userId`: `string`) => `string`                         |
-| `userRejected`              | (`userId`: `string`) => `string`                         |
-| `userVetoed`                | (`userId`: `string`) => `string`                         |
-| `userWindowGrants`          | (`userId`: `string`) => `string`                         |
-| `users`                     | () => `string`                                           |
-| `workflowAssignmentLink`    | (`assignmentId`: `string`) => `string`                   |
-| `workflowAuditStream`       | () => `string`                                           |
-| `workflowDefinition`        | (`id`: `string`) => `string`                             |
-| `workflowDefinitions`       | () => `string`                                           |
-| `workflowInstance`          | (`id`: `string`) => `string`                             |
-| `workflowInstanceSequence`  | () => `string`                                           |
-| `workflowInstances`         | () => `string`                                           |
-| `workflowInstancesActive`   | () => `string`                                           |
-| `workflowInstancesByTime`   | () => `string`                                           |
-| `workflowInstancesByUser`   | (`userId`: `string`) => `string`                         |
-| `workflowStepExpiry`        | (`instanceId`: `string`, `stepId`: `string`) => `string` |
-| `workflowStepExpiryIndex`   | () => `string`                                           |
+| Name | Type |
+| :------ | :------ |
+| `acceptedAssignments` | () => `string` |
+| `acceptedAssignmentsExpiry` | () => `string` |
+| `allTags` | () => `string` |
+| `assignmentOwner` | () => `string` |
+| `assignmentPriority` | (`id`: `string`) => `string` |
+| `assignmentTags` | (`id`: `string`) => `string` |
+| `assignmentVetoed` | (`id`: `string`) => `string` |
+| `assignments` | () => `string` |
+| `assignmentsGeo` | () => `string` |
+| `assignmentsQueuedAt` | () => `string` |
+| `assignmentsRef` | () => `string` |
+| `assignmentsSlaExpiry` | () => `string` |
+| `autoWeightsSyncLock` | () => `string` |
+| `circuitBreakerFailures` | () => `string` |
+| `circuitBreakerState` | () => `string` |
+| `completedAssignments` | () => `string` |
+| `deadLetterQueue` | () => `string` |
+| `decisionTraces` | () => `string` |
+| `eventRetryCount` | (`eventId`: `string`) => `string` |
+| `eventStream` | () => `string` |
+| `eventStreamDeadLetter` | () => `string` |
+| `eventsRetryScheduled` | () => `string` |
+| `learningDecision` | (`assignmentId`: `string`) => `string` |
+| `learningEpisode` | (`assignmentId`: `string`) => `string` |
+| `learningModel` | () => `string` |
+| `learningStats` | () => `string` |
+| `learningUserTagCounts` | (`userId`: `string`) => `string` |
+| `learningUserTagRewardSq` | (`userId`: `string`) => `string` |
+| `learningUserTagRewards` | (`userId`: `string`) => `string` |
+| `learningUserTagTs` | (`userId`: `string`) => `string` |
+| `learningUsers` | () => `string` |
+| `parkedAssignments` | () => `string` |
+| `pausedUsers` | () => `string` |
+| `pendingAssignmentsData` | () => `string` |
+| `pendingAssignmentsExpiry` | () => `string` |
+| `processedEvent` | (`eventId`: `string`) => `string` |
+| `processedEvents` | () => `string` |
+| `recurringAssignments` | () => `string` |
+| `recurringDueAt` | () => `string` |
+| `reliabilityMetrics` | () => `string` |
+| `scheduleNotAfter` | () => `string` |
+| `scheduledActivateAt` | () => `string` |
+| `scheduledAssignments` | () => `string` |
+| `slaStats` | () => `string` |
+| `slaTagStats` | (`tag`: `string`) => `string` |
+| `tagAssignments` | (`tag`: `string`) => `string` |
+| `tempUserCandidates` | (`userId`: `string`) => `string` |
+| `tempUserExclude` | (`userId`: `string`) => `string` |
+| `tempUserFinal` | (`userId`: `string`) => `string` |
+| `userAcceptedAssignments` | (`userId`: `string`) => `string` |
+| `userActivity` | () => `string` |
+| `userAssignments` | (`userId`: `string`) => `string` |
+| `userRejected` | (`userId`: `string`) => `string` |
+| `userVetoed` | (`userId`: `string`) => `string` |
+| `userWindowGrants` | (`userId`: `string`) => `string` |
+| `users` | () => `string` |
+| `workflowAssignmentLink` | (`assignmentId`: `string`) => `string` |
+| `workflowAuditStream` | () => `string` |
+| `workflowDefinition` | (`id`: `string`) => `string` |
+| `workflowDefinitions` | () => `string` |
+| `workflowInstance` | (`id`: `string`) => `string` |
+| `workflowInstanceSequence` | () => `string` |
+| `workflowInstances` | () => `string` |
+| `workflowInstancesActive` | () => `string` |
+| `workflowInstancesByTime` | () => `string` |
+| `workflowInstancesByUser` | (`userId`: `string`) => `string` |
+| `workflowStepExpiry` | (`instanceId`: `string`, `stepId`: `string`) => `string` |
+| `workflowStepExpiryIndex` | () => `string` |
 
 #### Defined in
 
-[src/utils/keys.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/keys.ts#L13)
+[src/utils/keys.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/keys.ts#L13)
 
----
+___
 
 ### days
 
@@ -1140,8 +1297,8 @@ Days as minutes.
 
 #### Parameters
 
-| Name    | Type     |
-| :------ | :------- |
+| Name | Type |
+| :------ | :------ |
 | `count` | `number` |
 
 #### Returns
@@ -1150,9 +1307,9 @@ Days as minutes.
 
 #### Defined in
 
-[src/scheduling/rules.ts:34](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/rules.ts#L34)
+[src/scheduling/rules.ts:34](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/rules.ts#L34)
 
----
+___
 
 ### diagnoseInfeasibility
 
@@ -1167,8 +1324,8 @@ one.
 
 #### Parameters
 
-| Name    | Type                                           |
-| :------ | :--------------------------------------------- |
+| Name | Type |
+| :------ | :------ |
 | `input` | [`ScheduleInput`](interfaces/ScheduleInput.md) |
 
 #### Returns
@@ -1177,9 +1334,9 @@ one.
 
 #### Defined in
 
-[src/scheduling/operations.ts:426](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L426)
+[src/scheduling/operations.ts:426](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L426)
 
----
+___
 
 ### explainCandidate
 
@@ -1194,12 +1351,12 @@ the roster arguable rather than oracular.
 
 #### Parameters
 
-| Name              | Type                                                         | Default value |
-| :---------------- | :----------------------------------------------------------- | :------------ |
-| `input`           | [`ScheduleInput`](interfaces/ScheduleInput.md)               | `undefined`   |
-| `employeeId`      | `string`                                                     | `undefined`   |
-| `shiftInstanceId` | `string`                                                     | `undefined`   |
-| `roster`          | [`ScheduledAssignment`](interfaces/ScheduledAssignment.md)[] | `[]`          |
+| Name | Type | Default value |
+| :------ | :------ | :------ |
+| `input` | [`ScheduleInput`](interfaces/ScheduleInput.md) | `undefined` |
+| `employeeId` | `string` | `undefined` |
+| `shiftInstanceId` | `string` | `undefined` |
+| `roster` | [`ScheduledAssignment`](interfaces/ScheduledAssignment.md)[] | `[]` |
 
 #### Returns
 
@@ -1207,9 +1364,9 @@ the roster arguable rather than oracular.
 
 #### Defined in
 
-[src/scheduling/operations.ts:116](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L116)
+[src/scheduling/operations.ts:116](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L116)
 
----
+___
 
 ### explainMatchScore
 
@@ -1225,13 +1382,13 @@ other.
 
 #### Parameters
 
-| Name                    | Type                           |
-| :---------------------- | :----------------------------- |
-| `user`                  | [`User`](interfaces/User.md)   |
-| `assignmentTags`        | `string`                       |
-| `assignmentPriority`    | `string` \| `number`           |
-| `enableDefaultMatching` | `boolean`                      |
-| `skillThresholds?`      | `Record`\<`string`, `number`\> |
+| Name | Type |
+| :------ | :------ |
+| `user` | [`User`](interfaces/User.md) |
+| `assignmentTags` | `string` |
+| `assignmentPriority` | `string` \| `number` |
+| `enableDefaultMatching` | `boolean` |
+| `skillThresholds?` | `Record`\<`string`, `number`\> |
 
 #### Returns
 
@@ -1239,9 +1396,9 @@ other.
 
 #### Defined in
 
-[src/scoring/match-score.ts:167](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scoring/match-score.ts#L167)
+[src/scoring/match-score.ts:167](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scoring/match-score.ts#L167)
 
----
+___
 
 ### extractMatchFeatures
 
@@ -1252,11 +1409,11 @@ tag-overlap ratio, optional embedding similarity, and SLA urgency.
 
 #### Parameters
 
-| Name                      | Type                                                                   | Default value |
-| :------------------------ | :--------------------------------------------------------------------- | :------------ |
-| `user`                    | [`User`](interfaces/User.md)                                           | `undefined`   |
-| `assignment`              | [`LearningAssignmentContext`](interfaces/LearningAssignmentContext.md) | `undefined`   |
-| `slaTightnessReferenceMs` | `number`                                                               | `3600000`     |
+| Name | Type | Default value |
+| :------ | :------ | :------ |
+| `user` | [`User`](interfaces/User.md) | `undefined` |
+| `assignment` | [`LearningAssignmentContext`](interfaces/LearningAssignmentContext.md) | `undefined` |
+| `slaTightnessReferenceMs` | `number` | `3600000` |
 
 #### Returns
 
@@ -1264,9 +1421,9 @@ tag-overlap ratio, optional embedding similarity, and SLA urgency.
 
 #### Defined in
 
-[src/learning/features.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/learning/features.ts#L33)
+[src/learning/features.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/learning/features.ts#L33)
 
----
+___
 
 ### hasValidCoordinates
 
@@ -1274,9 +1431,9 @@ tag-overlap ratio, optional embedding similarity, and SLA urgency.
 
 #### Parameters
 
-| Name        | Type      |
-| :---------- | :-------- |
-| `latitude`  | `unknown` |
+| Name | Type |
+| :------ | :------ |
+| `latitude` | `unknown` |
 | `longitude` | `unknown` |
 
 #### Returns
@@ -1285,9 +1442,9 @@ tag-overlap ratio, optional embedding similarity, and SLA urgency.
 
 #### Defined in
 
-[src/utils/geo.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/geo.ts#L23)
+[src/utils/geo.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/geo.ts#L23)
 
----
+___
 
 ### haversineDistanceKm
 
@@ -1295,8 +1452,8 @@ tag-overlap ratio, optional embedding similarity, and SLA urgency.
 
 #### Parameters
 
-| Name   | Type     |
-| :----- | :------- |
+| Name | Type |
+| :------ | :------ |
 | `lat1` | `number` |
 | `lon1` | `number` |
 | `lat2` | `number` |
@@ -1308,9 +1465,9 @@ tag-overlap ratio, optional embedding similarity, and SLA urgency.
 
 #### Defined in
 
-[src/utils/geo.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/geo.ts#L27)
+[src/utils/geo.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/geo.ts#L27)
 
----
+___
 
 ### hours
 
@@ -1320,8 +1477,8 @@ Hours as minutes, for readability in rule objects.
 
 #### Parameters
 
-| Name    | Type     |
-| :------ | :------- |
+| Name | Type |
+| :------ | :------ |
 | `count` | `number` |
 
 #### Returns
@@ -1330,9 +1487,9 @@ Hours as minutes, for readability in rule objects.
 
 #### Defined in
 
-[src/scheduling/rules.ts:29](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/rules.ts#L29)
+[src/scheduling/rules.ts:29](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/rules.ts#L29)
 
----
+___
 
 ### isIpInCidr
 
@@ -1342,9 +1499,9 @@ Check if an IP address is within a CIDR range
 
 #### Parameters
 
-| Name   | Type     |
-| :----- | :------- |
-| `ip`   | `string` |
+| Name | Type |
+| :------ | :------ |
+| `ip` | `string` |
 | `cidr` | `string` |
 
 #### Returns
@@ -1353,9 +1510,9 @@ Check if an IP address is within a CIDR range
 
 #### Defined in
 
-[src/utils/cidr.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/cidr.ts#L119)
+[src/utils/cidr.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/cidr.ts#L119)
 
----
+___
 
 ### isValidLatitude
 
@@ -1363,8 +1520,8 @@ Check if an IP address is within a CIDR range
 
 #### Parameters
 
-| Name    | Type      |
-| :------ | :-------- |
+| Name | Type |
+| :------ | :------ |
 | `value` | `unknown` |
 
 #### Returns
@@ -1373,9 +1530,9 @@ value is number
 
 #### Defined in
 
-[src/utils/geo.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/geo.ts#L15)
+[src/utils/geo.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/geo.ts#L15)
 
----
+___
 
 ### isValidLongitude
 
@@ -1383,8 +1540,8 @@ value is number
 
 #### Parameters
 
-| Name    | Type      |
-| :------ | :-------- |
+| Name | Type |
+| :------ | :------ |
 | `value` | `unknown` |
 
 #### Returns
@@ -1393,9 +1550,9 @@ value is number
 
 #### Defined in
 
-[src/utils/geo.ts:19](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/geo.ts#L19)
+[src/utils/geo.ts:19](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/geo.ts#L19)
 
----
+___
 
 ### linearWorkflow
 
@@ -1405,11 +1562,11 @@ Create a simple linear workflow with automatic step chaining.
 
 #### Parameters
 
-| Name    | Type                                                                                                                                                                                                                                                                                                                                       | Description                  |
-| :------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------- |
-| `id`    | `string`                                                                                                                                                                                                                                                                                                                                   | Workflow ID                  |
-| `name`  | `string`                                                                                                                                                                                                                                                                                                                                   | Workflow name                |
-| `steps` | \{ `assignment`: `Partial`\<[`Assignment`](modules.md#assignment)\> ; `id`: `string` ; `machineTask?`: \{ `handler`: `string` ; `input?`: `Record`\<`string`, `any`\> } ; `name`: `string` ; `targetUser?`: `string` \| \{ `tag`: `string` } ; `taskType?`: [`WorkflowTaskType`](modules.md#workflowtasktype) ; `timeoutMs?`: `number` }[] | Array of step configurations |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `id` | `string` | Workflow ID |
+| `name` | `string` | Workflow name |
+| `steps` | \{ `assignment`: `Partial`\<[`Assignment`](modules.md#assignment)\> ; `id`: `string` ; `machineTask?`: \{ `handler`: `string` ; `input?`: `Record`\<`string`, `any`\>  } ; `name`: `string` ; `targetUser?`: `string` \| \{ `tag`: `string`  } ; `taskType?`: [`WorkflowTaskType`](modules.md#workflowtasktype) ; `timeoutMs?`: `number`  }[] | Array of step configurations |
 
 #### Returns
 
@@ -1417,9 +1574,9 @@ Create a simple linear workflow with automatic step chaining.
 
 #### Defined in
 
-[src/workflow-builder.ts:350](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L350)
+[src/workflow-builder.ts:350](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/workflow-builder.ts#L350)
 
----
+___
 
 ### lintAssignment
 
@@ -1431,10 +1588,10 @@ array when nothing is worth flagging. Purely structural — pair with
 
 #### Parameters
 
-| Name         | Type                                                           |
-| :----------- | :------------------------------------------------------------- |
-| `assignment` | [`Assignment`](modules.md#assignment)                          |
-| `context`    | [`AssignmentLintContext`](interfaces/AssignmentLintContext.md) |
+| Name | Type |
+| :------ | :------ |
+| `assignment` | [`Assignment`](modules.md#assignment) |
+| `context` | [`AssignmentLintContext`](interfaces/AssignmentLintContext.md) |
 
 #### Returns
 
@@ -1442,9 +1599,9 @@ array when nothing is worth flagging. Purely structural — pair with
 
 #### Defined in
 
-[src/validation/assignment-lint.ts:41](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/validation/assignment-lint.ts#L41)
+[src/validation/assignment-lint.ts:41](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/validation/assignment-lint.ts#L41)
 
----
+___
 
 ### normalizeWorkflowDefinition
 
@@ -1452,8 +1609,8 @@ array when nothing is worth flagging. Purely structural — pair with
 
 #### Parameters
 
-| Name         | Type                                                                                                                           |
-| :----------- | :----------------------------------------------------------------------------------------------------------------------------- |
+| Name | Type |
+| :------ | :------ |
 | `definition` | [`WorkflowDefinition`](interfaces/WorkflowDefinition.md) \| [`WorkflowDefinitionInput`](interfaces/WorkflowDefinitionInput.md) |
 
 #### Returns
@@ -1462,100 +1619,100 @@ array when nothing is worth flagging. Purely structural — pair with
 
 #### Defined in
 
-[src/workflow-validation.ts:133](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-validation.ts#L133)
+[src/workflow-validation.ts:133](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/workflow-validation.ts#L133)
 
----
+___
 
 ### parseCIDR
 
-▸ **parseCIDR**(`cidr`): \{ `isIPv6`: `boolean` ; `network`: `bigint` ; `prefixLength`: `number` } \| `null`
+▸ **parseCIDR**(`cidr`): \{ `isIPv6`: `boolean` ; `network`: `bigint` ; `prefixLength`: `number`  } \| ``null``
 
 Parse a CIDR notation string (e.g., '192.168.1.0/24' or '2001:db8::/32')
 Returns { network: BigInt, prefixLength: number, isIPv6: boolean } or null
 
 #### Parameters
 
-| Name   | Type     |
-| :----- | :------- |
+| Name | Type |
+| :------ | :------ |
 | `cidr` | `string` |
 
 #### Returns
 
-\{ `isIPv6`: `boolean` ; `network`: `bigint` ; `prefixLength`: `number` } \| `null`
+\{ `isIPv6`: `boolean` ; `network`: `bigint` ; `prefixLength`: `number`  } \| ``null``
 
 #### Defined in
 
-[src/utils/cidr.ts:93](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/cidr.ts#L93)
+[src/utils/cidr.ts:93](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/cidr.ts#L93)
 
----
+___
 
 ### parseIP
 
-▸ **parseIP**(`ip`): \{ `isIPv6`: `boolean` ; `value`: `bigint` } \| `null`
+▸ **parseIP**(`ip`): \{ `isIPv6`: `boolean` ; `value`: `bigint`  } \| ``null``
 
 Parse an IP address (auto-detect IPv4 or IPv6)
 Returns { value: BigInt, isIPv6: boolean } or null if invalid
 
 #### Parameters
 
-| Name | Type     |
-| :--- | :------- |
+| Name | Type |
+| :------ | :------ |
 | `ip` | `string` |
 
 #### Returns
 
-\{ `isIPv6`: `boolean` ; `value`: `bigint` } \| `null`
+\{ `isIPv6`: `boolean` ; `value`: `bigint`  } \| ``null``
 
 #### Defined in
 
-[src/utils/cidr.ts:69](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/cidr.ts#L69)
+[src/utils/cidr.ts:69](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/cidr.ts#L69)
 
----
+___
 
 ### parseIPv4
 
-▸ **parseIPv4**(`ip`): `bigint` \| `null`
+▸ **parseIPv4**(`ip`): `bigint` \| ``null``
 
 Parse an IPv4 address into a BigInt representation
 
 #### Parameters
 
-| Name | Type     |
-| :--- | :------- |
+| Name | Type |
+| :------ | :------ |
 | `ip` | `string` |
 
 #### Returns
 
-`bigint` \| `null`
+`bigint` \| ``null``
 
 #### Defined in
 
-[src/utils/cidr.ts:9](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/cidr.ts#L9)
+[src/utils/cidr.ts:9](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/cidr.ts#L9)
 
----
+___
 
 ### parseIPv6
 
-▸ **parseIPv6**(`ip`): `bigint` \| `null`
+▸ **parseIPv6**(`ip`): `bigint` \| ``null``
 
 Parse an IPv6 address into a BigInt representation
 Handles full, compressed (::), and IPv4-mapped formats
 
 #### Parameters
 
-| Name | Type     |
-| :--- | :------- |
+| Name | Type |
+| :------ | :------ |
 | `ip` | `string` |
 
 #### Returns
 
-`bigint` \| `null`
+`bigint` \| ``null``
 
 #### Defined in
 
-[src/utils/cidr.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/utils/cidr.ts#L26)
+[src/utils/cidr.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/cidr.ts#L26)
 
----
+___
 
 ### rankCandidates
 
@@ -1564,7 +1721,7 @@ Handles full, compressed (::), and IPv4-mapped formats
 Rank everyone who could take an open shift.
 
 The hard gate and the soft ordering are kept separate on purpose: an
-ineligible person is _never_ promoted by being cheap, and the reason they are
+ineligible person is *never* promoted by being cheap, and the reason they are
 ineligible is still reported, because "Anna would be ideal but is 2h short on
 rest" is more useful than Anna's silent absence from the list.
 
@@ -1575,12 +1732,12 @@ Annex III point 4(b), which is high-risk with no narrow-task exemption.
 
 #### Parameters
 
-| Name              | Type                                                         |
-| :---------------- | :----------------------------------------------------------- |
-| `input`           | [`ScheduleInput`](interfaces/ScheduleInput.md)               |
-| `shiftInstanceId` | `string`                                                     |
-| `roster`          | [`ScheduledAssignment`](interfaces/ScheduledAssignment.md)[] |
-| `disruption?`     | [`Disruption`](modules.md#disruption)                        |
+| Name | Type |
+| :------ | :------ |
+| `input` | [`ScheduleInput`](interfaces/ScheduleInput.md) |
+| `shiftInstanceId` | `string` |
+| `roster` | [`ScheduledAssignment`](interfaces/ScheduledAssignment.md)[] |
+| `disruption?` | [`Disruption`](modules.md#disruption) |
 
 #### Returns
 
@@ -1588,9 +1745,9 @@ Annex III point 4(b), which is high-risk with no narrow-task exemption.
 
 #### Defined in
 
-[src/scheduling/operations.ts:222](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L222)
+[src/scheduling/operations.ts:222](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L222)
 
----
+___
 
 ### repairSchedule
 
@@ -1598,7 +1755,7 @@ Annex III point 4(b), which is high-risk with no narrow-task exemption.
 
 Re-plan around a disruption, changing as little as possible.
 
-Everything not touched by the disruption is pinned, so the answer is a _diff_
+Everything not touched by the disruption is pinned, so the answer is a *diff*
 a manager can act on rather than a fresh roster nobody recognises. A full
 re-solve at 06:00 returns a different schedule for the whole team, which is
 not an answer anyone will accept.
@@ -1610,11 +1767,11 @@ single name.
 
 #### Parameters
 
-| Name         | Type                                                         |
-| :----------- | :----------------------------------------------------------- |
-| `input`      | [`ScheduleInput`](interfaces/ScheduleInput.md)               |
-| `disruption` | [`Disruption`](modules.md#disruption)                        |
-| `published`  | [`ScheduledAssignment`](interfaces/ScheduledAssignment.md)[] |
+| Name | Type |
+| :------ | :------ |
+| `input` | [`ScheduleInput`](interfaces/ScheduleInput.md) |
+| `disruption` | [`Disruption`](modules.md#disruption) |
+| `published` | [`ScheduledAssignment`](interfaces/ScheduledAssignment.md)[] |
 
 #### Returns
 
@@ -1622,9 +1779,9 @@ single name.
 
 #### Defined in
 
-[src/scheduling/operations.ts:177](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/operations.ts#L177)
+[src/scheduling/operations.ts:177](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L177)
 
----
+___
 
 ### solveSchedule
 
@@ -1634,8 +1791,8 @@ One-shot convenience wrapper around `new ShiftScheduler().solve(input)`.
 
 #### Parameters
 
-| Name    | Type                                           |
-| :------ | :--------------------------------------------- |
+| Name | Type |
+| :------ | :------ |
 | `input` | [`ScheduleInput`](interfaces/ScheduleInput.md) |
 
 #### Returns
@@ -1644,9 +1801,9 @@ One-shot convenience wrapper around `new ShiftScheduler().solve(input)`.
 
 #### Defined in
 
-[src/scheduling/scheduler.class.ts:175](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/scheduler.class.ts#L175)
+[src/scheduling/scheduler.class.ts:175](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/scheduler.class.ts#L175)
 
----
+___
 
 ### synthesizeRoutingWeights
 
@@ -1656,12 +1813,12 @@ Synthesize a routingWeights map from per-tag reward statistics.
 
 #### Parameters
 
-| Name               | Type                                                                   | Description                                                                                                                                                 |
-| :----------------- | :--------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stats`            | [`LearningTagStat`](interfaces/LearningTagStat.md)[]                   | per-user tag reward statistics (from learned outcomes)                                                                                                      |
-| `options?`         | [`AutoRoutingWeightsOptions`](interfaces/AutoRoutingWeightsOptions.md) | synthesis policy and tuning (merged with defaults)                                                                                                          |
-| `knownTags?`       | `string`[]                                                             | optional tags to include even without observations; unobserved known tags receive the optimistic prior weight                                               |
-| `existingWeights?` | `Record`\<`string`, `number`\>                                         | optional current routingWeights of the user; used as the per-tag prior for under-sampled or unobserved tags instead of the flat `priorWeight` when provided |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `stats` | [`LearningTagStat`](interfaces/LearningTagStat.md)[] | per-user tag reward statistics (from learned outcomes) |
+| `options?` | [`AutoRoutingWeightsOptions`](interfaces/AutoRoutingWeightsOptions.md) | synthesis policy and tuning (merged with defaults) |
+| `knownTags?` | `string`[] | optional tags to include even without observations; unobserved known tags receive the optimistic prior weight |
+| `existingWeights?` | `Record`\<`string`, `number`\> | optional current routingWeights of the user; used as the per-tag prior for under-sampled or unobserved tags instead of the flat `priorWeight` when provided |
 
 #### Returns
 
@@ -1669,9 +1826,9 @@ Synthesize a routingWeights map from per-tag reward statistics.
 
 #### Defined in
 
-[src/learning/auto-weights.ts:192](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/learning/auto-weights.ts#L192)
+[src/learning/auto-weights.ts:191](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/learning/auto-weights.ts#L191)
 
----
+___
 
 ### userCoversTag
 
@@ -1683,10 +1840,10 @@ when the user has any, tag membership (user-side patterns) otherwise.
 
 #### Parameters
 
-| Name   | Type                         |
-| :----- | :--------------------------- |
+| Name | Type |
+| :------ | :------ |
 | `user` | [`User`](interfaces/User.md) |
-| `tag`  | `string`                     |
+| `tag` | `string` |
 
 #### Returns
 
@@ -1694,9 +1851,9 @@ when the user has any, tag membership (user-side patterns) otherwise.
 
 #### Defined in
 
-[src/validation/assignment-lint.ts:28](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/validation/assignment-lint.ts#L28)
+[src/validation/assignment-lint.ts:28](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/validation/assignment-lint.ts#L28)
 
----
+___
 
 ### validateWorkflowDefinition
 
@@ -1704,8 +1861,8 @@ when the user has any, tag membership (user-side patterns) otherwise.
 
 #### Parameters
 
-| Name         | Type                                                     |
-| :----------- | :------------------------------------------------------- |
+| Name | Type |
+| :------ | :------ |
 | `definition` | [`WorkflowDefinition`](interfaces/WorkflowDefinition.md) |
 
 #### Returns
@@ -1714,9 +1871,9 @@ when the user has any, tag membership (user-side patterns) otherwise.
 
 #### Defined in
 
-[src/workflow-validation.ts:50](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-validation.ts#L50)
+[src/workflow-validation.ts:50](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/workflow-validation.ts#L50)
 
----
+___
 
 ### weeklyAverageOver
 
@@ -1724,7 +1881,7 @@ when the user has any, tag membership (user-side patterns) otherwise.
 
 "At most `hoursPerWeek` on average over `days`" as a rolling-window limit.
 
-The conversion is the trap. A rolling average is expressed as a _total_ over
+The conversion is the trap. A rolling average is expressed as a *total* over
 the window, so 48h/week over four months is not `{maxMinutes: 2880,
 windowDays: 120}` — that would cap the whole four months at 48 hours. It is
 48h × (120 ÷ 7) ≈ 823h. Getting this wrong produces a rule that looks right
@@ -1732,11 +1889,11 @@ and is off by a factor of seventeen.
 
 #### Parameters
 
-| Name           | Type     |
-| :------------- | :------- |
+| Name | Type |
+| :------ | :------ |
 | `hoursPerWeek` | `number` |
-| `days`         | `number` |
-| `label?`       | `string` |
+| `days` | `number` |
+| `label?` | `string` |
 
 #### Returns
 
@@ -1744,9 +1901,9 @@ and is off by a factor of seventeen.
 
 #### Defined in
 
-[src/scheduling/rules.ts:20](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/rules.ts#L20)
+[src/scheduling/rules.ts:20](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/rules.ts#L20)
 
----
+___
 
 ### workflow
 
@@ -1756,9 +1913,9 @@ Convenience function to create a new workflow builder.
 
 #### Parameters
 
-| Name   | Type     |
-| :----- | :------- |
-| `id`   | `string` |
+| Name | Type |
+| :------ | :------ |
+| `id` | `string` |
 | `name` | `string` |
 
 #### Returns
@@ -1767,4 +1924,4 @@ Convenience function to create a new workflow builder.
 
 #### Defined in
 
-[src/workflow-builder.ts:340](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/workflow-builder.ts#L340)
+[src/workflow-builder.ts:340](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/workflow-builder.ts#L340)

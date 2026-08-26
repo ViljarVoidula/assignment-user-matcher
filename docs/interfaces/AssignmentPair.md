@@ -19,9 +19,9 @@ A candidate (employee, shiftInstance) pair under evaluation.
 
 #### Defined in
 
-[src/scheduling/types.ts:857](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L857)
+[src/scheduling/types.ts:863](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L863)
 
----
+___
 
 ### shiftInstanceId
 
@@ -29,4 +29,4 @@ A candidate (employee, shiftInstance) pair under evaluation.
 
 #### Defined in
 
-[src/scheduling/types.ts:858](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b3eb9426bfa369db6ad83bfd4f2d3bc0d5c86582/src/scheduling/types.ts#L858)
+[src/scheduling/types.ts:864](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L864)

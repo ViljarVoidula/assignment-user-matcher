@@ -503,7 +503,7 @@ Semantics worth knowing:
 - **The offer deadline never extends.** `notAfter` is absolute, so rejection requeues carry the same deadline — a re-offered assignment can still miss.
 - **Fire-once, replica-safe.** Sweep entries are claimed with a `ZREM` before acting, so concurrent replicas can run the sweep in parallel.
 - **Sweep granularity.** Schedule clocks fire on the maintenance tick (`processScheduledAssignments()`), not at the exact millisecond.
-- **Recurrence is out of scope.** Materialize each occurrence as its own assignment from your scheduler/shift tool; re-adding an existing id never resets its clocks, so materialization is idempotent. The [`scheduling` module](#shift-scheduling-scheduling-module) is that shift tool if you need one — it produces dated occurrences you can feed straight in.
+- **One policy, one window.** Repeating work is a [recurring assignment](#recurring-assignments-addrecurringassignment): a standing template whose sweep materializes each occurrence as an ordinary scheduled assignment carrying a derived policy. (Hand-materializing occurrences from your own scheduler still works — re-adding an existing id never resets its clocks, so materialization is idempotent — and the [`scheduling` module](#shift-scheduling-scheduling-module) produces dated occurrences you can feed straight in.)
 - **Operator override.** `assignToUser(id, userId)` refuses held assignments; `{ force: true }` early-activates (clocks anchor there). If the user then rejects and `notBefore` is still in the future, the assignment returns to the scheduled store.
 - **Unparking.** `unparkAssignment(id, { resetSchedule: true })` strips the schedule policy; without it a miss-parked assignment misses again on the next sweep.
 
@@ -513,18 +513,62 @@ Lifecycle events: `scheduleActivated` (`{ taskId, at }`) and `scheduleMissed` (`
 
 **Learning integration.** Misses feed the contextual bandit as `expire` outcomes — a pending-state miss penalizes the user who sat on the offer, so automatic routing-weight vetoes pick up chronic missers with no extra configuration.
 
+### Recurring assignments (`addRecurringAssignment`)
+
+A recurring assignment is a **standing template**, never itself matchable: the recurrence sweep cuts each occurrence from it as an ordinary assignment whose `schedule` is derived from the policy (`notBefore` = the slot's open time, `notAfter` = open + `windowMs`). Everything else the template carries — tags, priority, SLA, escalation, vetoes, geo — is inherited by every occurrence.
+
+```ts
+await matcher.addRecurringAssignment({
+    id: 'blog-draft',
+    tags: ['blog'],
+    recurrence: {
+        everyMs: 14 * 24 * 3600_000, // biweekly
+        startAt: Date.parse('2026-09-07T09:00:00Z'), // first window opens here (default: now)
+        windowMs: 3 * 24 * 3600_000, // each occurrence offered for 3 days
+        onMiss: 'park', // an unserved window parks the occurrence for inspection
+    },
+});
+
+matcher.startMaintenance(); // the recurrence sweep rides the maintenance tick
+```
+
+| Field            | Meaning                                                                                                                             | Default  |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `everyMs`        | Interval between window opens. Minimum 1000                                                                                         | required |
+| `startAt`        | Epoch ms the first window opens                                                                                                     | now      |
+| `windowMs`       | Offer window per occurrence (`schedule.notAfter = open + windowMs`). Omitted: occurrences never expire off the offer clock          | none     |
+| `onMiss`         | Per-occurrence miss policy, as in `SchedulePolicy`                                                                                  | `'park'` |
+| `until`          | No occurrence opens after this epoch ms; the template retires                                                                       | none     |
+| `maxOccurrences` | Retire after this many occurrences materialized                                                                                     | none     |
+| `catchUp`        | Downtime policy: `'skip'` materializes only slots whose window is still open; `'all'` materializes every elapsed slot (audit trail) | `'skip'` |
+
+Semantics worth knowing:
+
+- **Occurrence ids are deterministic** — `<templateId>@<openEpochMs>` — so a crashed sweep re-materializing a slot is an idempotent re-add, and any occurrence traces back to its template with no extra state.
+- **Slots never drift.** They align to `startAt + k × everyMs` whatever the sweep cadence; the tick decides when a slot is _noticed_, never where it sits.
+- **One occurrence ahead.** The sweep materializes each occurrence one interval before its window opens, so upcoming work is already visible in the scheduled store (`getScheduledAssignments()`, `getQueueStats().scheduled`).
+- **Skipped slots are free.** Under `catchUp: 'skip'`, slots that fully elapsed during downtime never existed: they don't count against `maxOccurrences` and don't flood the queue on revival. Under `'all'` they materialize and are immediately missed by the schedule sweep (parked/dropped per `onMiss`) — the audit-trail reading of a dead interval.
+- **Re-adding updates the template, not the clock.** Occurrences already cut and the next slot are facts about the past; remove and re-add to restart.
+- **Removal is forward-looking.** `removeRecurringAssignment(id)` stops future occurrences; already-materialized ones live on as ordinary assignments. `{ dropScheduled: true }` additionally clears occurrences still held un-activated in the scheduled store — never queued, pending, or accepted work.
+- **Fire-once, replica-safe, self-healing.** Sweep claims are one-shot `ZREM`s like the scheduled sweep; the due index is re-derived from the template store at the top of every pass, so a crashed sweep can strand nothing.
+
+API: `addRecurringAssignment(template)` · `removeRecurringAssignment(id, { dropScheduled? })` · `getRecurringAssignment(id)` / `listRecurringAssignments()` (each returns `{ template, nextAt, occurrences }`) · `processRecurringAssignments()` (manual sweep; also runs on the maintenance tick as `recurrence`, default on).
+
+Lifecycle events: `recurrenceMaterialized` (`{ taskId, recurringId, occurrence, opensAt, at }` — hosts that keep per-task context copy it template → occurrence on this event) and `recurrenceRetired` (`{ recurringId, reason, occurrences, at }`).
+
 ### `startMaintenance(options?)` / `stopMaintenance()` / `runMaintenanceOnce(options?)`
 
 Deadlines are not self-firing — something has to sweep them. `startMaintenance()` runs every enabled sweep on one tick:
 
-- `scheduled` (default on) — schedule activations and offer-window misses (`schedule.notBefore` / `schedule.notAfter`). Runs first in the pass so a just-activated assignment's other clocks start from the same tick.
+- `recurrence` (default on) — recurring-assignment materialization. Runs first so a due-now occurrence flows recurrence → schedule → queue inside one tick.
+- `scheduled` (default on) — schedule activations and offer-window misses (`schedule.notBefore` / `schedule.notAfter`). Runs before the deadline sweeps so a just-activated assignment's other clocks start from the same tick.
 - `responseDeadlines` (default on) — expiry, escalation, parking.
 - `completionDeadlines` (default on) — SLA completion deadlines (`sla.completeWithinMs`).
 - `slaExpiries` (default on) — SLA freshness TTLs (`sla.expireAfterMs`).
 - `workflowStepTimeouts` (default on when `enableWorkflows`) — the step-timeout index. **Note:** `startOrchestrator()` consumes the event stream but does not sweep step timeouts; without maintenance, `timeoutMs` on a workflow step never fires.
 - `idleUsers` (default on when `idleUserTimeoutMs` is set).
 
-`runMaintenanceOnce()` does one pass and returns a `MaintenanceReport` (`expiredMatches`, `escalations`, `parked`, `completionBreaches`, `slaExpiries`, `scheduleActivations`, `scheduleMisses`, `expiredSteps`, `releasedIdleUsers`, `tookMs`) — use it from a host that already owns a tick (a multi-tenant worker, a serverless schedule) instead of holding a timer per matcher. `startAutoReleaseInterval()` remains as a deprecated alias that sweeps response deadlines only.
+`runMaintenanceOnce()` does one pass and returns a `MaintenanceReport` (`expiredMatches`, `escalations`, `parked`, `completionBreaches`, `slaExpiries`, `scheduleActivations`, `scheduleMisses`, `recurrenceMaterializations`, `recurrenceRetirements`, `expiredSteps`, `releasedIdleUsers`, `tookMs`) — use it from a host that already owns a tick (a multi-tenant worker, a serverless schedule) instead of holding a timer per matcher. `startAutoReleaseInterval()` remains as a deprecated alias that sweeps response deadlines only.
 
 ### `getQueueStats(): Promise<QueueStats>`
 
