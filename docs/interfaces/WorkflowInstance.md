@@ -39,7 +39,7 @@ Persistent context passed between steps
 
 #### Defined in
 
-[src/types/matcher.ts:1514](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1514)
+[src/types/matcher.ts:1562](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1562)
 
 ___
 
@@ -51,7 +51,7 @@ Timestamps
 
 #### Defined in
 
-[src/types/matcher.ts:1528](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1528)
+[src/types/matcher.ts:1576](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1576)
 
 ___
 
@@ -63,7 +63,7 @@ Current assignment ID being processed
 
 #### Defined in
 
-[src/types/matcher.ts:1510](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1510)
+[src/types/matcher.ts:1558](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1558)
 
 ___
 
@@ -75,7 +75,7 @@ Current step ID (null if completed or in parallel execution)
 
 #### Defined in
 
-[src/types/matcher.ts:1508](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1508)
+[src/types/matcher.ts:1556](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1556)
 
 ___
 
@@ -87,7 +87,7 @@ Snapshot of the workflow definition at instance creation time (for versioning)
 
 #### Defined in
 
-[src/types/matcher.ts:1531](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1531)
+[src/types/matcher.ts:1579](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1579)
 
 ___
 
@@ -99,7 +99,7 @@ History of completed steps with their results
 
 #### Defined in
 
-[src/types/matcher.ts:1516](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1516)
+[src/types/matcher.ts:1564](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1564)
 
 ___
 
@@ -111,7 +111,7 @@ Unique identifier for this instance
 
 #### Defined in
 
-[src/types/matcher.ts:1500](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1500)
+[src/types/matcher.ts:1548](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1548)
 
 ___
 
@@ -123,7 +123,7 @@ The user who initiated this workflow
 
 #### Defined in
 
-[src/types/matcher.ts:1504](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1504)
+[src/types/matcher.ts:1552](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1552)
 
 ___
 
@@ -135,7 +135,7 @@ For parallel execution: track all active branches
 
 #### Defined in
 
-[src/types/matcher.ts:1512](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1512)
+[src/types/matcher.ts:1560](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1560)
 
 ___
 
@@ -147,7 +147,7 @@ Retry count for current step
 
 #### Defined in
 
-[src/types/matcher.ts:1524](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1524)
+[src/types/matcher.ts:1572](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1572)
 
 ___
 
@@ -159,7 +159,7 @@ Current status
 
 #### Defined in
 
-[src/types/matcher.ts:1506](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1506)
+[src/types/matcher.ts:1554](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1554)
 
 ___
 
@@ -169,7 +169,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1529](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1529)
+[src/types/matcher.ts:1577](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1577)
 
 ___
 
@@ -181,7 +181,7 @@ Version for optimistic locking
 
 #### Defined in
 
-[src/types/matcher.ts:1526](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1526)
+[src/types/matcher.ts:1574](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1574)
 
 ___
 
@@ -193,4 +193,4 @@ Reference to the workflow definition
 
 #### Defined in
 
-[src/types/matcher.ts:1502](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1502)
+[src/types/matcher.ts:1550](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1550)

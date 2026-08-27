@@ -23,7 +23,7 @@ Assignments nobody can take right now (plus healthy ones when requested)
 
 #### Defined in
 
-[src/types/matcher.ts:742](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L742)
+[src/types/matcher.ts:761](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L761)
 
 ___
 
@@ -33,7 +33,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:738](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L738)
+[src/types/matcher.ts:757](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L757)
 
 ___
 
@@ -45,7 +45,7 @@ Queued assignments examined (after `limit` / `minWaitingMs`)
 
 #### Defined in
 
-[src/types/matcher.ts:740](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L740)
+[src/types/matcher.ts:759](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L759)
 
 ___
 
@@ -69,4 +69,4 @@ persist across calls mean nothing is sweeping — check that
 
 #### Defined in
 
-[src/types/matcher.ts:748](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L748)
+[src/types/matcher.ts:767](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L767)

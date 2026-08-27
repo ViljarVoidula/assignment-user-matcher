@@ -28,7 +28,7 @@ carrying `hazardousNight`, or globally here.
 
 #### Defined in
 
-[src/scheduling/types.ts:378](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L378)
+[src/scheduling/types.ts:378](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L378)
 
 ___
 
@@ -40,7 +40,7 @@ Days over which the 8h night limit is averaged. Art 8(a) sets no EU ceiling.
 
 #### Defined in
 
-[src/scheduling/types.ts:372](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L372)
+[src/scheduling/types.ts:372](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L372)
 
 ___
 
@@ -52,7 +52,7 @@ Cap on a night worker's shift, normally 480.
 
 #### Defined in
 
-[src/scheduling/types.ts:370](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L370)
+[src/scheduling/types.ts:370](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L370)
 
 ___
 
@@ -64,7 +64,7 @@ Clock bands where work is barred outright (94/33/EC bars adolescents 00:00–04:
 
 #### Defined in
 
-[src/scheduling/types.ts:382](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L382)
+[src/scheduling/types.ts:382](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L382)
 
 ___
 
@@ -76,7 +76,7 @@ Night minutes in a shift that make it a night shift. Art 2(4)(a) uses 180.
 
 #### Defined in
 
-[src/scheduling/types.ts:368](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L368)
+[src/scheduling/types.ts:368](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L368)
 
 ___
 
@@ -88,7 +88,7 @@ Caps on how many night shifts may fall in a window, optionally filtered by end t
 
 #### Defined in
 
-[src/scheduling/types.ts:380](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L380)
+[src/scheduling/types.ts:380](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L380)
 
 ___
 
@@ -102,4 +102,4 @@ and Poland lets the employer choose any 8h band within 21:00–07:00.
 
 #### Defined in
 
-[src/scheduling/types.ts:366](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L366)
+[src/scheduling/types.ts:366](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L366)

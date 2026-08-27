@@ -262,6 +262,7 @@ The workflow engine is designed to run with many orchestrator replicas over larg
 - **Per-event idempotency markers** — processed-event markers carry their own TTL (`workflowIdempotencyTtlMs`), and replayed step executions generate deterministic assignment IDs so crash-replays never create duplicate assignments.
 - **Shared circuit breaker** — set `circuitBreakerShared: true` to converge breaker state across replicas through a shared Redis failure counter (recommended for multi-replica deployments).
 - **Instance retention** — set `workflowInstanceRetentionMs` to expire terminal (completed/failed/cancelled) instances and clean their registry/index entries. Unset (the default) keeps them forever, matching previous behavior; a value in the range of days to weeks is recommended for high-volume deployments.
+- **Event-stream trimming** — set `workflowEventStreamAutoTrim: true` to keep the `events:stream` Redis stream bounded. Trimming runs after event processing and on the orchestrator's reclaim interval, and is anchored to the consumption frontier — every entry delivered _and_ acknowledged by every consumer group — so it can never drop an unconsumed event, no matter how far consumers lag (the flip side: the stream still grows while consumers are down). Unset (the default), the stream is never trimmed; `trimWorkflowEventStream()` exposes the same trim for hosts running their own tick.
 
 Operational helpers:
 
@@ -336,8 +337,12 @@ Retrieves current pending assignments, including who owns each assignment and ho
 - `assignment`: The assignment payload.
 - `ownerId`: The current owner user ID, or `null` if missing.
 - `pendingForMs`: Elapsed pending time in milliseconds.
-- `pendingSince`: Unix timestamp (ms) when the assignment entered pending state.
+- `pendingSince`: Unix timestamp (ms) when the assignment entered pending state (derived from the assignment's own response deadline — `escalation.respondWithinMs` or `matchExpirationMs`).
 - `expiresAt`: Unix timestamp (ms) when pending expiration is scheduled.
+
+### `getCompletedAssignments(options?: { cursor?, limit? }): Promise<CompletedAssignmentPage>`
+
+Lists terminal assignments from the completed store (completions and failures share it), cursor-paged like the other bounded reads. Each entry is stamped `_status: 'completed'` or `'failed'` (the terminal marker also distinguishes them: `_completedBy`/`_completedAt` vs `_failedBy`/`_failedAt`). The store is only pruned when `completedAssignmentsRetentionMs` is configured (see [Options](#options)); pagination is best-effort under a concurrent purge — the cursor is a positional offset, so entries deleted between pages can shift what a later page returns. Loop until `hasMore` is false and re-page if completeness matters.
 
 ### User status & workload queries
 
@@ -536,18 +541,18 @@ matcher.startMaintenance(); // the recurrence sweep rides the maintenance tick
 
 | Field            | Meaning                                                                                                                             | Default  |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `everyMs`        | Interval between window opens. Minimum 1000                                                                                          | required |
-| `startAt`        | Epoch ms the first window opens                                                                                                      | now      |
-| `windowMs`       | Offer window per occurrence (`schedule.notAfter = open + windowMs`). Omitted: occurrences never expire off the offer clock           | none     |
-| `onMiss`         | Per-occurrence miss policy, as in `SchedulePolicy`                                                                                   | `'park'` |
-| `until`          | No occurrence opens after this epoch ms; the template retires                                                                        | none     |
-| `maxOccurrences` | Retire after this many occurrences materialized                                                                                      | none     |
+| `everyMs`        | Interval between window opens. Minimum 1000                                                                                         | required |
+| `startAt`        | Epoch ms the first window opens                                                                                                     | now      |
+| `windowMs`       | Offer window per occurrence (`schedule.notAfter = open + windowMs`). Omitted: occurrences never expire off the offer clock          | none     |
+| `onMiss`         | Per-occurrence miss policy, as in `SchedulePolicy`                                                                                  | `'park'` |
+| `until`          | No occurrence opens after this epoch ms; the template retires                                                                       | none     |
+| `maxOccurrences` | Retire after this many occurrences materialized                                                                                     | none     |
 | `catchUp`        | Downtime policy: `'skip'` materializes only slots whose window is still open; `'all'` materializes every elapsed slot (audit trail) | `'skip'` |
 
 Semantics worth knowing:
 
 - **Occurrence ids are deterministic** — `<templateId>@<openEpochMs>` — so a crashed sweep re-materializing a slot is an idempotent re-add, and any occurrence traces back to its template with no extra state.
-- **Slots never drift.** They align to `startAt + k × everyMs` whatever the sweep cadence; the tick decides when a slot is *noticed*, never where it sits.
+- **Slots never drift.** They align to `startAt + k × everyMs` whatever the sweep cadence; the tick decides when a slot is _noticed_, never where it sits.
 - **One occurrence ahead.** The sweep materializes each occurrence one interval before its window opens, so upcoming work is already visible in the scheduled store (`getScheduledAssignments()`, `getQueueStats().scheduled`).
 - **Skipped slots are free.** Under `catchUp: 'skip'`, slots that fully elapsed during downtime never existed: they don't count against `maxOccurrences` and don't flood the queue on revival. Under `'all'` they materialize and are immediately missed by the schedule sweep (parked/dropped per `onMiss`) — the audit-trail reading of a dead interval.
 - **Re-adding updates the template, not the clock.** Occurrences already cut and the next slot are facts about the past; remove and re-add to restart.
@@ -569,8 +574,9 @@ Deadlines are not self-firing — something has to sweep them. `startMaintenance
 - `slaExpiries` (default on) — SLA freshness TTLs (`sla.expireAfterMs`).
 - `workflowStepTimeouts` (default on when `enableWorkflows`) — the step-timeout index. **Note:** `startOrchestrator()` consumes the event stream but does not sweep step timeouts; without maintenance, `timeoutMs` on a workflow step never fires.
 - `idleUsers` (default on when `idleUserTimeoutMs` is set).
+- `completedRetention` (default on when `completedAssignmentsRetentionMs` is set) — purges terminal assignments from the completed store once their `_completedAt`/`_failedAt` timestamp is older than the window. The window applies retroactively to records created before the option was configured; purges are capped per pass so a large historical store drains across ticks. Entries without a terminal timestamp (externally injected) are never deleted. Also available standalone as `processCompletedAssignmentsRetention()`.
 
-`runMaintenanceOnce()` does one pass and returns a `MaintenanceReport` (`expiredMatches`, `escalations`, `parked`, `completionBreaches`, `slaExpiries`, `scheduleActivations`, `scheduleMisses`, `recurrenceMaterializations`, `recurrenceRetirements`, `expiredSteps`, `releasedIdleUsers`, `tookMs`) — use it from a host that already owns a tick (a multi-tenant worker, a serverless schedule) instead of holding a timer per matcher. `startAutoReleaseInterval()` remains as a deprecated alias that sweeps response deadlines only.
+`runMaintenanceOnce()` does one pass and returns a `MaintenanceReport` (`expiredMatches`, `escalations`, `parked`, `completionBreaches`, `slaExpiries`, `scheduleActivations`, `scheduleMisses`, `recurrenceMaterializations`, `recurrenceRetirements`, `retentionPurged`, `expiredSteps`, `releasedIdleUsers`, `tookMs`) — use it from a host that already owns a tick (a multi-tenant worker, a serverless schedule) instead of holding a timer per matcher. `startAutoReleaseInterval()` remains as a deprecated alias that sweeps response deadlines only.
 
 ### `getQueueStats(): Promise<QueueStats>`
 
@@ -639,6 +645,19 @@ type Options = {
     // Use `startIdleUserInterval(intervalMs)` / `stopIdleUserInterval()` to run
     // the check periodically. Disabled when undefined (default).
     idleUserTimeoutMs?: number; // Default: undefined (disabled)
+
+    // Retention window for the completed-assignments store, in ms. Terminal
+    // assignments (completed or failed — they share the store) whose
+    // _completedAt/_failedAt timestamp is older than the window are purged by
+    // the maintenance tick (sweep flag `completedRetention`, default on when
+    // this is set; also callable directly as processCompletedAssignmentsRetention()).
+    // The window applies RETROACTIVELY: records created before you configured
+    // it are purged too — in capped batches per tick, so a large historical
+    // store drains gradually rather than in one deletion storm. Entries
+    // without a terminal timestamp are never deleted. Disabled when
+    // undefined (default) — the store is kept forever, so set this on busy
+    // deployments unless you need the full audit trail.
+    completedAssignmentsRetentionMs?: number; // Default: undefined (keep forever)
 
     // Who wins when several users are eligible for the same assignment
     // during bulk matching (matchUsersAssignments() with no userId)?
@@ -1678,7 +1697,7 @@ repairSchedule(input, disruption, published); // minimal-perturbation re-plan + 
 diagnoseInfeasibility(input); // why it cannot be solved, before solving
 ```
 
-`repairSchedule` is the call-in path: everything untouched is pinned, so you get a **diff** rather than an unrecognisable new roster, plus a ranked list of who can lawfully cover, each with compliance verdicts, marginal cost and a rationale. All four share the solver's constraint set — there is deliberately no second validation path.
+`repairSchedule` is the call-in path: everything untouched is pinned, so you get a **diff** rather than an unrecognisable new roster, plus a ranked list of who can lawfully cover, each with compliance verdicts, marginal cost and a rationale. All four share the solver's constraint set — there is deliberately no second validation path. `checkCompliance` also runs the solver's ledger pass, so a hand-edited roster reports the same accrued obligations (compensatory rest, late-cancellation pay, protection fallbacks, time off in lieu) that `solveSchedule` would report for the same assignments — a human override can never validate as "compliant but owing nothing".
 
 ### Compliance boundary
 

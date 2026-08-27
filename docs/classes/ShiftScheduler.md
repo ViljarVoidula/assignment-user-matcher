@@ -42,4 +42,4 @@ Solve a scheduling problem synchronously. Throws `ScheduleValidationError` on ma
 
 #### Defined in
 
-[src/scheduling/scheduler.class.ts:40](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/scheduler.class.ts#L40)
+[src/scheduling/scheduler.class.ts:40](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/scheduler.class.ts#L40)

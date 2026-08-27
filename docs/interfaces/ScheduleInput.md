@@ -35,7 +35,7 @@ Absences that block assignment and may be neutral in rolling averages.
 
 #### Defined in
 
-[src/scheduling/types.ts:623](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L623)
+[src/scheduling/types.ts:623](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L623)
 
 ___
 
@@ -52,7 +52,7 @@ so runs stay deterministic and replayable.
 
 #### Defined in
 
-[src/scheduling/types.ts:619](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L619)
+[src/scheduling/types.ts:619](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L619)
 
 ___
 
@@ -71,7 +71,7 @@ Public holidays and closures, as ISO dates.
 
 #### Defined in
 
-[src/scheduling/types.ts:601](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L601)
+[src/scheduling/types.ts:601](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L601)
 
 ___
 
@@ -81,7 +81,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:592](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L592)
+[src/scheduling/types.ts:592](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L592)
 
 ___
 
@@ -91,7 +91,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:587](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L587)
+[src/scheduling/types.ts:587](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L587)
 
 ___
 
@@ -106,7 +106,7 @@ construction, because an 11h rest rule cannot see the shift that ended at
 
 #### Defined in
 
-[src/scheduling/types.ts:608](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L608)
+[src/scheduling/types.ts:608](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L608)
 
 ___
 
@@ -116,7 +116,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:589](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L589)
+[src/scheduling/types.ts:589](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L589)
 
 ___
 
@@ -128,7 +128,7 @@ Weights of optional soft-objective terms. Omitted terms stay out of the solve.
 
 #### Defined in
 
-[src/scheduling/types.ts:591](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L591)
+[src/scheduling/types.ts:591](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L591)
 
 ___
 
@@ -154,7 +154,7 @@ Called with the best roster so far as the search improves it.
 
 #### Defined in
 
-[src/scheduling/types.ts:625](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L625)
+[src/scheduling/types.ts:625](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L625)
 
 ___
 
@@ -174,7 +174,7 @@ Inclusive ISO date range, plus the zone its wall-clock times are read in.
 
 #### Defined in
 
-[src/scheduling/types.ts:586](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L586)
+[src/scheduling/types.ts:586](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L586)
 
 ___
 
@@ -186,7 +186,7 @@ Pairs the solver may not move.
 
 #### Defined in
 
-[src/scheduling/types.ts:621](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L621)
+[src/scheduling/types.ts:621](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L621)
 
 ___
 
@@ -205,7 +205,7 @@ A published roster, which anchors the notice clock and the perturbation objectiv
 
 #### Defined in
 
-[src/scheduling/types.ts:610](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L610)
+[src/scheduling/types.ts:610](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L610)
 
 ___
 
@@ -217,7 +217,7 @@ The labour-law layer. Omit for a plain feasibility solve.
 
 #### Defined in
 
-[src/scheduling/types.ts:599](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L599)
+[src/scheduling/types.ts:599](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L599)
 
 ___
 
@@ -229,7 +229,7 @@ Seed for reproducible runs.
 
 #### Defined in
 
-[src/scheduling/types.ts:594](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L594)
+[src/scheduling/types.ts:594](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L594)
 
 ___
 
@@ -239,7 +239,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:588](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L588)
+[src/scheduling/types.ts:588](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L588)
 
 ___
 
@@ -251,4 +251,4 @@ Wall-clock budget for the improvement loop. Default 10_000.
 
 #### Defined in
 
-[src/scheduling/types.ts:596](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L596)
+[src/scheduling/types.ts:596](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L596)

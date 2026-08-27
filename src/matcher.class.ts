@@ -125,6 +125,8 @@ import type {
     QueueAuditOptions,
     QueueAuditEntry,
     QueueAuditReport,
+    RetentionSweepResult,
+    CompletedAssignmentPage,
     UserStatusFilter,
     UserQueryOptions,
     UserSummary,
@@ -179,6 +181,8 @@ export type {
     QueueAuditOptions,
     QueueAuditEntry,
     QueueAuditReport,
+    RetentionSweepResult,
+    CompletedAssignmentPage,
     UserStatusFilter,
     UserQueryOptions,
     UserSummary,
@@ -244,6 +248,11 @@ function loadLuaScript(filename: string): string {
 // Lua script for atomic workflow transitions
 const WORKFLOW_TRANSITION_LUA = loadLuaScript('workflow-transition.lua');
 
+// Retention purges are capped per maintenance pass so enabling retention on a
+// deployment with a large historical completed store drains it across ticks
+// instead of one deletion storm.
+const RETENTION_PURGE_BATCH = 5000;
+
 export default class AssignmentMatcher implements WorkflowHost {
     relevantBatchSize: number;
     redisPrefix: string;
@@ -254,6 +263,7 @@ export default class AssignmentMatcher implements WorkflowHost {
     enableDefaultMatching: boolean;
     matchExpirationMs: number;
     idleUserTimeoutMs: number | null;
+    private completedAssignmentsRetentionMs: number | null;
     pendingAssignmentsKey: string;
     pendingAssignmentsExpiryKey: string;
     assignmentOwnerKey: string;
@@ -266,6 +276,7 @@ export default class AssignmentMatcher implements WorkflowHost {
     private scheduleNotAfterKey: string;
     private recurringAssignmentsKey: string;
     private recurringDueAtKey: string;
+    private completedAssignmentsAtKey: string;
     private keys: KeyBuilders;
 
     // Workflow-related properties
@@ -326,6 +337,11 @@ export default class AssignmentMatcher implements WorkflowHost {
         this.maxUserBacklogSize = options?.maxUserBacklogSize ?? 9;
         this.matchExpirationMs = options?.matchExpirationMs ?? 60000;
         this.idleUserTimeoutMs = options?.idleUserTimeoutMs ?? null;
+        const completedRetentionMs = options?.completedAssignmentsRetentionMs;
+        this.completedAssignmentsRetentionMs =
+            completedRetentionMs !== undefined && Number.isFinite(completedRetentionMs) && completedRetentionMs > 0
+                ? completedRetentionMs
+                : null;
         this.pendingAssignmentsKey = this.keys.pendingAssignmentsData();
         this.pendingAssignmentsExpiryKey = this.keys.pendingAssignmentsExpiry();
         this.assignmentOwnerKey = this.keys.assignmentOwner();
@@ -339,6 +355,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         this.recurringAssignmentsKey = this.keys.recurringAssignments();
         this.recurringDueAtKey = this.keys.recurringDueAt();
         this.completedAssignmentsKey = this.keys.completedAssignments();
+        this.completedAssignmentsAtKey = this.keys.completedAssignmentsAt();
         this.calculatePriority = options?.prioritizationFunction ?? this.calculatePriority;
         this.usingDefaultMatchScore = !options?.matchingFunction;
         this.matchScore = options?.matchingFunction ?? this.defaultMatchScore.bind(this);
@@ -412,6 +429,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             reclaimIntervalMs: options?.workflowReclaimPollIntervalMs ?? 5000,
             reclaimMinIdleMs: options?.workflowOrphanReclaimMs ?? 60000,
             retentionMs: options?.workflowInstanceRetentionMs,
+            autoTrimEventStream: options?.workflowEventStreamAutoTrim,
             retryBackoffMs: options?.workflowRetryBackoffMs,
             eventBatchSize: options?.workflowEventBatchSize,
             pollBlockMs: options?.workflowPollBlockMs,
@@ -2293,7 +2311,12 @@ export default class AssignmentMatcher implements WorkflowHost {
 
                 const score = expiryScores[i];
                 const expiresAt = score === null || score === undefined ? null : Number(score);
-                const pendingSince = expiresAt === null ? null : expiresAt - this.matchExpirationMs;
+                // The expiry score was written as claimAt + the assignment's own
+                // response deadline (escalation.respondWithinMs, falling back to
+                // matchExpirationMs) — deriving pendingSince from anything else
+                // mis-ages every escalating assignment.
+                const pendingSince =
+                    expiresAt === null ? null : expiresAt - responseDeadlineFromJson(json, this.matchExpirationMs);
                 const pendingForMs = pendingSince === null ? null : Math.max(0, now - pendingSince);
 
                 metas.push({ json, ownerId: owners[i] ?? null, pendingForMs, pendingSince, expiresAt });
@@ -2339,6 +2362,60 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         results.sort((a, b) => (b.pendingForMs ?? -1) - (a.pendingForMs ?? -1));
         return results;
+    }
+
+    /**
+     * List terminal assignments from the completed store (both completions and
+     * failures — they share the store, distinguished by the `_status` stamp:
+     * `_completedBy`/`_completedAt` vs `_failedBy`/`_failedAt`). Cursor-paged
+     * over HSCAN. The store is pruned only when
+     * `completedAssignmentsRetentionMs` is set; pagination is best-effort
+     * under a concurrent purge — the cursor is a positional offset over scan
+     * order, so entries deleted between pages can shift what a later page
+     * returns. Loop until `hasMore` is false and re-page if completeness
+     * matters.
+     */
+    async getCompletedAssignments(options?: { cursor?: string | null; limit?: number }): Promise<CompletedAssignmentPage> {
+        await this.readyPromise;
+
+        const limit = Math.max(1, Math.min(Math.floor(options?.limit ?? 100) || 100, 1000));
+        const offset = Math.max(0, parseInt(options?.cursor ?? '0', 10) || 0);
+
+        const assignments: CompletedAssignmentPage['assignments'] = [];
+        const seen = new Set<string>();
+        let scanned = 0;
+        let hasMore = false;
+        let cursor = '0';
+
+        do {
+            const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.completedAssignmentsKey, cursor, {
+                COUNT: Math.max(limit, 100),
+            });
+            cursor = nextCursor;
+            for (const entry of entries) {
+                // HSCAN may repeat a field across pages under a concurrent rehash.
+                if (seen.has(entry.field)) continue;
+                seen.add(entry.field);
+                if (scanned < offset) {
+                    scanned++;
+                    continue;
+                }
+                if (assignments.length >= limit) {
+                    hasMore = true;
+                    break;
+                }
+                scanned++;
+                try {
+                    const assignment = JSON.parse(entry.value);
+                    assignment._status = assignment._failedAt !== undefined ? 'failed' : 'completed';
+                    assignments.push(assignment);
+                } catch {
+                    // Skip corrupt entries (same precedent as the pending listing).
+                }
+            }
+        } while (cursor !== '0' && !hasMore);
+
+        return { assignments, nextCursor: hasMore ? String(scanned) : null, hasMore };
     }
 
     /** Default match score implementation using extracted scoring module */
@@ -3718,6 +3795,7 @@ export default class AssignmentMatcher implements WorkflowHost {
                     _failureReason: `rejection-budget-exhausted:${cause}`,
                 }),
             );
+            multi.zAdd(this.completedAssignmentsAtKey, { score: now, value: assignment.id });
         }
         await multi.exec();
 
@@ -3772,6 +3850,8 @@ export default class AssignmentMatcher implements WorkflowHost {
             _result: result,
         };
         multi.hSet(this.completedAssignmentsKey, assignmentId, JSON.stringify(completedData));
+        // Retention index: the sweep reads only entries past the window.
+        multi.zAdd(this.completedAssignmentsAtKey, { score: now, value: assignmentId });
 
         await multi.exec();
 
@@ -3838,6 +3918,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             _failureReason: reason,
         };
         multi.hSet(this.completedAssignmentsKey, assignmentId, JSON.stringify(failedData));
+        multi.zAdd(this.completedAssignmentsAtKey, { score: now, value: assignmentId });
 
         await multi.exec();
 
@@ -4026,6 +4107,18 @@ export default class AssignmentMatcher implements WorkflowHost {
     async publishWorkflowEvent(event: WorkflowEvent): Promise<string> {
         await this.readyPromise;
         return this.workflow.publishWorkflowEvent(event);
+    }
+
+    /**
+     * Trim the workflow event stream up to the consumption frontier — every
+     * entry delivered *and* acknowledged by every consumer group. Never trims
+     * ahead of consumers, so no event can be lost to trimming. Runs
+     * automatically after event processing and on the reclaim interval when
+     * `workflowEventStreamAutoTrim` is set; callable directly otherwise.
+     */
+    async trimWorkflowEventStream(): Promise<number> {
+        await this.readyPromise;
+        return this.workflow.trimWorkflowEventStream();
     }
 
     /**
@@ -4320,6 +4413,7 @@ export default class AssignmentMatcher implements WorkflowHost {
                             _failureReason: 'completion-sla-breach',
                         }),
                     )
+                    .zAdd(this.completedAssignmentsAtKey, { score: now, value: id })
                     // Terminal: the freshness TTL no longer applies.
                     .zRem(this.assignmentsSlaExpiryKey, id);
                 if (workerId) multi.zRem(this.keys.userAcceptedAssignments(workerId), id);
@@ -4812,6 +4906,77 @@ export default class AssignmentMatcher implements WorkflowHost {
     private maintenanceRunning = false;
 
     /**
+     * Purge terminal assignments older than `completedAssignmentsRetentionMs`.
+     *
+     * The completed store has no expiry of its own — an accepted assignment's
+     * deadlines all die at accept — so without this sweep it grows forever on
+     * busy deployments. The terminal-timestamp index (`completedAssignmentsAt`,
+     * written atomically with each completed hSet) keeps the steady-state pass
+     * O(eligible) — the same shape as every other deadline sweep — and purges
+     * are capped per pass, so enabling retention on a deployment with a large
+     * historical store drains it across ticks instead of in one deletion
+     * storm. The window applies retroactively: pre-existing records older
+     * than it are purged too. Entries without a terminal timestamp
+     * (externally injected or corrupt) are never indexed and never deleted.
+     * No-op, reporting zero, when no retention window is configured.
+     */
+    async processCompletedAssignmentsRetention(): Promise<RetentionSweepResult> {
+        await this.readyPromise;
+
+        const retentionMs = this.completedAssignmentsRetentionMs;
+        if (retentionMs === null) return { purged: 0 };
+
+        await this.backfillCompletedRetentionIndex();
+
+        const cutoff = Date.now() - retentionMs;
+        const stale = await this.redisClient.zRangeByScore(this.completedAssignmentsAtKey, '-inf', cutoff, {
+            LIMIT: { offset: 0, count: RETENTION_PURGE_BATCH },
+        });
+        if (stale.length === 0) return { purged: 0 };
+
+        await this.redisClient
+            .multi()
+            .hDel(this.completedAssignmentsKey, stale)
+            .zRem(this.completedAssignmentsAtKey, stale)
+            .exec();
+
+        return { purged: stale.length };
+    }
+
+    /**
+     * One-shot migration for entries written before the terminal-timestamp
+     * index existed (same pattern as `backfillWorkflowIndexes()`): a single
+     * full HSCAN pass indexes them, then the marker key makes the pass never
+     * run again. Entries without a terminal timestamp stay unindexed — and
+     * therefore never purgeable — by design.
+     */
+    private async backfillCompletedRetentionIndex(): Promise<void> {
+        if (Number(await this.redisClient.exists(this.keys.completedRetentionIndexed()))) return;
+
+        const multi = this.redisClient.multi();
+        let cursor = '0';
+        do {
+            const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.completedAssignmentsKey, cursor, {
+                COUNT: 500,
+            });
+            cursor = nextCursor;
+            for (const entry of entries) {
+                try {
+                    const parsed = JSON.parse(entry.value);
+                    const terminalAt = Number(parsed._completedAt ?? parsed._failedAt);
+                    if (Number.isFinite(terminalAt) && terminalAt > 0) {
+                        multi.zAdd(this.completedAssignmentsAtKey, { score: terminalAt, value: entry.field });
+                    }
+                } catch {
+                    // Corrupt entries are not the sweep's to index or delete.
+                }
+            }
+        } while (cursor !== '0');
+        multi.set(this.keys.completedRetentionIndexed(), '1');
+        await multi.exec();
+    }
+
+    /**
      * Run every enabled maintenance sweep once: response deadlines and
      * escalations, workflow step timeouts, and idle-user release.
      *
@@ -4836,6 +5001,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         let scheduleMisses = 0;
         let recurrenceMaterializations = 0;
         let recurrenceRetirements = 0;
+        let retentionPurged = 0;
 
         // Recurrence before schedule: an occurrence materialized due-now is
         // then activated by the schedule sweep in this same tick.
@@ -4869,6 +5035,9 @@ export default class AssignmentMatcher implements WorkflowHost {
         if (opts.idleUsers && this.idleUserTimeoutMs !== null) {
             releasedIdleUsers = (await this.processIdleUsers()).length;
         }
+        if (opts.completedRetention && this.completedAssignmentsRetentionMs !== null) {
+            retentionPurged = (await this.processCompletedAssignmentsRetention()).purged;
+        }
 
         return {
             expiredMatches,
@@ -4882,6 +5051,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             scheduleMisses,
             recurrenceMaterializations,
             recurrenceRetirements,
+            retentionPurged,
             tookMs: Date.now() - startedAt,
         };
     }
@@ -4933,6 +5103,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             recurrence: options?.recurrence ?? true,
             workflowStepTimeouts: options?.workflowStepTimeouts ?? this.enableWorkflows,
             idleUsers: options?.idleUsers ?? this.idleUserTimeoutMs !== null,
+            completedRetention: options?.completedRetention ?? this.completedAssignmentsRetentionMs !== null,
         };
     }
 

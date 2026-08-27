@@ -27,7 +27,7 @@ Whether circuit breaker is currently allowing requests
 
 #### Defined in
 
-[src/types/matcher.ts:1607](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1607)
+[src/types/matcher.ts:1655](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1655)
 
 ___
 
@@ -39,7 +39,7 @@ Current circuit breaker state
 
 #### Defined in
 
-[src/types/matcher.ts:1593](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1593)
+[src/types/matcher.ts:1641](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1641)
 
 ___
 
@@ -51,7 +51,7 @@ Current Dead Letter Queue size
 
 #### Defined in
 
-[src/types/matcher.ts:1595](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1595)
+[src/types/matcher.ts:1643](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1643)
 
 ___
 
@@ -63,7 +63,7 @@ Timestamp of last successful connection
 
 #### Defined in
 
-[src/types/matcher.ts:1603](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1603)
+[src/types/matcher.ts:1651](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1651)
 
 ___
 
@@ -75,7 +75,7 @@ Last error message if any
 
 #### Defined in
 
-[src/types/matcher.ts:1601](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1601)
+[src/types/matcher.ts:1649](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1649)
 
 ___
 
@@ -87,7 +87,7 @@ Timestamp of last health check
 
 #### Defined in
 
-[src/types/matcher.ts:1605](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1605)
+[src/types/matcher.ts:1653](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1653)
 
 ___
 
@@ -99,7 +99,7 @@ Number of reconnection attempts since start
 
 #### Defined in
 
-[src/types/matcher.ts:1599](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1599)
+[src/types/matcher.ts:1647](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1647)
 
 ___
 
@@ -111,4 +111,4 @@ Whether Redis is considered healthy
 
 #### Defined in
 
-[src/types/matcher.ts:1597](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1597)
+[src/types/matcher.ts:1645](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1645)

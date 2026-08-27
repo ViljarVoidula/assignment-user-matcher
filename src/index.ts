@@ -35,6 +35,8 @@ export type {
     RecurringAssignment,
     RecurringAssignmentRecord,
     RecurrenceSweepResult,
+    RetentionSweepResult,
+    CompletedAssignmentPage,
     AssignmentLintIssue,
     AssignmentLintContext,
     AssignmentReadinessReport,

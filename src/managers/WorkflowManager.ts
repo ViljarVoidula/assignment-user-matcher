@@ -76,6 +76,15 @@ export class WorkflowManager {
             commandTimeout?: number;
             /** TTL applied to terminal workflow instances; keeps them forever when unset */
             retentionMs?: number;
+            /**
+             * Automatically trim the workflow event stream up to the
+             * consumption frontier — every entry delivered *and* acknowledged
+             * by every consumer group — after event processing and on the
+             * reclaim interval. Never trims ahead of consumers, so trimming
+             * cannot lose an event; the flip side is that the stream still
+             * grows while consumers are down. Unset (default): never trimmed.
+             */
+            autoTrimEventStream?: boolean;
             /** Initial backoff delay for scheduled event retries (default: 1000ms) */
             retryBackoffMs?: number;
             /** Max stream entries read per orchestrator poll (default: 10) */
@@ -821,6 +830,52 @@ export class WorkflowManager {
     }
 
     /**
+     * Trim the workflow event stream up to the consumption frontier.
+     *
+     * The frontier is derived per consumer group and the minimum across groups
+     * wins: with pending entries a group's threshold is its oldest
+     * unacknowledged id (exclusive — that entry must survive); with none,
+     * every delivered entry is acked, so the threshold is one past the
+     * last-delivered id and deletes through it. Everything below the frontier
+     * has been delivered *and* acknowledged by every group, so removing it can
+     * never lose an event (XTRIM MINID is not consumer-group-aware on its own;
+     * anchoring it here is what makes the trim safe). Returns the number of
+     * entries removed, or 0 when there is nothing safe to remove (no groups,
+     * unknown group state, or nothing fully consumed yet).
+     */
+    async trimWorkflowEventStream(): Promise<number> {
+        const streamKey = this.keys.eventStream();
+
+        let groups: Array<{ name: string; pending: number; 'last-delivered-id'?: string }>;
+        try {
+            groups = (await this.redisClient.xInfoGroups(streamKey)) as unknown as typeof groups;
+        } catch {
+            return 0; // stream or groups do not exist yet — nothing has been consumed
+        }
+
+        let frontier: [number, number] | null = null;
+        for (const group of groups) {
+            const lastDelivered = parseStreamId(group['last-delivered-id']);
+            let threshold: [number, number];
+            if (Number(group.pending) > 0) {
+                const summary = (await this.redisClient.xPending(streamKey, group.name)) as unknown as {
+                    firstId?: string | null;
+                };
+                const firstPending = parseStreamId(summary?.firstId);
+                threshold = firstPending ?? [0, 0];
+            } else if (lastDelivered) {
+                threshold = [lastDelivered[0], lastDelivered[1] + 1];
+            } else {
+                threshold = [0, 0];
+            }
+            if (!frontier || compareStreamIds(threshold, frontier) < 0) frontier = threshold;
+        }
+        if (!frontier || (frontier[0] === 0 && frontier[1] <= 1)) return 0;
+
+        return Number(await this.redisClient.xTrim(streamKey, 'MINID', `${frontier[0]}-${frontier[1]}`));
+    }
+
+    /**
      * Non-blocking drain of up to `maxEvents` due workflow events, using the
      * main Redis client (no duplicated subscriber connection, no BLOCK wait).
      * Shares all processing internals with the orchestrator loop — idempotency,
@@ -894,6 +949,16 @@ export class WorkflowManager {
                 return processed;
             }
             console.error('processWorkflowEvents read error:', err);
+        }
+
+        // Sweep-mode hosts get the auto-trim here: acks above just advanced the
+        // frontier, so this is the cheapest point at which trimming is safe.
+        if (this.options.autoTrimEventStream) {
+            try {
+                await this.trimWorkflowEventStream();
+            } catch (err) {
+                console.error('Event stream trim failed:', err);
+            }
         }
 
         return processed;
@@ -1547,6 +1612,17 @@ export class WorkflowManager {
             }
             console.error('Error in XAUTOCLAIM:', err);
         }
+
+        // The reclaim interval is the orchestrator-mode trim cadence — it runs
+        // whether or not this pass reclaimed anything, because regular event
+        // processing advanced the frontier since the last tick.
+        if (this.options.autoTrimEventStream) {
+            try {
+                await this.trimWorkflowEventStream();
+            } catch (err) {
+                console.error('Event stream trim failed:', err);
+            }
+        }
         return totalReclaimed;
     }
 
@@ -1842,4 +1918,15 @@ export class WorkflowManager {
             return { ok: false, error: err.message };
         }
     }
+}
+
+function parseStreamId(id: string | null | undefined): [number, number] | null {
+    if (!id) return null;
+    const [ms, seq] = id.split('-').map(Number);
+    if (!Number.isFinite(ms)) return null;
+    return [ms, Number.isFinite(seq) ? seq : 0];
+}
+
+function compareStreamIds(a: [number, number], b: [number, number]): number {
+    return a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1];
 }

@@ -119,6 +119,14 @@ export function createKeyBuilders(config: RedisKeyConfig) {
 
         // Completed assignments store
         completedAssignments: () => `${prefix}assignments:completed`,
+        // Terminal-timestamp index for the completed store: assignment id
+        // scored by _completedAt/_failedAt epoch ms, written in the same multi
+        // as the completed hSet, so the retention sweep reads only eligible
+        // entries instead of scanning the whole store every tick.
+        completedAssignmentsAt: () => `${prefix}assignments:completedAt`,
+        // One-shot marker: the retention sweep's backfill pass (indexing
+        // entries written before the index existed) has completed.
+        completedRetentionIndexed: () => `${prefix}assignments:completed:retention-indexed`,
 
         // Decision trace stream (auditable routing decisions)
         decisionTraces: () => `${prefix}decisions:traces`,

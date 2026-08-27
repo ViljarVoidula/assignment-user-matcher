@@ -25,7 +25,7 @@ actually happened, use decision traces instead.
 
 #### Defined in
 
-[src/types/matcher.ts:627](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L627)
+[src/types/matcher.ts:646](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L646)
 
 ___
 
@@ -35,7 +35,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:636](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L636)
+[src/types/matcher.ts:655](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L655)
 
 ___
 
@@ -45,7 +45,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:635](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L635)
+[src/types/matcher.ts:654](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L654)
 
 ___
 
@@ -59,14 +59,14 @@ released on acceptance — consult decision traces for the full history).
 
 #### Defined in
 
-[src/types/matcher.ts:634](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L634)
+[src/types/matcher.ts:653](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L653)
 
 ___
 
 ### status
 
-• **status**: ``"queued"`` \| ``"pending"`` \| ``"accepted"`` \| ``"completed"`` \| ``"scheduled"`` \| ``"not_found"``
+• **status**: ``"completed"`` \| ``"queued"`` \| ``"pending"`` \| ``"accepted"`` \| ``"scheduled"`` \| ``"not_found"``
 
 #### Defined in
 
-[src/types/matcher.ts:628](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L628)
+[src/types/matcher.ts:647](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L647)

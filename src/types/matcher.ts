@@ -365,13 +365,23 @@ export type RecurrenceSweepResult = {
     retired: number;
 };
 
+/** Outcome of one `processCompletedAssignmentsRetention()` sweep. */
+export type RetentionSweepResult = {
+    /** Completed assignments whose terminal timestamp fell outside the window */
+    purged: number;
+};
+
 /** Aggregate SLO attainment counters from `getSlaStats()`. */
 export interface SlaStats {
     /** Total assignments offered (pending) for the scope */
     offers: number;
     /** Assignments accepted before their response deadline */
     acceptedInTime: number;
-    /** Pending assignments whose response deadline elapsed (all, not only SLA-bearing) */
+    /**
+     * Pending assignments whose response deadline elapsed. The response clock
+     * applies to every assignment (escalation window or `matchExpirationMs`),
+     * but like every counter here only SLA-bearing assignments are measured.
+     */
     acceptanceBreaches: number;
     /** Accepted assignments whose completion deadline elapsed */
     completionBreaches: number;
@@ -437,6 +447,15 @@ export type PendingAssignmentInfo = {
     pendingForMs: number | null;
     pendingSince: number | null;
     expiresAt: number | null;
+};
+
+/** One page of `getCompletedAssignments()`. */
+export type CompletedAssignmentPage = {
+    /** Terminal assignments, each stamped `_status: 'completed' | 'failed'` */
+    assignments: Array<Assignment & { _status?: 'completed' | 'failed' }>;
+    /** Opaque cursor for the next page (an entry offset); null on the last page */
+    nextCursor: string | null;
+    hasMore: boolean;
 };
 
 /**
@@ -949,6 +968,8 @@ export type MaintenanceReport = {
     recurrenceMaterializations: number;
     /** Recurring templates retired (bound reached) */
     recurrenceRetirements: number;
+    /** Completed assignments removed by the retention sweep */
+    retentionPurged: number;
     /** Wall-clock duration of the pass */
     tookMs: number;
 };
@@ -971,6 +992,11 @@ export type MaintenanceOptions = {
     workflowStepTimeouts?: boolean;
     /** Idle-user release. @default true when `idleUserTimeoutMs` is set */
     idleUsers?: boolean;
+    /**
+     * Completed-assignments retention sweep (`completedAssignmentsRetentionMs`).
+     * @default true when `completedAssignmentsRetentionMs` is set
+     */
+    completedRetention?: boolean;
 };
 
 export type MatcherOptions = {
@@ -1200,6 +1226,28 @@ export type MatcherOptions = {
      * When unset (default), terminal instances are kept forever.
      */
     workflowInstanceRetentionMs?: number;
+    /**
+     * Automatically trim the workflow event stream up to the consumption
+     * frontier — every entry delivered *and* acknowledged by every consumer
+     * group — after event processing and on the orchestrator's reclaim
+     * interval (sweep-mode hosts can call `trimWorkflowEventStream()` from
+     * their own tick). Because the trim is anchored below every group's
+     * oldest unacknowledged entry, trimming can never lose an event; the
+     * tradeoff is that the stream still grows while consumers are down. When
+     * unset (default), the stream is never trimmed.
+     */
+    workflowEventStreamAutoTrim?: boolean;
+    /**
+     * Retention window for the completed-assignments store, in ms. When set,
+     * the maintenance tick purges terminal (completed or failed — the store
+     * holds both outcomes) assignments whose `_completedAt`/`_failedAt`
+     * timestamp is older than the window. The window applies retroactively:
+     * records created before this option was configured are purged as soon
+     * as they fall outside it, in capped batches per tick. Entries without a
+     * terminal timestamp are never deleted. When unset (default), the store
+     * is kept forever.
+     */
+    completedAssignmentsRetentionMs?: number;
     /** Initial backoff delay for scheduled workflow event retries in ms (default: 1000) */
     workflowRetryBackoffMs?: number;
     /** Max stream entries read per orchestrator poll (XREADGROUP COUNT, default: 10) */

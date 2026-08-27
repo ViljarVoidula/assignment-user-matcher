@@ -107,6 +107,49 @@ describe('Scheduling operations', function () {
             expect(rest.actual).to.be.a('number');
             expect(rest.required).to.be.a('number');
         });
+
+        it('reports the same accrued obligations the solver would, ledger for ledger', function () {
+            // Overtime compensated in time off makes every roster with hours
+            // past the ordinary baseline accrue a debt the caller must see —
+            // whether the solver or a human produced the roster.
+            const input = wardInput({
+                employees: [
+                    { id: 'anna', tags: ['nurse'], timeOff: [], overtimeConsent: true },
+                    { id: 'bo', tags: ['nurse'], timeOff: [], overtimeConsent: true },
+                    { id: 'cara', tags: ['nurse'], timeOff: [], overtimeConsent: true },
+                ],
+                rules: {
+                    dailyRest: { minMinutes: 11 * H },
+                    nightWork: { window: { from: '23:00', to: '06:00' }, qualifiesAfterMinutes: 2 * H },
+                    overtime: { ordinaryPerWeekMinutes: 10 * H, compensation: 'timeOff', requiresConsent: true },
+                },
+                timeBudgetMs: 100,
+            });
+            const solved = solveSchedule(input);
+            expect(solved.ledger!, 'fixture must accrue obligations').to.have.length.greaterThan(0);
+            const report = checkCompliance(input, solved.assignments);
+            expect(report.ledger).to.deep.equal(solved.ledger!);
+        });
+
+        it('charges overtime a hand-edited roster accrues, not only a solved one', function () {
+            const input = wardInput({
+                rules: {
+                    dailyRest: { minMinutes: 11 * H },
+                    nightWork: { window: { from: '23:00', to: '06:00' }, qualifiesAfterMinutes: 2 * H },
+                    overtime: { ordinaryPerWeekMinutes: 10 * H, compensation: 'timeOff', requiresConsent: true },
+                },
+            });
+            // A human puts Anna on two day shifts: 16h against a 10h weekly
+            // baseline accrues 6h of time off in lieu the report must carry.
+            const edited: ScheduledAssignment[] = [
+                { employeeId: 'anna', shiftInstanceId: 'day@2026-01-05', date: '2026-01-05', reasons: [] },
+                { employeeId: 'anna', shiftInstanceId: 'day@2026-01-06', date: '2026-01-06', reasons: [] },
+            ];
+            const report = checkCompliance(input, edited);
+            const debt = report.ledger.find((l) => l.kind === 'timeOffInLieu' && l.employeeId === 'anna');
+            expect(debt, 'time-off-in-lieu debt reported').to.exist;
+            expect(debt!.minutes).to.equal(6 * H);
+        });
     });
 
     describe('explainCandidate', function () {

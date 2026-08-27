@@ -472,6 +472,28 @@ describe('User status & workload query APIs', function () {
             }
         });
 
+        it('getPendingAssignmentsWithAge derives pendingSince from the per-assignment response deadline', async function () {
+            const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
+            try {
+                const matcher = createMatcher({ matchExpirationMs: 300000 });
+                await matcher.addUser({ id: 'u1', tags: ['t'], maxBacklogSize: 10 });
+                const claimedAt = Date.now();
+                await pendOne(matcher, 'u1', 'esc', { escalation: { respondWithinMs: 2000 } });
+                clock.tick(500);
+
+                const [entry] = await matcher.getPendingAssignmentsWithAge();
+                // The expiry score is claimAt + respondWithinMs, so the age must
+                // be measured against the escalation window (2s), not the global
+                // matchExpirationMs (5m) — deriving from the global window made a
+                // half-second-old escalation look ~5 minutes old.
+                expect(entry.expiresAt).to.equal(claimedAt + 2000);
+                expect(entry.pendingSince).to.equal(claimedAt);
+                expect(entry.pendingForMs).to.equal(500);
+            } finally {
+                clock.restore();
+            }
+        });
+
         it('getPendingAssignmentsWithAge with limit returns only the top-N longest pending', async function () {
             const clock = sinon.useFakeTimers({ now: Date.now(), toFake: ['Date'] });
             try {

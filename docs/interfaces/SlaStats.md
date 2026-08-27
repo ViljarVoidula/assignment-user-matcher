@@ -24,11 +24,13 @@ Aggregate SLO attainment counters from `getSlaStats()`.
 
 • **acceptanceBreaches**: `number`
 
-Pending assignments whose response deadline elapsed (all, not only SLA-bearing)
+Pending assignments whose response deadline elapsed. The response clock
+applies to every assignment (escalation window or `matchExpirationMs`),
+but like every counter here only SLA-bearing assignments are measured.
 
 #### Defined in
 
-[src/types/matcher.ts:375](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L375)
+[src/types/matcher.ts:385](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L385)
 
 ___
 
@@ -40,7 +42,7 @@ Assignments accepted before their response deadline
 
 #### Defined in
 
-[src/types/matcher.ts:373](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L373)
+[src/types/matcher.ts:379](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L379)
 
 ___
 
@@ -52,7 +54,7 @@ Accepted assignments whose completion deadline elapsed
 
 #### Defined in
 
-[src/types/matcher.ts:377](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L377)
+[src/types/matcher.ts:387](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L387)
 
 ___
 
@@ -64,7 +66,7 @@ Mean accept latency in ms (acceptedAt - matchedAt), 0 when no data
 
 #### Defined in
 
-[src/types/matcher.ts:385](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L385)
+[src/types/matcher.ts:395](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L395)
 
 ___
 
@@ -76,7 +78,7 @@ Mean completion latency in ms (completedAt - acceptedAt), 0 when no data
 
 #### Defined in
 
-[src/types/matcher.ts:387](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L387)
+[src/types/matcher.ts:397](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L397)
 
 ___
 
@@ -88,7 +90,7 @@ Total assignments offered (pending) for the scope
 
 #### Defined in
 
-[src/types/matcher.ts:371](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L371)
+[src/types/matcher.ts:377](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L377)
 
 ___
 
@@ -100,7 +102,7 @@ Assignments parked because their rejection budget ran out
 
 #### Defined in
 
-[src/types/matcher.ts:381](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L381)
+[src/types/matcher.ts:391](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L391)
 
 ___
 
@@ -112,7 +114,7 @@ Assignments parked/dropped because their offer window (`schedule.notAfter`) clos
 
 #### Defined in
 
-[src/types/matcher.ts:383](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L383)
+[src/types/matcher.ts:393](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L393)
 
 ___
 
@@ -124,4 +126,4 @@ Assignments removed/parked by the freshness TTL
 
 #### Defined in
 
-[src/types/matcher.ts:379](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L379)
+[src/types/matcher.ts:389](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L389)

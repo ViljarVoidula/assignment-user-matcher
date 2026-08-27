@@ -108,6 +108,7 @@
 - [AssignmentLifecycleEvent](modules.md#assignmentlifecycleevent)
 - [AssignmentStatus](modules.md#assignmentstatus)
 - [AutoRoutingWeightsPolicy](modules.md#autoroutingweightspolicy)
+- [CompletedAssignmentPage](modules.md#completedassignmentpage)
 - [CompletionDeadlineSweepResult](modules.md#completiondeadlinesweepresult)
 - [Disruption](modules.md#disruption)
 - [EscalationSweepResult](modules.md#escalationsweepresult)
@@ -130,6 +131,7 @@
 - [QueueStats](modules.md#queuestats)
 - [RecurrenceSweepResult](modules.md#recurrencesweepresult)
 - [RecurringAssignment](modules.md#recurringassignment)
+- [RetentionSweepResult](modules.md#retentionsweepresult)
 - [ScheduleSweepResult](modules.md#schedulesweepresult)
 - [Severity](modules.md#severity)
 - [SlaExpirySweepResult](modules.md#slaexpirysweepresult)
@@ -210,7 +212,7 @@ One accepted (in-progress) assignment of a user, newest first.
 
 #### Defined in
 
-[src/types/matcher.ts:506](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L506)
+[src/types/matcher.ts:525](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L525)
 
 ___
 
@@ -242,7 +244,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:37](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L37)
+[src/types/matcher.ts:37](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L37)
 
 ___
 
@@ -252,7 +254,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:767](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L767)
+[src/types/matcher.ts:786](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L786)
 
 ___
 
@@ -262,7 +264,7 @@ ___
 
 #### Defined in
 
-[src/queries/pagination.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/queries/pagination.ts#L6)
+[src/queries/pagination.ts:6](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/queries/pagination.ts#L6)
 
 ___
 
@@ -274,7 +276,27 @@ Synthesis policy for automatic routing weights.
 
 #### Defined in
 
-[src/types/matcher.ts:1691](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1691)
+[src/types/matcher.ts:1739](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1739)
+
+___
+
+### CompletedAssignmentPage
+
+Ƭ **CompletedAssignmentPage**: `Object`
+
+One page of `getCompletedAssignments()`.
+
+#### Type declaration
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `assignments` | [`Assignment`](modules.md#assignment) & \{ `_status?`: ``"completed"`` \| ``"failed"``  }[] | Terminal assignments, each stamped `_status: 'completed' \| 'failed'` |
+| `hasMore` | `boolean` | - |
+| `nextCursor` | `string` \| ``null`` | Opaque cursor for the next page (an entry offset); null on the last page |
+
+#### Defined in
+
+[src/types/matcher.ts:453](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L453)
 
 ___
 
@@ -292,7 +314,7 @@ Outcome of one `processCompletionDeadlines()` sweep.
 
 #### Defined in
 
-[src/types/matcher.ts:909](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L909)
+[src/types/matcher.ts:928](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L928)
 
 ___
 
@@ -302,7 +324,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/operations.ts:137](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L137)
+[src/scheduling/operations.ts:157](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L157)
 
 ___
 
@@ -322,7 +344,7 @@ Outcome of one `processResponseDeadlines()` sweep.
 
 #### Defined in
 
-[src/types/matcher.ts:899](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L899)
+[src/types/matcher.ts:918](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L918)
 
 ___
 
@@ -335,7 +357,7 @@ value does.
 
 #### Defined in
 
-[src/types/matcher.ts:516](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L516)
+[src/types/matcher.ts:535](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L535)
 
 ___
 
@@ -353,7 +375,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:390](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L390)
+[src/types/matcher.ts:400](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L400)
 
 ___
 
@@ -380,7 +402,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:396](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L396)
+[src/types/matcher.ts:406](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L406)
 
 ___
 
@@ -390,7 +412,7 @@ ___
 
 #### Defined in
 
-[src/utils/keys.ts:160](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/keys.ts#L160)
+[src/utils/keys.ts:168](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/keys.ts#L168)
 
 ___
 
@@ -417,7 +439,7 @@ Pluggable feature extractor for the learning layer
 
 #### Defined in
 
-[src/types/matcher.ts:1637](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1637)
+[src/types/matcher.ts:1685](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1685)
 
 ___
 
@@ -429,7 +451,7 @@ Sparse feature vector describing a user/assignment match context
 
 #### Defined in
 
-[src/types/matcher.ts:1627](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1627)
+[src/types/matcher.ts:1675](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1675)
 
 ___
 
@@ -441,7 +463,7 @@ Assignment lifecycle outcomes that generate learning rewards
 
 #### Defined in
 
-[src/types/matcher.ts:1621](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1621)
+[src/types/matcher.ts:1669](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1669)
 
 ___
 
@@ -453,7 +475,7 @@ Reward values per lifecycle outcome
 
 #### Defined in
 
-[src/types/matcher.ts:1624](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1624)
+[src/types/matcher.ts:1672](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1672)
 
 ___
 
@@ -465,7 +487,7 @@ Named external signal values (e.g. { accuracy: 0.95, csat: 0.8 })
 
 #### Defined in
 
-[src/types/matcher.ts:1663](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1663)
+[src/types/matcher.ts:1711](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1711)
 
 ___
 
@@ -494,7 +516,7 @@ Signature for machine task handlers registered via registerMachineHandler().
 
 #### Defined in
 
-[src/managers/WorkflowManager.ts:42](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/managers/WorkflowManager.ts#L42)
+[src/managers/WorkflowManager.ts:42](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/managers/WorkflowManager.ts#L42)
 
 ___
 
@@ -508,6 +530,7 @@ Which sweeps `startMaintenance()` runs, and how often.
 
 | Name | Type | Description |
 | :------ | :------ | :------ |
+| `completedRetention?` | `boolean` | Completed-assignments retention sweep (`completedAssignmentsRetentionMs`). **`Default`** true when `completedAssignmentsRetentionMs` is set |
 | `completionDeadlines?` | `boolean` | Completion deadlines (SLA `completeWithinMs`). **`Default`** ```ts true ``` |
 | `idleUsers?` | `boolean` | Idle-user release. **`Default`** true when `idleUserTimeoutMs` is set |
 | `intervalMs?` | `number` | Master tick interval for every enabled sweep. **`Default`** ```ts 5000 ``` |
@@ -519,7 +542,7 @@ Which sweeps `startMaintenance()` runs, and how often.
 
 #### Defined in
 
-[src/types/matcher.ts:957](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L957)
+[src/types/matcher.ts:978](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L978)
 
 ___
 
@@ -541,6 +564,7 @@ One pass of `runMaintenanceOnce()`. Counts are per pass, not cumulative.
 | `recurrenceMaterializations` | `number` | Occurrences materialized from recurring assignments |
 | `recurrenceRetirements` | `number` | Recurring templates retired (bound reached) |
 | `releasedIdleUsers` | `number` | Idle users removed from the pool (see `idleUserTimeoutMs`) |
+| `retentionPurged` | `number` | Completed assignments removed by the retention sweep |
 | `scheduleActivations` | `number` | Held assignments enqueued by the scheduled sweep |
 | `scheduleMisses` | `number` | Assignments whose offer window (`schedule.notAfter`) elapsed |
 | `slaExpiries` | `number` | Assignments whose freshness TTL elapsed (SLA) |
@@ -548,7 +572,7 @@ One pass of `runMaintenanceOnce()`. Counts are per pass, not cumulative.
 
 #### Defined in
 
-[src/types/matcher.ts:929](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L929)
+[src/types/matcher.ts:948](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L948)
 
 ___
 
@@ -560,7 +584,7 @@ How the winning user of a decision was arbitrated.
 
 #### Defined in
 
-[src/types/matcher.ts:601](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L601)
+[src/types/matcher.ts:620](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L620)
 
 ___
 
@@ -575,7 +599,7 @@ the rule that fired and the values it compared.
 
 #### Defined in
 
-[src/types/matcher.ts:546](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L546)
+[src/types/matcher.ts:565](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L565)
 
 ___
 
@@ -591,6 +615,7 @@ ___
 | `autoRoutingWeightsSyncIntervalMs?` | `number` | Milliseconds between automatic learned routing-weight syncs for all tracked users. When unset (default), sync remains operator-driven. Set on at most one replica per deployment; a Redis lock prevents overlapping runs. |
 | `circuitBreakerPersistState?` | `boolean` | Persist circuit breaker state to Redis for distributed awareness (default: false) |
 | `circuitBreakerShared?` | `boolean` | Share circuit breaker failure counts across replicas via Redis so breakers converge in multi-orchestrator deployments (default: false). |
+| `completedAssignmentsRetentionMs?` | `number` | Retention window for the completed-assignments store, in ms. When set, the maintenance tick purges terminal (completed or failed — the store holds both outcomes) assignments whose `_completedAt`/`_failedAt` timestamp is older than the window. The window applies retroactively: records created before this option was configured are purged as soon as they fall outside it, in capped batches per tick. Entries without a terminal timestamp are never deleted. When unset (default), the store is kept forever. |
 | `deadLetterQueueAlertThreshold?` | `number` | Alert threshold for Dead Letter Queue size (default: 100) |
 | `decisionTraceMaxCandidates?` | `number` | Maximum candidates stored per trace (default: 25). The chosen candidate is always kept; remaining slots go to the highest-ranked candidates. |
 | `decisionTraceMaxEntries?` | `number` | Maximum decision traces retained in the Redis stream (default: 1000, approximate trim) |
@@ -646,6 +671,7 @@ ___
 | `workflowCircuitBreakerResetMs?` | `number` | Time to wait before attempting to close circuit breaker in ms (default: 30000) |
 | `workflowCircuitBreakerThreshold?` | `number` | Number of failures before circuit breaker opens (default: 5) |
 | `workflowEventBatchSize?` | `number` | Max stream entries read per orchestrator poll (XREADGROUP COUNT, default: 10) |
+| `workflowEventStreamAutoTrim?` | `boolean` | Automatically trim the workflow event stream up to the consumption frontier — every entry delivered *and* acknowledged by every consumer group — after event processing and on the orchestrator's reclaim interval (sweep-mode hosts can call `trimWorkflowEventStream()` from their own tick). Because the trim is anchored below every group's oldest unacknowledged entry, trimming can never lose an event; the tradeoff is that the stream still grows while consumers are down. When unset (default), the stream is never trimmed. |
 | `workflowIdempotencyTtlMs?` | `number` | TTL for idempotency keys in milliseconds (default: 86400000 = 24h) |
 | `workflowInstanceRetentionMs?` | `number` | TTL applied to terminal (completed/failed/cancelled) workflow instances, including cleanup of registry, per-user, and active-index entries. When unset (default), terminal instances are kept forever. |
 | `workflowMaxEventsPerSecond?` | `number` | Per-replica throttle on workflow event processing (events per second). Applies to orchestrator stream consumption and scheduled-retry draining. When unset (default), events are processed as fast as possible. |
@@ -658,7 +684,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:976](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L976)
+[src/types/matcher.ts:1002](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1002)
 
 ___
 
@@ -678,7 +704,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:434](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L434)
+[src/types/matcher.ts:444](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L444)
 
 ___
 
@@ -703,7 +729,7 @@ removal), and per-user load.
 
 #### Defined in
 
-[src/types/matcher.ts:424](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L424)
+[src/types/matcher.ts:434](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L434)
 
 ___
 
@@ -722,7 +748,7 @@ Outcome of one `processRecurringAssignments()` sweep.
 
 #### Defined in
 
-[src/types/matcher.ts:361](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L361)
+[src/types/matcher.ts:361](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L361)
 
 ___
 
@@ -737,7 +763,25 @@ the template itself cannot carry one.
 
 #### Defined in
 
-[src/types/matcher.ts:345](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L345)
+[src/types/matcher.ts:345](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L345)
+
+___
+
+### RetentionSweepResult
+
+Ƭ **RetentionSweepResult**: `Object`
+
+Outcome of one `processCompletedAssignmentsRetention()` sweep.
+
+#### Type declaration
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `purged` | `number` | Completed assignments whose terminal timestamp fell outside the window |
+
+#### Defined in
+
+[src/types/matcher.ts:369](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L369)
 
 ___
 
@@ -756,7 +800,7 @@ Outcome of one `processScheduledAssignments()` sweep.
 
 #### Defined in
 
-[src/types/matcher.ts:921](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L921)
+[src/types/matcher.ts:940](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L940)
 
 ___
 
@@ -775,7 +819,7 @@ saving purchase a rest violation, which is not a trade the law permits.
 
 #### Defined in
 
-[src/scheduling/types.ts:661](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/types.ts#L661)
+[src/scheduling/types.ts:661](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L661)
 
 ___
 
@@ -793,7 +837,7 @@ Outcome of one `processSlaExpiries()` sweep.
 
 #### Defined in
 
-[src/types/matcher.ts:915](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L915)
+[src/types/matcher.ts:934](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L934)
 
 ___
 
@@ -811,7 +855,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:402](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L402)
+[src/types/matcher.ts:412](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L412)
 
 ___
 
@@ -832,7 +876,7 @@ One user's live load snapshot inside `QueueStats`.
 
 #### Defined in
 
-[src/types/matcher.ts:409](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L409)
+[src/types/matcher.ts:419](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L419)
 
 ___
 
@@ -859,7 +903,7 @@ keep consuming until `hasMore` is false.
 
 #### Defined in
 
-[src/types/matcher.ts:456](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L456)
+[src/types/matcher.ts:475](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L475)
 
 ___
 
@@ -878,7 +922,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:497](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L497)
+[src/types/matcher.ts:516](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L516)
 
 ___
 
@@ -894,7 +938,7 @@ Status filter for `getUsersPaginated()`:
 
 #### Defined in
 
-[src/types/matcher.ts:449](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L449)
+[src/types/matcher.ts:468](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L468)
 
 ___
 
@@ -921,7 +965,7 @@ One user's status/workload summary.
 
 #### Defined in
 
-[src/types/matcher.ts:476](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L476)
+[src/types/matcher.ts:495](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L495)
 
 ___
 
@@ -943,7 +987,7 @@ Operational metrics for the workflow engine
 
 #### Defined in
 
-[src/types/matcher.ts:1271](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1271)
+[src/types/matcher.ts:1319](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1319)
 
 ___
 
@@ -955,7 +999,7 @@ Event types for workflow lifecycle
 
 #### Defined in
 
-[src/types/matcher.ts:1289](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1289)
+[src/types/matcher.ts:1337](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1337)
 
 ___
 
@@ -967,7 +1011,7 @@ Status of a workflow instance
 
 #### Defined in
 
-[src/types/matcher.ts:1487](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1487)
+[src/types/matcher.ts:1535](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1535)
 
 ___
 
@@ -979,7 +1023,7 @@ Target user selector for workflow assignment steps
 
 #### Defined in
 
-[src/types/matcher.ts:1295](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1295)
+[src/types/matcher.ts:1343](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1343)
 
 ___
 
@@ -991,7 +1035,7 @@ Step execution mode
 
 #### Defined in
 
-[src/types/matcher.ts:1292](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1292)
+[src/types/matcher.ts:1340](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1340)
 
 ___
 
@@ -1018,7 +1062,7 @@ affect workflow processing.
 
 #### Defined in
 
-[src/types/matcher.ts:1468](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1468)
+[src/types/matcher.ts:1516](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1516)
 
 ___
 
@@ -1032,7 +1076,7 @@ Use MatcherOptions instead
 
 #### Defined in
 
-[src/types/matcher.ts:1268](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1268)
+[src/types/matcher.ts:1316](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1316)
 
 ## Variables
 
@@ -1042,7 +1086,7 @@ Use MatcherOptions instead
 
 #### Defined in
 
-[src/learning/auto-weights.ts:30](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/learning/auto-weights.ts#L30)
+[src/learning/auto-weights.ts:30](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/learning/auto-weights.ts#L30)
 
 ___
 
@@ -1054,7 +1098,7 @@ EU floor: Directive 2003/88/EC Article 3 — 11 consecutive hours per 24-hour pe
 
 #### Defined in
 
-[src/scheduling/constraints/min-rest.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/constraints/min-rest.ts#L23)
+[src/scheduling/constraints/min-rest.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/constraints/min-rest.ts#L23)
 
 ## Functions
 
@@ -1084,7 +1128,7 @@ Create an approval workflow with submit -> review -> complete/rejected pattern.
 
 #### Defined in
 
-[src/workflow-builder.ts:393](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/workflow-builder.ts#L393)
+[src/workflow-builder.ts:393](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/workflow-builder.ts#L393)
 
 ___
 
@@ -1108,7 +1152,7 @@ Returns true if no CIDRs are specified (open assignment) or if IP matches any CI
 
 #### Defined in
 
-[src/utils/cidr.ts:139](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/cidr.ts#L139)
+[src/utils/cidr.ts:139](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/cidr.ts#L139)
 
 ___
 
@@ -1135,7 +1179,7 @@ the one nobody reads.
 
 #### Defined in
 
-[src/scheduling/operations.ts:59](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L59)
+[src/scheduling/operations.ts:69](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L69)
 
 ___
 
@@ -1168,7 +1212,7 @@ an explicit, redundant-but-safe way to force denial in that case.
 
 #### Defined in
 
-[src/utils/geo.ts:49](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/geo.ts#L49)
+[src/utils/geo.ts:49](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/geo.ts#L49)
 
 ___
 
@@ -1192,7 +1236,7 @@ Returns 0 for mismatched lengths or zero-magnitude vectors.
 
 #### Defined in
 
-[src/learning/features.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/learning/features.ts#L15)
+[src/learning/features.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/learning/features.ts#L15)
 
 ___
 
@@ -1230,6 +1274,8 @@ Creates Redis key builder functions with a given prefix
 | `circuitBreakerFailures` | () => `string` |
 | `circuitBreakerState` | () => `string` |
 | `completedAssignments` | () => `string` |
+| `completedAssignmentsAt` | () => `string` |
+| `completedRetentionIndexed` | () => `string` |
 | `deadLetterQueue` | () => `string` |
 | `decisionTraces` | () => `string` |
 | `eventRetryCount` | (`eventId`: `string`) => `string` |
@@ -1285,7 +1331,7 @@ Creates Redis key builder functions with a given prefix
 
 #### Defined in
 
-[src/utils/keys.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/keys.ts#L13)
+[src/utils/keys.ts:13](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/keys.ts#L13)
 
 ___
 
@@ -1307,7 +1353,7 @@ Days as minutes.
 
 #### Defined in
 
-[src/scheduling/rules.ts:34](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/rules.ts#L34)
+[src/scheduling/rules.ts:34](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/rules.ts#L34)
 
 ___
 
@@ -1334,7 +1380,7 @@ one.
 
 #### Defined in
 
-[src/scheduling/operations.ts:426](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L426)
+[src/scheduling/operations.ts:446](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L446)
 
 ___
 
@@ -1364,7 +1410,7 @@ the roster arguable rather than oracular.
 
 #### Defined in
 
-[src/scheduling/operations.ts:116](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L116)
+[src/scheduling/operations.ts:136](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L136)
 
 ___
 
@@ -1396,7 +1442,7 @@ other.
 
 #### Defined in
 
-[src/scoring/match-score.ts:167](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scoring/match-score.ts#L167)
+[src/scoring/match-score.ts:167](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scoring/match-score.ts#L167)
 
 ___
 
@@ -1421,7 +1467,7 @@ tag-overlap ratio, optional embedding similarity, and SLA urgency.
 
 #### Defined in
 
-[src/learning/features.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/learning/features.ts#L33)
+[src/learning/features.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/learning/features.ts#L33)
 
 ___
 
@@ -1442,7 +1488,7 @@ ___
 
 #### Defined in
 
-[src/utils/geo.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/geo.ts#L23)
+[src/utils/geo.ts:23](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/geo.ts#L23)
 
 ___
 
@@ -1465,7 +1511,7 @@ ___
 
 #### Defined in
 
-[src/utils/geo.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/geo.ts#L27)
+[src/utils/geo.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/geo.ts#L27)
 
 ___
 
@@ -1487,7 +1533,7 @@ Hours as minutes, for readability in rule objects.
 
 #### Defined in
 
-[src/scheduling/rules.ts:29](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/rules.ts#L29)
+[src/scheduling/rules.ts:29](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/rules.ts#L29)
 
 ___
 
@@ -1510,7 +1556,7 @@ Check if an IP address is within a CIDR range
 
 #### Defined in
 
-[src/utils/cidr.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/cidr.ts#L119)
+[src/utils/cidr.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/cidr.ts#L119)
 
 ___
 
@@ -1530,7 +1576,7 @@ value is number
 
 #### Defined in
 
-[src/utils/geo.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/geo.ts#L15)
+[src/utils/geo.ts:15](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/geo.ts#L15)
 
 ___
 
@@ -1550,7 +1596,7 @@ value is number
 
 #### Defined in
 
-[src/utils/geo.ts:19](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/geo.ts#L19)
+[src/utils/geo.ts:19](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/geo.ts#L19)
 
 ___
 
@@ -1574,7 +1620,7 @@ Create a simple linear workflow with automatic step chaining.
 
 #### Defined in
 
-[src/workflow-builder.ts:350](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/workflow-builder.ts#L350)
+[src/workflow-builder.ts:350](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/workflow-builder.ts#L350)
 
 ___
 
@@ -1599,7 +1645,7 @@ array when nothing is worth flagging. Purely structural — pair with
 
 #### Defined in
 
-[src/validation/assignment-lint.ts:41](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/validation/assignment-lint.ts#L41)
+[src/validation/assignment-lint.ts:41](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/validation/assignment-lint.ts#L41)
 
 ___
 
@@ -1619,7 +1665,7 @@ ___
 
 #### Defined in
 
-[src/workflow-validation.ts:133](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/workflow-validation.ts#L133)
+[src/workflow-validation.ts:133](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/workflow-validation.ts#L133)
 
 ___
 
@@ -1642,7 +1688,7 @@ Returns { network: BigInt, prefixLength: number, isIPv6: boolean } or null
 
 #### Defined in
 
-[src/utils/cidr.ts:93](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/cidr.ts#L93)
+[src/utils/cidr.ts:93](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/cidr.ts#L93)
 
 ___
 
@@ -1665,7 +1711,7 @@ Returns { value: BigInt, isIPv6: boolean } or null if invalid
 
 #### Defined in
 
-[src/utils/cidr.ts:69](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/cidr.ts#L69)
+[src/utils/cidr.ts:69](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/cidr.ts#L69)
 
 ___
 
@@ -1687,7 +1733,7 @@ Parse an IPv4 address into a BigInt representation
 
 #### Defined in
 
-[src/utils/cidr.ts:9](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/cidr.ts#L9)
+[src/utils/cidr.ts:9](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/cidr.ts#L9)
 
 ___
 
@@ -1710,7 +1756,7 @@ Handles full, compressed (::), and IPv4-mapped formats
 
 #### Defined in
 
-[src/utils/cidr.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/utils/cidr.ts#L26)
+[src/utils/cidr.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/utils/cidr.ts#L26)
 
 ___
 
@@ -1745,7 +1791,7 @@ Annex III point 4(b), which is high-risk with no narrow-task exemption.
 
 #### Defined in
 
-[src/scheduling/operations.ts:222](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L222)
+[src/scheduling/operations.ts:242](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L242)
 
 ___
 
@@ -1779,7 +1825,7 @@ single name.
 
 #### Defined in
 
-[src/scheduling/operations.ts:177](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L177)
+[src/scheduling/operations.ts:197](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L197)
 
 ___
 
@@ -1801,7 +1847,7 @@ One-shot convenience wrapper around `new ShiftScheduler().solve(input)`.
 
 #### Defined in
 
-[src/scheduling/scheduler.class.ts:175](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/scheduler.class.ts#L175)
+[src/scheduling/scheduler.class.ts:175](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/scheduler.class.ts#L175)
 
 ___
 
@@ -1826,7 +1872,7 @@ Synthesize a routingWeights map from per-tag reward statistics.
 
 #### Defined in
 
-[src/learning/auto-weights.ts:191](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/learning/auto-weights.ts#L191)
+[src/learning/auto-weights.ts:191](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/learning/auto-weights.ts#L191)
 
 ___
 
@@ -1851,7 +1897,7 @@ when the user has any, tag membership (user-side patterns) otherwise.
 
 #### Defined in
 
-[src/validation/assignment-lint.ts:28](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/validation/assignment-lint.ts#L28)
+[src/validation/assignment-lint.ts:28](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/validation/assignment-lint.ts#L28)
 
 ___
 
@@ -1871,7 +1917,7 @@ ___
 
 #### Defined in
 
-[src/workflow-validation.ts:50](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/workflow-validation.ts#L50)
+[src/workflow-validation.ts:50](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/workflow-validation.ts#L50)
 
 ___
 
@@ -1901,7 +1947,7 @@ and is off by a factor of seventeen.
 
 #### Defined in
 
-[src/scheduling/rules.ts:20](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/rules.ts#L20)
+[src/scheduling/rules.ts:20](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/rules.ts#L20)
 
 ___
 
@@ -1924,4 +1970,4 @@ Convenience function to create a new workflow builder.
 
 #### Defined in
 
-[src/workflow-builder.ts:340](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/workflow-builder.ts#L340)
+[src/workflow-builder.ts:340](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/workflow-builder.ts#L340)

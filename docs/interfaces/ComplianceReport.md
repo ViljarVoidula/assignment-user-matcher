@@ -19,7 +19,7 @@
 
 #### Defined in
 
-[src/scheduling/operations.ts:45](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L45)
+[src/scheduling/operations.ts:49](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L49)
 
 ___
 
@@ -27,9 +27,14 @@ ___
 
 • **ledger**: [`LedgerEntry`](LedgerEntry.md)[]
 
+Obligations the roster accrues (compensatory rest, late-cancellation
+pay, protection fallbacks, time off in lieu) — the same ledger the
+solver reports for the same assignments, so a hand-edited roster can
+never validate as "compliant but owing nothing".
+
 #### Defined in
 
-[src/scheduling/operations.ts:49](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L49)
+[src/scheduling/operations.ts:59](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L59)
 
 ___
 
@@ -41,7 +46,7 @@ Per-assignment verdicts for every rule that had something to say.
 
 #### Defined in
 
-[src/scheduling/operations.ts:48](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L48)
+[src/scheduling/operations.ts:52](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L52)
 
 ___
 
@@ -51,4 +56,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/operations.ts:46](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/scheduling/operations.ts#L46)
+[src/scheduling/operations.ts:50](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L50)

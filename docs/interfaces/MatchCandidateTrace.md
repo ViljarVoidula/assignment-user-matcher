@@ -25,7 +25,7 @@ Whether this user actually received (or currently owns) the assignment
 
 #### Defined in
 
-[src/types/matcher.ts:592](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L592)
+[src/types/matcher.ts:611](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L611)
 
 ___
 
@@ -37,7 +37,7 @@ What arbitration compares: base priority + score + geo boost + learning boost
 
 #### Defined in
 
-[src/types/matcher.ts:596](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L596)
+[src/types/matcher.ts:615](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L615)
 
 ___
 
@@ -49,7 +49,7 @@ Whether the user could have received the assignment under the hard rules
 
 #### Defined in
 
-[src/types/matcher.ts:590](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L590)
+[src/types/matcher.ts:609](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L609)
 
 ___
 
@@ -59,7 +59,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:597](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L597)
+[src/types/matcher.ts:616](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L616)
 
 ___
 
@@ -71,7 +71,7 @@ Pure match score (routing-weight sum or tag-overlap ratio); 0 when excluded
 
 #### Defined in
 
-[src/types/matcher.ts:594](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L594)
+[src/types/matcher.ts:613](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L613)
 
 ___
 
@@ -81,4 +81,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:588](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L588)
+[src/types/matcher.ts:607](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L607)

@@ -35,6 +35,10 @@ import { collectAggregateViolations, collectPairViolations, verdictsFor } from '
 import { solveSchedule } from './scheduler.class';
 import { preferenceScore } from './constraints/availability';
 import { marginalCostCents } from './cost';
+import { compensatoryRestLedger } from './constraints/rest-days';
+import { cancellationLedger } from './constraints/notice';
+import { protectionLedger } from './constraints/protections';
+import { overtimeLedger } from './constraints/overtime';
 import { MINUTES_PER_DAY } from './time';
 
 /* ------------------------------------------------------------------------- */
@@ -46,6 +50,12 @@ export interface ComplianceReport {
     violations: ConstraintViolation[];
     /** Per-assignment verdicts for every rule that had something to say. */
     verdicts: Array<{ pair: AssignmentPair; verdicts: RuleVerdict[] }>;
+    /**
+     * Obligations the roster accrues (compensatory rest, late-cancellation
+     * pay, protection fallbacks, time off in lieu) — the same ledger the
+     * solver reports for the same assignments, so a hand-edited roster can
+     * never validate as "compliant but owing nothing".
+     */
     ledger: LedgerEntry[];
 }
 
@@ -93,11 +103,21 @@ export function checkCompliance(input: ScheduleInput, roster: ScheduledAssignmen
     }
     violations.push(...collectPairViolations(state), ...collectAggregateViolations(state));
 
+    // The same ledger pass the solver runs at result assembly — one judgement
+    // path, so `checkCompliance` can never disagree with `solveSchedule`
+    // about what a roster owes.
+    const ledger: LedgerEntry[] = [
+        ...compensatoryRestLedger(state, ctx.rules.restDays),
+        ...cancellationLedger(state, ctx.rules.notice),
+        ...protectionLedger(state),
+        ...overtimeLedger(state),
+    ];
+
     return {
         compliant: violations.every((v) => v.severity !== 'hard'),
         violations,
         verdicts,
-        ledger: [],
+        ledger,
     };
 }
 

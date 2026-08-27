@@ -21,7 +21,7 @@ Tracks the state of a parallel execution branch
 
 #### Defined in
 
-[src/types/matcher.ts:1492](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1492)
+[src/types/matcher.ts:1540](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1540)
 
 ___
 
@@ -31,17 +31,17 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1494](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1494)
+[src/types/matcher.ts:1542](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1542)
 
 ___
 
 ### status
 
-• **status**: ``"pending"`` \| ``"completed"`` \| ``"failed"``
+• **status**: ``"completed"`` \| ``"failed"`` \| ``"pending"``
 
 #### Defined in
 
-[src/types/matcher.ts:1493](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1493)
+[src/types/matcher.ts:1541](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1541)
 
 ___
 
@@ -51,4 +51,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1491](https://github.com/ViljarVoidula/assignment-user-matcher/blob/dfb81fd890bda21204ff43403124613346477f3e/src/types/matcher.ts#L1491)
+[src/types/matcher.ts:1539](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1539)
