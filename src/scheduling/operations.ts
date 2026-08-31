@@ -362,26 +362,21 @@ function rationaleFor(
     return parts.join(' · ');
 }
 
-/** Site the candidate would travel from: nearest same-day assignment, then home site. */
+/** Site the candidate would travel from: nearest preceding same-day assignment, then home site. */
 function originSiteFor(state: SearchState, employeeId: string, inst: import('./types').ShiftInstance): string | undefined {
     const assigned = state.byEmployee.get(employeeId);
     const homeSite = state.ctx.employeeById.get(employeeId)?.homeSiteId;
     if (!assigned) return homeSite;
 
-    let best: { siteId: string; gap: number; isPredecessor: boolean } | undefined;
+    let best: { siteId: string; gap: number } | undefined;
     for (const instanceId of assigned) {
         const other = state.ctx.instanceById.get(instanceId);
         if (!other || other.date !== inst.date || !other.siteId) continue;
 
         if (other.endMinute <= inst.startMinute) {
             const gap = inst.startMinute - other.endMinute;
-            if (!best || gap < best.gap || (gap === best.gap && !best.isPredecessor)) {
-                best = { siteId: other.siteId, gap, isPredecessor: true };
-            }
-        } else if (other.startMinute >= inst.endMinute) {
-            const gap = other.startMinute - inst.endMinute;
             if (!best || gap < best.gap) {
-                best = { siteId: other.siteId, gap, isPredecessor: false };
+                best = { siteId: other.siteId, gap };
             }
         }
     }

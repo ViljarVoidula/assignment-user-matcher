@@ -5060,7 +5060,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Start the periodic maintenance tick. Idempotent; a second call with
      * different options replaces the first.
      *
-     * @param options.intervalMs how often to sweep (default 5000)
+     * @param options which sweeps to run, plus `intervalMs` (default 5000) for the tick itself
      */
     startMaintenance(options?: MaintenanceOptions): void {
         this.stopMaintenance();

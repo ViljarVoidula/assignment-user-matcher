@@ -19,7 +19,7 @@
 
 #### Defined in
 
-[src/scheduling/operations.ts:49](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L49)
+[src/scheduling/operations.ts:53](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L53)
 
 ___
 
@@ -34,7 +34,7 @@ never validate as "compliant but owing nothing".
 
 #### Defined in
 
-[src/scheduling/operations.ts:59](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L59)
+[src/scheduling/operations.ts:63](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L63)
 
 ___
 
@@ -46,7 +46,7 @@ Per-assignment verdicts for every rule that had something to say.
 
 #### Defined in
 
-[src/scheduling/operations.ts:52](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L52)
+[src/scheduling/operations.ts:56](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L56)
 
 ___
 
@@ -56,4 +56,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/operations.ts:50](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/operations.ts#L50)
+[src/scheduling/operations.ts:54](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L54)

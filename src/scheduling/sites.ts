@@ -51,42 +51,50 @@ export function buildSiteIndex(sites: Site[] | undefined, travelSpeedKmh?: numbe
         byId.set(site.id, site);
     }
 
-    return { byId, travelSpeedKmh };
+    const resolvedTravelMinutes = new Map<string, Map<string, number>>();
+    const siteList = [...byId.values()];
+    for (const from of siteList) {
+        const row = new Map<string, number>();
+        resolvedTravelMinutes.set(from.id, row);
+        for (const to of siteList) {
+            const minutes = resolvePairMinutes(from, to, travelSpeedKmh);
+            if (minutes !== undefined) row.set(to.id, minutes);
+        }
+    }
+
+    return { byId, travelSpeedKmh, resolvedTravelMinutes };
+}
+
+function resolvePairMinutes(from: Site, to: Site, travelSpeedKmh?: number): number | undefined {
+    if (from.id === to.id) return 0;
+
+    const matrix = from.travelMinutesTo?.[to.id];
+    if (matrix !== undefined) return matrix;
+
+    if (
+        from.lat !== undefined &&
+        from.lng !== undefined &&
+        to.lat !== undefined &&
+        to.lng !== undefined &&
+        travelSpeedKmh !== undefined
+    ) {
+        const km = haversineDistanceKm(from.lat, from.lng, to.lat, to.lng);
+        return Math.round((km / travelSpeedKmh) * 60);
+    }
+
+    return undefined;
 }
 
 /**
  * Travel time between two sites, in minutes.
  *
- * Resolution order:
- * 1. Same id or missing id → 0 / undefined.
- * 2. Explicit `from.travelMinutesTo[to]` matrix entry.
- * 3. Haversine kilometres ÷ `travelSpeedKmh`, rounded to whole minutes.
- * 4. Otherwise undefined (the travel-gap rule skips that side; ranking shows
- *    raw distance instead).
+ * Returns 0 for the same site, undefined when either site is unknown or no
+ * travel data exists for the ordered pair.
  */
 export function travelMinutesBetween(index: SiteIndex, from?: string, to?: string): number | undefined {
     if (from === to && from !== undefined) return 0;
     if (from === undefined || to === undefined) return undefined;
-
-    const fromSite = index.byId.get(from);
-    const toSite = index.byId.get(to);
-    if (!fromSite || !toSite) return undefined;
-
-    const matrix = fromSite.travelMinutesTo?.[to];
-    if (matrix !== undefined) return matrix;
-
-    if (
-        fromSite.lat !== undefined &&
-        fromSite.lng !== undefined &&
-        toSite.lat !== undefined &&
-        toSite.lng !== undefined &&
-        index.travelSpeedKmh !== undefined
-    ) {
-        const km = haversineDistanceKm(fromSite.lat, fromSite.lng, toSite.lat, toSite.lng);
-        return Math.round((km / index.travelSpeedKmh) * 60);
-    }
-
-    return undefined;
+    return index.resolvedTravelMinutes.get(from)?.get(to);
 }
 
 /**

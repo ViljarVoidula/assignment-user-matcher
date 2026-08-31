@@ -22,7 +22,7 @@ Epoch ms the next occurrence's window opens
 
 #### Defined in
 
-[src/types/matcher.ts:355](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L355)
+[src/types/matcher.ts:355](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L355)
 
 ___
 
@@ -34,7 +34,7 @@ Occurrences materialized so far (skipped slots do not count)
 
 #### Defined in
 
-[src/types/matcher.ts:357](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L357)
+[src/types/matcher.ts:357](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L357)
 
 ___
 
@@ -44,4 +44,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:353](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L353)
+[src/types/matcher.ts:353](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L353)

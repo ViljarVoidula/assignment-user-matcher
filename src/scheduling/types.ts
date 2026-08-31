@@ -178,6 +178,8 @@ export interface SiteIndex {
     byId: Map<string, Site>;
     /** Caller-supplied fallback speed for deriving minutes from haversine kilometres. */
     travelSpeedKmh?: number;
+    /** Precomputed travel minutes for every ordered site pair with resolvable data. */
+    resolvedTravelMinutes: Map<string, Map<string, number>>;
 }
 
 /* ------------------------------------------------------------------------- */

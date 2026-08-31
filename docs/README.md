@@ -1682,6 +1682,40 @@ Break entitlements are checked against shift design: `unpaidBreakMinutes` (deduc
 
 **Duty-type quotas** (`rules.dutyQuotas`) cap how much of one duty type a person may hold over a rolling window, matched on `shiftTypeTag` — e.g. "at most 30 hours of stand-by in any 28 days". `maxMinutes` counts _elapsed_ duty minutes (a stand-by cap limits clock occupation, which is exactly the time a duty classification keeps out of the working-time budget); `maxCount` caps occurrences.
 
+### Multi-site rosters
+
+When you run several sites in one city, site data makes the solver and the call-in suggestions location-aware:
+
+- Add a `sites` registry with optional coordinates and an asymmetric `travelMinutesTo` matrix.
+- Set `Employee.homeSiteId` for the soft home-site preference and `Employee.siteIds` as a hard allow-list.
+- Use `objectives.homeSiteWeight` to make the solver prefer keeping people at their home site.
+- `repairSchedule` and `rankCandidates` measure "nearby" from the candidate's nearest same-day assignment, falling back to `homeSiteId`, and include `originSiteId`, `travelMinutes`, `distanceKm` and `isHomeSite` on every `RepairCandidate`.
+
+```ts
+const result = solveSchedule({
+    period: { startDate: '2026-01-05', endDate: '2026-01-11', timeZone: 'Europe/Berlin' },
+    employees: [
+        { id: 'alice', tags: ['nurse'], timeOff: [], homeSiteId: 'north', siteIds: ['north', 'south'] },
+        { id: 'bob', tags: ['nurse'], timeOff: [], homeSiteId: 'south', siteIds: ['south'] },
+    ],
+    shifts: [
+        { id: 'day', name: 'Day', startTime: '08:00', endTime: '16:00', siteId: 'north' },
+        { id: 'late', name: 'Late', startTime: '14:00', endTime: '22:00', siteId: 'south' },
+    ],
+    sites: [
+        { id: 'north', lat: 52.5, lng: 13.4, travelMinutesTo: { south: 35 } },
+        { id: 'south', lat: 52.4, lng: 13.5, travelMinutesTo: { north: 40 } },
+    ],
+    // Fallback only used when a matrix entry is missing:
+    travelSpeedKmh: 30,
+    objectives: { homeSiteWeight: 1 },
+});
+```
+
+Travel-time resolution order: explicit matrix entry → haversine kilometres ÷ `travelSpeedKmh` → unknown. When minutes are unknown, suggestions still show `distanceKm` for host-side re-sorting.
+
+The `site-travel-gap` rule is a hard constraint: two consecutive assignments at different sites must leave at least the travel time between them. It reads the same person timeline as the rest rules, so it works across contracts (`personId`) and across the period boundary via `history` entries that carry `siteId`. It enforces the gap only; it does not treat travel time as working time (CJEU C-266/14). Because the default 11h `min-rest` rule masks most intra-day switches, the gap rule mainly matters when you have relaxed `minRestMinutes` or configured a `dailyRest` rule that permits split shifts.
+
 ### Labour cost
 
 `Employee.cost` prices the roster: hourly rate, premium bands (`night` / `sunday` / `holiday`, stacked additively or by maximum), an overtime step (`overtimeAfterMinutes` + `overtimeMultiplier`), and a `standbyRateFraction` paying the non-working remainder of a duty-classified span (e.g. stand-by owed at 1/10 of the wage). When any employee carries a cost model, `result.cost` reports `{ totalCents, byEmployee }`.
@@ -1698,6 +1732,8 @@ diagnoseInfeasibility(input); // why it cannot be solved, before solving
 ```
 
 `repairSchedule` is the call-in path: everything untouched is pinned, so you get a **diff** rather than an unrecognisable new roster, plus a ranked list of who can lawfully cover, each with compliance verdicts, marginal cost and a rationale. All four share the solver's constraint set — there is deliberately no second validation path. `checkCompliance` also runs the solver's ledger pass, so a hand-edited roster reports the same accrued obligations (compensatory rest, late-cancellation pay, protection fallbacks, time off in lieu) that `solveSchedule` would report for the same assignments — a human override can never validate as "compliant but owing nothing".
+
+`expandShiftInstances(input)` returns the dated planning grid a host should render before anything is assigned — the same `<templateId>@<date>` ids every other call refers to. Use it so the grid ids never drift from the instances the solver will judge.
 
 ### Compliance boundary
 

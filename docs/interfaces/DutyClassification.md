@@ -25,7 +25,7 @@ roster can be defended without re-litigating the classification.
 
 #### Defined in
 
-[src/scheduling/types.ts:561](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L561)
+[src/scheduling/types.ts:583](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L583)
 
 ___
 
@@ -40,7 +40,7 @@ stand-by that accrues at a percentage.
 
 #### Defined in
 
-[src/scheduling/types.ts:547](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L547)
+[src/scheduling/types.ts:569](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L569)
 
 ___
 
@@ -52,7 +52,7 @@ Whether the duty still blocks the rest clock even if it barely counts as work.
 
 #### Defined in
 
-[src/scheduling/types.ts:551](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L551)
+[src/scheduling/types.ts:573](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L573)
 
 ___
 
@@ -64,7 +64,7 @@ Expected active minutes when `countsAsWorkingTime` is `'actualOnly'`.
 
 #### Defined in
 
-[src/scheduling/types.ts:549](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L549)
+[src/scheduling/types.ts:571](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L571)
 
 ___
 
@@ -82,4 +82,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:552](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L552)
+[src/scheduling/types.ts:574](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L574)

@@ -25,7 +25,7 @@ Error message if available
 
 #### Defined in
 
-[src/types/matcher.ts:1603](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1603)
+[src/types/matcher.ts:1603](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L1603)
 
 ___
 
@@ -37,7 +37,7 @@ Error stack trace if available
 
 #### Defined in
 
-[src/types/matcher.ts:1605](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1605)
+[src/types/matcher.ts:1605](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L1605)
 
 ___
 
@@ -49,7 +49,7 @@ Original event that failed
 
 #### Defined in
 
-[src/types/matcher.ts:1599](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1599)
+[src/types/matcher.ts:1599](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L1599)
 
 ___
 
@@ -61,7 +61,7 @@ Timestamp when moved to DLQ
 
 #### Defined in
 
-[src/types/matcher.ts:1607](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1607)
+[src/types/matcher.ts:1607](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L1607)
 
 ___
 
@@ -73,7 +73,7 @@ Reason the event failed
 
 #### Defined in
 
-[src/types/matcher.ts:1601](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1601)
+[src/types/matcher.ts:1601](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L1601)
 
 ___
 
@@ -85,4 +85,4 @@ Number of processing attempts before moving to DLQ
 
 #### Defined in
 
-[src/types/matcher.ts:1609](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L1609)
+[src/types/matcher.ts:1609](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L1609)

@@ -149,12 +149,16 @@ describe('Scheduling scenarios', function () {
         });
 
         it('is deterministic for the same seed and varies with a different one', function () {
-            const a = solveSchedule(germanWard());
-            const b = solveSchedule(germanWard());
+            // A wall-clock LNS budget makes two runs non-deterministic across
+            // timing jitter, so the reproducibility check uses a zero budget.
+            const base = { ...germanWard(), timeBudgetMs: 0 };
+            const a = solveSchedule(base);
+            const b = solveSchedule(base);
             expect(a.assignments).to.deep.equal(b.assignments);
 
-            const c = solveSchedule({ ...germanWard(), seed: 99 });
+            const c = solveSchedule({ ...base, seed: 99 });
             expect(c.violations.filter((v) => v.severity === 'hard')).to.have.length(0);
+            expect(c.assignments).to.not.deep.equal(a.assignments);
         });
 
         it('spreads night shifts rather than concentrating them on one nurse', function () {

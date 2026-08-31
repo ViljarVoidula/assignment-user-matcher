@@ -69,8 +69,13 @@ export type {
     ShiftInstance,
     ShiftTemplate,
     Site,
+    SiteIndex,
     TimeOffEntry,
     WeeklyRestRule,
     WorkingTimeLimits,
     WorkingTimeRules,
 } from './types';
+
+// Timeline internals, exported as types so custom-constraint authors can name
+// what they receive through `SearchState.timelines` and `ModelContext.history`.
+export type { PersonTimeline, TimelineEntry, TimelineIndex } from './engine/timeline';

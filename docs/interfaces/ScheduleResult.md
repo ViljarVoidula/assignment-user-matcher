@@ -24,7 +24,7 @@ The outcome of a solve. `'optimal'` means "no known improvement", never a proof.
 
 #### Defined in
 
-[src/scheduling/types.ts:701](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L701)
+[src/scheduling/types.ts:729](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L729)
 
 ___
 
@@ -43,7 +43,7 @@ Per-person cost breakdown when a cost model was supplied.
 
 #### Defined in
 
-[src/scheduling/types.ts:715](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L715)
+[src/scheduling/types.ts:743](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L743)
 
 ___
 
@@ -55,13 +55,13 @@ Deferred obligations the roster created, such as compensatory rest owed.
 
 #### Defined in
 
-[src/scheduling/types.ts:713](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L713)
+[src/scheduling/types.ts:741](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L741)
 
 ___
 
 ### provenance
 
-• `Optional` **provenance**: `ScheduleProvenance`
+• `Optional` **provenance**: [`ScheduleProvenance`](ScheduleProvenance.md)
 
 What produced this roster. Reproducibility is an audit requirement:
 "the roster was lawful under the rules as they stood" is the defence, and
@@ -71,7 +71,7 @@ matter (BetrVG §87(1)), not internal tuning.
 
 #### Defined in
 
-[src/scheduling/types.ts:711](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L711)
+[src/scheduling/types.ts:739](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L739)
 
 ___
 
@@ -89,7 +89,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:703](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L703)
+[src/scheduling/types.ts:731](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L731)
 
 ___
 
@@ -99,7 +99,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:700](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L700)
+[src/scheduling/types.ts:728](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L728)
 
 ___
 
@@ -109,4 +109,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:702](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L702)
+[src/scheduling/types.ts:730](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L730)

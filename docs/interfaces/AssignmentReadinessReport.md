@@ -23,7 +23,7 @@ Users eligible for the assignment right now (same rules as `previewMatch()`)
 
 #### Defined in
 
-[src/types/matcher.ts:721](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L721)
+[src/types/matcher.ts:721](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L721)
 
 ___
 
@@ -33,7 +33,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:724](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L724)
+[src/types/matcher.ts:724](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L724)
 
 ___
 
@@ -45,7 +45,7 @@ Policy lint findings plus live findings (coverage, duplicates, eligibility)
 
 #### Defined in
 
-[src/types/matcher.ts:719](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L719)
+[src/types/matcher.ts:719](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L719)
 
 ___
 
@@ -57,4 +57,4 @@ Assignment tags no active (non-paused) user can currently serve
 
 #### Defined in
 
-[src/types/matcher.ts:723](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L723)
+[src/types/matcher.ts:723](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L723)

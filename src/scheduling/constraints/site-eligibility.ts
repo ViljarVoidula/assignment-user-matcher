@@ -15,13 +15,13 @@ export function siteEligibility(): SchedulingConstraint {
         id: 'site-eligibility',
         hardness: 'hard',
         prune(ctx, eligibility) {
-            for (const [instanceId, employees] of eligibility) {
-                const inst = ctx.instanceById.get(instanceId);
-                if (!inst?.siteId) continue;
-                for (const employeeId of [...employees]) {
-                    const allowed = ctx.employeeById.get(employeeId)?.siteIds;
-                    if (allowed && allowed.length > 0 && !allowed.includes(inst.siteId)) {
-                        employees.delete(employeeId);
+            for (const [employeeId, instances] of eligibility) {
+                const allowed = ctx.employeeById.get(employeeId)?.siteIds;
+                if (!allowed || allowed.length === 0) continue;
+                for (const instanceId of [...instances]) {
+                    const inst = ctx.instanceById.get(instanceId);
+                    if (inst?.siteId && !allowed.includes(inst.siteId)) {
+                        instances.delete(instanceId);
                     }
                 }
             }

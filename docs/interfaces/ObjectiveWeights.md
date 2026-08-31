@@ -13,6 +13,7 @@ rather than being internal tuning.
 ### Properties
 
 - [costWeightPerEuro](ObjectiveWeights.md#costweightpereuro)
+- [homeSiteWeight](ObjectiveWeights.md#homesiteweight)
 
 ## Properties
 
@@ -28,4 +29,19 @@ summary still use the cost model either way.
 
 #### Defined in
 
-[src/scheduling/types.ts:750](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L750)
+[src/scheduling/types.ts:778](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L778)
+
+___
+
+### homeSiteWeight
+
+• `Optional` **homeSiteWeight**: `number`
+
+Soft-score points per assignment away from an employee's `homeSiteId`.
+When set positive, the solver prefers assigning people to their home site.
+The ranking function does **not** consume behavioural or predictive signals;
+this is declared data, kept outside AI Act Annex III point 4(b).
+
+#### Defined in
+
+[src/scheduling/types.ts:785](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L785)

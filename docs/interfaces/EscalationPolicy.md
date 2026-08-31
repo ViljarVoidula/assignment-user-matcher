@@ -53,7 +53,7 @@ Maximum number of escalations.
 
 #### Defined in
 
-[src/types/matcher.ts:122](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L122)
+[src/types/matcher.ts:122](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L122)
 
 ___
 
@@ -75,7 +75,7 @@ Terminal behaviour once the ladder is exhausted.
 
 #### Defined in
 
-[src/types/matcher.ts:131](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L131)
+[src/types/matcher.ts:131](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L131)
 
 ___
 
@@ -97,7 +97,7 @@ What happens to the user who let the clock run out.
 
 #### Defined in
 
-[src/types/matcher.ts:108](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L108)
+[src/types/matcher.ts:108](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L108)
 
 ___
 
@@ -109,7 +109,7 @@ Priority delta applied on each escalation so ignored work climbs the queue.
 
 #### Defined in
 
-[src/types/matcher.ts:110](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L110)
+[src/types/matcher.ts:110](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L110)
 
 ___
 
@@ -122,7 +122,7 @@ taken back. Per-assignment override of `matchExpirationMs`.
 
 #### Defined in
 
-[src/types/matcher.ts:99](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L99)
+[src/types/matcher.ts:99](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L99)
 
 ___
 
@@ -137,4 +137,4 @@ assignment starts with; the first escalation moves it to entry 1.
 
 #### Defined in
 
-[src/types/matcher.ts:117](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/types/matcher.ts#L117)
+[src/types/matcher.ts:117](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/types/matcher.ts#L117)

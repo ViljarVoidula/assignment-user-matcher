@@ -50,27 +50,27 @@ How to aggregate a person's assignments across records.
 
 #### Defined in
 
-[src/scheduling/types.ts:205](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L205)
+[src/scheduling/types.ts:227](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L227)
 
 ___
 
 ### breaks
 
-• `Optional` **breaks**: `BreakRule`[]
+• `Optional` **breaks**: [`BreakRule`](BreakRule.md)[]
 
 #### Defined in
 
-[src/scheduling/types.ts:198](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L198)
+[src/scheduling/types.ts:220](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L220)
 
 ___
 
 ### consecutive
 
-• `Optional` **consecutive**: `ConsecutiveRule`
+• `Optional` **consecutive**: [`ConsecutiveRule`](ConsecutiveRule.md)
 
 #### Defined in
 
-[src/scheduling/types.ts:189](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L189)
+[src/scheduling/types.ts:211](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L211)
 
 ___
 
@@ -80,7 +80,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:182](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L182)
+[src/scheduling/types.ts:204](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L204)
 
 ___
 
@@ -92,29 +92,29 @@ Rolling volume caps on particular duty types, matched on `shiftTypeTag`.
 
 #### Defined in
 
-[src/scheduling/types.ts:188](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L188)
+[src/scheduling/types.ts:210](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L210)
 
 ___
 
 ### engagement
 
-• `Optional` **engagement**: `EngagementRule`
+• `Optional` **engagement**: [`EngagementRule`](EngagementRule.md)
 
 #### Defined in
 
-[src/scheduling/types.ts:200](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L200)
+[src/scheduling/types.ts:222](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L222)
 
 ___
 
 ### fairness
 
-• `Optional` **fairness**: `FairnessRule`[]
+• `Optional` **fairness**: [`FairnessRule`](FairnessRule.md)[]
 
 Fairness dimensions to equalise. Soft by nature.
 
 #### Defined in
 
-[src/scheduling/types.ts:203](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L203)
+[src/scheduling/types.ts:225](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L225)
 
 ___
 
@@ -135,7 +135,7 @@ not gaps — a distinct shape from `dailyRest`.
 
 #### Defined in
 
-[src/scheduling/types.ts:196](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L196)
+[src/scheduling/types.ts:218](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L218)
 
 ___
 
@@ -145,17 +145,17 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:197](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L197)
+[src/scheduling/types.ts:219](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L219)
 
 ___
 
 ### notice
 
-• `Optional` **notice**: `NoticeRule`
+• `Optional` **notice**: [`NoticeRule`](NoticeRule.md)
 
 #### Defined in
 
-[src/scheduling/types.ts:201](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L201)
+[src/scheduling/types.ts:223](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L223)
 
 ___
 
@@ -167,17 +167,17 @@ The ordinary-vs-overtime split and its caps.
 
 #### Defined in
 
-[src/scheduling/types.ts:186](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L186)
+[src/scheduling/types.ts:208](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L208)
 
 ___
 
 ### restDays
 
-• `Optional` **restDays**: `RestDayRule`
+• `Optional` **restDays**: [`RestDayRule`](RestDayRule.md)
 
 #### Defined in
 
-[src/scheduling/types.ts:199](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L199)
+[src/scheduling/types.ts:221](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L221)
 
 ___
 
@@ -187,7 +187,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:183](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L183)
+[src/scheduling/types.ts:205](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L205)
 
 ___
 
@@ -197,4 +197,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:184](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L184)
+[src/scheduling/types.ts:206](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L206)

@@ -1,5 +1,11 @@
 import { expect } from 'chai';
-import { checkCompliance, explainCandidate, rankCandidates, solveSchedule } from '../../src/scheduling';
+import {
+    checkCompliance,
+    diagnoseInfeasibility,
+    explainCandidate,
+    rankCandidates,
+    solveSchedule,
+} from '../../src/scheduling';
 import type { ScheduleInput, ScheduledAssignment } from '../../src/scheduling';
 import { buildSiteIndex, distanceKmBetween, travelMinutesBetween } from '../../src/scheduling/sites';
 import { ScheduleValidationError } from '../../src/scheduling/types';
@@ -51,6 +57,27 @@ function cityInput(overrides: Partial<ScheduleInput> = {}): ScheduleInput {
         constraints: { minRestMinutes: 0 },
         timeBudgetMs: 0,
         ...overrides,
+    };
+}
+
+function noSiteInput(): ScheduleInput {
+    return {
+        period: { startDate: '2026-01-05', endDate: '2026-01-11' },
+        employees: [
+            { id: 'anna', tags: ['nurse'], timeOff: [] },
+            { id: 'bo', tags: ['nurse'], timeOff: [] },
+        ],
+        shifts: [
+            {
+                id: 'day',
+                name: 'Day',
+                startTime: '08:00',
+                endTime: '12:00',
+                dates: ['2026-01-05'],
+            },
+        ],
+        constraints: { minRestMinutes: 0 },
+        timeBudgetMs: 0,
     };
 }
 
@@ -139,6 +166,26 @@ describe('Scheduling sites', function () {
             // Bo is only eligible for south, so the north shift must be filled by Anna.
             const north = result.assignments.filter((a) => a.shiftInstanceId === 'day-north@2026-01-05');
             expect(north.every((a) => a.employeeId === 'anna')).to.equal(true);
+        });
+
+        it('prunes site-restricted employees during propagation', function () {
+            // Bo is the only employee and he is not eligible for the north shift.
+            const input = cityInput({
+                employees: [{ id: 'bo', tags: ['nurse'], timeOff: [], siteIds: ['south'] }],
+                shifts: [
+                    {
+                        id: 'day-north',
+                        name: 'Day North',
+                        startTime: '08:00',
+                        endTime: '12:00',
+                        dates: ['2026-01-05'],
+                        siteId: 'north',
+                    },
+                ],
+            });
+            const report = diagnoseInfeasibility(input);
+            expect(report.feasible).to.equal(false);
+            expect(report.findings[0].kind).to.equal('noEligibleEmployee');
         });
 
         it('appears in explainCandidate and checkCompliance', function () {
@@ -240,6 +287,30 @@ describe('Scheduling sites', function () {
             expect(verdicts.find((v) => v.ruleId === 'site-travel-gap')!.pass).to.equal(true);
         });
 
+        it('judges only the immediate predecessor and successor, not every different-site entry', function () {
+            const input = cityInput({
+                employees: [{ id: 'anna', tags: ['nurse'], timeOff: [], siteIds: ['A', 'B', 'C'] }],
+                sites: [
+                    { id: 'A', travelMinutesTo: { B: 10, C: 300 } },
+                    { id: 'B', travelMinutesTo: { C: 10 } },
+                    { id: 'C' },
+                ],
+                shifts: [
+                    { id: 'a', name: 'A', startTime: '08:00', endTime: '09:00', dates: ['2026-01-05'], siteId: 'A' },
+                    { id: 'b', name: 'B', startTime: '09:15', endTime: '10:15', dates: ['2026-01-05'], siteId: 'B' },
+                    { id: 'c', name: 'C', startTime: '10:30', endTime: '11:30', dates: ['2026-01-05'], siteId: 'C' },
+                ],
+            });
+            const roster: ScheduledAssignment[] = [
+                { employeeId: 'anna', shiftInstanceId: 'a@2026-01-05', date: '2026-01-05', reasons: [] },
+                { employeeId: 'anna', shiftInstanceId: 'b@2026-01-05', date: '2026-01-05', reasons: [] },
+            ];
+            // A→C directly would need 300 min, but the actual path is A→B→C and the
+            // immediate predecessor of C is B, with a 15-minute gap against a 10-minute need.
+            const verdicts = explainCandidate(input, 'anna', 'c@2026-01-05', roster);
+            expect(verdicts.find((v) => v.ruleId === 'site-travel-gap')!.pass).to.equal(true);
+        });
+
         it('is silent when travel data is unknown', function () {
             const input = cityInput({
                 sites: [{ id: 'north' }, { id: 'south' }],
@@ -334,6 +405,51 @@ describe('Scheduling sites', function () {
             expect(anna.travelMinutes).to.equal(120);
         });
 
+        it('ignores later same-day assignments when inferring origin', function () {
+            const input = cityInput({
+                employees: [{ id: 'anna', tags: ['nurse'], timeOff: [], homeSiteId: 'east' }],
+                sites: [
+                    { id: 'north', travelMinutesTo: { south: 30 } },
+                    { id: 'south' },
+                    { id: 'east', travelMinutesTo: { south: 5 } },
+                ],
+                shifts: [
+                    {
+                        id: 'morn-north',
+                        name: 'Morning North',
+                        startTime: '08:00',
+                        endTime: '10:00',
+                        dates: ['2026-01-05'],
+                        siteId: 'north',
+                    },
+                    {
+                        id: 'mid-south',
+                        name: 'Mid South',
+                        startTime: '12:00',
+                        endTime: '14:00',
+                        dates: ['2026-01-05'],
+                        siteId: 'south',
+                    },
+                    {
+                        id: 'aft-east',
+                        name: 'Afternoon East',
+                        startTime: '16:00',
+                        endTime: '18:00',
+                        dates: ['2026-01-05'],
+                        siteId: 'east',
+                    },
+                ],
+            });
+            const roster: ScheduledAssignment[] = [
+                { employeeId: 'anna', shiftInstanceId: 'morn-north@2026-01-05', date: '2026-01-05', reasons: [] },
+                { employeeId: 'anna', shiftInstanceId: 'aft-east@2026-01-05', date: '2026-01-05', reasons: [] },
+            ];
+            const candidates = rankCandidates(input, 'mid-south@2026-01-05', roster);
+            const anna = candidates.find((c) => c.employeeId === 'anna')!;
+            expect(anna.originSiteId).to.equal('north');
+            expect(anna.travelMinutes).to.equal(30);
+        });
+
         it('falls back to the home site when there is no same-day assignment', function () {
             const input = cityInput({
                 employees: [{ id: 'anna', tags: ['nurse'], timeOff: [], homeSiteId: 'south' }],
@@ -355,6 +471,13 @@ describe('Scheduling sites', function () {
     });
 
     describe('provenance', function () {
+        it('omits site keys from the hash when no site data is supplied', function () {
+            const a = solveSchedule(noSiteInput()).provenance!.rulesHash;
+            const b = solveSchedule({ ...noSiteInput(), sites: undefined, travelSpeedKmh: undefined }).provenance!
+                .rulesHash;
+            expect(a).to.equal(b);
+        });
+
         it('changes the rules hash when sites or travel speed change', function () {
             const a = solveSchedule(cityInput()).provenance!.rulesHash;
             const b = solveSchedule(cityInput({ travelSpeedKmh: 90 })).provenance!.rulesHash;

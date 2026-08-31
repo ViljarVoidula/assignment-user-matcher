@@ -13,6 +13,7 @@ An assignment from before the period start, treated as immutable context.
 - [endTime](HistoricalAssignment.md#endtime)
 - [id](HistoricalAssignment.md#id)
 - [shiftTypeTag](HistoricalAssignment.md#shifttypetag)
+- [siteId](HistoricalAssignment.md#siteid)
 - [startTime](HistoricalAssignment.md#starttime)
 - [workingMinutes](HistoricalAssignment.md#workingminutes)
 
@@ -26,7 +27,7 @@ ISO date the duty started on; may precede `period.startDate`.
 
 #### Defined in
 
-[src/scheduling/types.ts:632](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L632)
+[src/scheduling/types.ts:658](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L658)
 
 ___
 
@@ -36,7 +37,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:630](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L630)
+[src/scheduling/types.ts:656](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L656)
 
 ___
 
@@ -46,7 +47,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:634](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L634)
+[src/scheduling/types.ts:660](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L660)
 
 ___
 
@@ -56,7 +57,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:638](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L638)
+[src/scheduling/types.ts:666](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L666)
 
 ___
 
@@ -66,7 +67,19 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:637](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L637)
+[src/scheduling/types.ts:663](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L663)
+
+___
+
+### siteId
+
+• `Optional` **siteId**: `string`
+
+Site where the historical duty took place, so cross-site travel gaps can be enforced at the period boundary.
+
+#### Defined in
+
+[src/scheduling/types.ts:665](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L665)
 
 ___
 
@@ -76,7 +89,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:633](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L633)
+[src/scheduling/types.ts:659](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L659)
 
 ___
 
@@ -88,4 +101,4 @@ Working minutes, if they differ from the elapsed span.
 
 #### Defined in
 
-[src/scheduling/types.ts:636](https://github.com/ViljarVoidula/assignment-user-matcher/blob/326255ef7b75a86169d8f4e5d601b412717d2cc8/src/scheduling/types.ts#L636)
+[src/scheduling/types.ts:662](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L662)

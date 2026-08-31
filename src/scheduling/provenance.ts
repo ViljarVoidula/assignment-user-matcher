@@ -37,8 +37,10 @@ export function hashRules(
         overrides: options?.overrides ?? null,
         custom: (options?.custom ?? []).map((c) => ({ id: c.id, hardness: c.hardness, weight: c.weight ?? null })),
         objectives: objectives ?? null,
-        sites: sites ? sites.map(siteDigest) : null,
-        travelSpeedKmh: travelSpeedKmh ?? null,
+        // Omit these keys entirely when absent so existing inputs without site data
+        // keep the same rulesHash they had before this feature existed.
+        ...(sites ? { sites: sites.map(siteDigest) } : {}),
+        ...(travelSpeedKmh !== undefined ? { travelSpeedKmh } : {}),
     });
     return fnv1a64(payload);
 }

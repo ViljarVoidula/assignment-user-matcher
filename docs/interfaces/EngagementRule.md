@@ -1,0 +1,35 @@
+[assignment-user-matcher](../README.md) / [Exports](../modules.md) / EngagementRule
+
+# Interface: EngagementRule
+
+Minimum engagement. Belgium requires 3h per work session; the Netherlands
+pays a minimum of 3h per call and credits 30 min per call-out; Ireland owes
+the lesser of 25% of contracted hours or 15h. These decouple *paid* from
+*worked*, so they constrain shift design rather than assignment.
+
+## Table of contents
+
+### Properties
+
+- [minPaidMinutesPerEngagement](EngagementRule.md#minpaidminutesperengagement)
+- [minShiftMinutes](EngagementRule.md#minshiftminutes)
+
+## Properties
+
+### minPaidMinutesPerEngagement
+
+• `Optional` **minPaidMinutesPerEngagement**: `number`
+
+#### Defined in
+
+[src/scheduling/types.ts:459](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L459)
+
+___
+
+### minShiftMinutes
+
+• `Optional` **minShiftMinutes**: `number`
+
+#### Defined in
+
+[src/scheduling/types.ts:458](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L458)

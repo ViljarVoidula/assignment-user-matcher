@@ -1732,6 +1732,8 @@ diagnoseInfeasibility(input); // why it cannot be solved, before solving
 
 `repairSchedule` is the call-in path: everything untouched is pinned, so you get a **diff** rather than an unrecognisable new roster, plus a ranked list of who can lawfully cover, each with compliance verdicts, marginal cost and a rationale. All four share the solver's constraint set — there is deliberately no second validation path. `checkCompliance` also runs the solver's ledger pass, so a hand-edited roster reports the same accrued obligations (compensatory rest, late-cancellation pay, protection fallbacks, time off in lieu) that `solveSchedule` would report for the same assignments — a human override can never validate as "compliant but owing nothing".
 
+`expandShiftInstances(input)` returns the dated planning grid a host should render before anything is assigned — the same `<templateId>@<date>` ids every other call refers to. Use it so the grid ids never drift from the instances the solver will judge.
+
 ### Compliance boundary
 
 Ranking uses declared qualifications, contractual availability, legal limits, cost, and fairness debt computed from **realised** assignment counts. It never consumes reliability scores, no-show prediction, acceptance history or learned per-worker behaviour, and the module is not wired to the matcher's learning layer. Under AI Act Annex III point 4(b), allocating on individual behaviour or traits is high-risk, and the Art 6(3) narrow-task filter has an absolute carve-back for profiling — so that boundary is what keeps this a constraint solver. `result.provenance` records `{ engineVersion, seed, rulesHash, profilingFree }` for audit.
