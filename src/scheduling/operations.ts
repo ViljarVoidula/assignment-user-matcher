@@ -35,11 +35,15 @@ import { collectAggregateViolations, collectPairViolations, verdictsFor } from '
 import { solveSchedule } from './scheduler.class';
 import { preferenceScore } from './constraints/availability';
 import { marginalCostCents } from './cost';
+import { distanceKmBetween, travelMinutesBetween } from './sites';
 import { compensatoryRestLedger } from './constraints/rest-days';
 import { cancellationLedger } from './constraints/notice';
 import { protectionLedger } from './constraints/protections';
 import { overtimeLedger } from './constraints/overtime';
 import { MINUTES_PER_DAY } from './time';
+
+/** Soft-ranking weight for travel minutes in `rankCandidates`. */
+const TRAVEL_MINUTE_WEIGHT = 1;
 
 /* ------------------------------------------------------------------------- */
 /* Compliance                                                                 */
@@ -172,6 +176,14 @@ export interface RepairCandidate {
     /** Lower is a better call. */
     rank: number;
     rationale: string;
+    /** Site the candidate is travelling from (same-day assignment, then home site). */
+    originSiteId?: string;
+    /** Estimated travel minutes from origin to the shift's site. */
+    travelMinutes?: number;
+    /** Straight-line distance from origin to the shift's site, when minutes are unavailable. */
+    distanceKm?: number;
+    /** Whether the shift is at this employee's home site. */
+    isHomeSite: boolean;
 }
 
 export interface RepairResult {
@@ -280,6 +292,16 @@ export function rankCandidates(
         );
         const fairnessDebt = meanExtra - (extraLoad.get(employee.id) ?? 0);
         const preference = preferenceScore(ctx.clock, employee.availability, inst);
+        const originSiteId = originSiteFor(state, employee.id, inst);
+        const travelMinutes =
+            originSiteId !== undefined && inst.siteId !== undefined
+                ? travelMinutesBetween(ctx.siteIndex, originSiteId, inst.siteId)
+                : undefined;
+        const distanceKm =
+            travelMinutes === undefined && originSiteId !== undefined && inst.siteId !== undefined
+                ? distanceKmBetween(ctx.siteIndex, originSiteId, inst.siteId)
+                : undefined;
+        const isHomeSite = employee.homeSiteId !== undefined && employee.homeSiteId === inst.siteId;
 
         candidates.push({
             employeeId: employee.id,
@@ -289,9 +311,25 @@ export function rankCandidates(
             blockers,
             marginalCostCents: costCents,
             fairnessDebt,
+            originSiteId,
+            travelMinutes,
+            distanceKm,
+            isHomeSite,
             // Ineligible candidates sort to the bottom but stay visible.
-            rank: eligible ? costCents / 100 - fairnessDebt * 10 + preference * 5 : Number.MAX_SAFE_INTEGER,
-            rationale: rationaleFor(eligible, blockers, costCents, fairnessDebt, preference),
+            rank: eligible
+                ? costCents / 100 - fairnessDebt * 10 + preference * 5 + (travelMinutes ?? 0) * TRAVEL_MINUTE_WEIGHT
+                : Number.MAX_SAFE_INTEGER,
+            rationale: rationaleFor(
+                eligible,
+                blockers,
+                costCents,
+                fairnessDebt,
+                preference,
+                travelMinutes,
+                distanceKm,
+                originSiteId,
+                isHomeSite,
+            ),
         });
     }
 
@@ -304,13 +342,51 @@ function rationaleFor(
     costCents: number,
     fairnessDebt: number,
     preference: number,
+    travelMinutes: number | undefined,
+    distanceKm: number | undefined,
+    originSiteId: string | undefined,
+    isHomeSite: boolean,
 ): string {
     if (!eligible) return blockers.map((b) => b.message).join('; ') || 'not eligible';
     const parts = [`€${(costCents / 100).toFixed(2)} marginal cost`];
     if (fairnessDebt > 0) parts.push(`${fairnessDebt.toFixed(1)} fewer extra shifts than average`);
     if (preference < 0) parts.push('prefers this window');
     if (preference > 0) parts.push('would rather avoid this window');
+    if (isHomeSite) {
+        parts.push('home site');
+    } else if (travelMinutes !== undefined && originSiteId !== undefined) {
+        parts.push(`${travelMinutes} min from ${originSiteId}`);
+    } else if (distanceKm !== undefined && originSiteId !== undefined) {
+        parts.push(`${distanceKm.toFixed(1)} km from ${originSiteId}`);
+    }
     return parts.join(' · ');
+}
+
+/** Site the candidate would travel from: nearest same-day assignment, then home site. */
+function originSiteFor(state: SearchState, employeeId: string, inst: import('./types').ShiftInstance): string | undefined {
+    const assigned = state.byEmployee.get(employeeId);
+    const homeSite = state.ctx.employeeById.get(employeeId)?.homeSiteId;
+    if (!assigned) return homeSite;
+
+    let best: { siteId: string; gap: number; isPredecessor: boolean } | undefined;
+    for (const instanceId of assigned) {
+        const other = state.ctx.instanceById.get(instanceId);
+        if (!other || other.date !== inst.date || !other.siteId) continue;
+
+        if (other.endMinute <= inst.startMinute) {
+            const gap = inst.startMinute - other.endMinute;
+            if (!best || gap < best.gap || (gap === best.gap && !best.isPredecessor)) {
+                best = { siteId: other.siteId, gap, isPredecessor: true };
+            }
+        } else if (other.startMinute >= inst.endMinute) {
+            const gap = other.startMinute - inst.endMinute;
+            if (!best || gap < best.gap) {
+                best = { siteId: other.siteId, gap, isPredecessor: false };
+            }
+        }
+    }
+
+    return best?.siteId ?? homeSite;
 }
 
 /** Shifts each person already holds, as the basis for fairness debt. */

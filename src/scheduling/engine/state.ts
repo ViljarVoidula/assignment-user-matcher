@@ -60,6 +60,7 @@ export function assign(state: InternalState, employeeId: string, instanceId: str
         end: inst.endMinute,
         workingMinutes: inst.workingMinutes,
         tag: inst.shiftTypeTag,
+        siteId: inst.siteId,
     });
 
     state.reasons.set(pairKey(employeeId, instanceId), reasons);

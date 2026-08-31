@@ -20,6 +20,10 @@ export interface Employee {
     tags: string[];
     /** ISO dates (YYYY-MM-DD) or explicit shift instances the employee must not work. */
     timeOff: TimeOffEntry[];
+    /** Site the employee is normally based at. Used as a soft preference by the solver and for origin inference in suggestions. */
+    homeSiteId?: string;
+    /** Hard allow-list of sites this employee may work at. When set, shifts at unlisted sites are ineligible. */
+    siteIds?: string[];
     /** Hard upper bound of worked **hours** over the whole period. */
     maxHoursForPeriod?: number;
     /** Soft lower bound of worked **hours** over the whole period (warn, don't block). */
@@ -158,6 +162,22 @@ export interface TimeOffEntry {
     date: string;
     /** Optional shift-instance id (`<templateId>@<date>`); when set only that instance is blocked. */
     shiftInstanceId?: string;
+}
+
+/** A physical site, with optional coordinates and an asymmetric travel-time matrix. */
+export interface Site {
+    id: string;
+    lat?: number;
+    lng?: number;
+    /** Travel time from this site to another site, in minutes. Takes precedence over haversine estimates. */
+    travelMinutesTo?: Record<string, number>;
+}
+
+/** Indexed view of `ScheduleInput.sites` used by constraints and ranking. */
+export interface SiteIndex {
+    byId: Map<string, Site>;
+    /** Caller-supplied fallback speed for deriving minutes from haversine kilometres. */
+    travelSpeedKmh?: number;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -597,6 +617,10 @@ export interface ScheduleInput {
 
     /** The labour-law layer. Omit for a plain feasibility solve. */
     rules?: WorkingTimeRules;
+    /** Site registry. Required for multi-site travel-gap, distance-aware ranking and home-site preferences. */
+    sites?: Site[];
+    /** Fallback speed (km/h) used to derive travel minutes from haversine distance when a matrix entry is absent. */
+    travelSpeedKmh?: number;
     /** Public holidays and closures, as ISO dates. */
     calendar?: { publicHolidays?: string[]; closedDates?: string[] };
     /**
@@ -635,6 +659,8 @@ export interface HistoricalAssignment {
     /** Working minutes, if they differ from the elapsed span. */
     workingMinutes?: number;
     shiftTypeTag?: string;
+    /** Site where the historical duty took place, so cross-site travel gaps can be enforced at the period boundary. */
+    siteId?: string;
     id?: string;
 }
 
@@ -748,6 +774,13 @@ export interface ObjectiveWeights {
      * summary still use the cost model either way.
      */
     costWeightPerEuro?: number;
+    /**
+     * Soft-score points per assignment away from an employee's `homeSiteId`.
+     * When set positive, the solver prefers assigning people to their home site.
+     * The ranking function does **not** consume behavioural or predictive signals;
+     * this is declared data, kept outside AI Act Annex III point 4(b).
+     */
+    homeSiteWeight?: number;
 }
 
 /** A dated obligation created by an assignment. */
@@ -830,6 +863,8 @@ export interface ModelContext {
     employeeTags: Map<string, Set<string>>;
     instances: ShiftInstance[];
     instanceById: Map<string, ShiftInstance>;
+    /** Site registry built from `ScheduleInput.sites`. */
+    siteIndex: SiteIndex;
     /** Minutes in [0, periodDays*1440) the employee is blocked by time-off. */
     employeeBlockedIntervals: Map<string, Array<{ start: number; end: number }>>;
     minRestMinutes: number;

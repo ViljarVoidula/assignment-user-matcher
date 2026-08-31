@@ -37,6 +37,8 @@ export interface TimelineEntry extends MinuteRange {
     workingMinutes: number;
     /** Free-form classification tag used by sequence rules (e.g. a shift type). */
     tag?: string;
+    /** Site where this span took place; drives cross-site travel-gap rules. */
+    siteId?: string;
     /** Historical entries are immutable and never returned by the mutable views. */
     historical?: boolean;
 }

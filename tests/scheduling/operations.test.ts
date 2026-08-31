@@ -283,7 +283,41 @@ describe('Scheduling operations', function () {
                 'fairnessDebt',
                 'rank',
                 'rationale',
+                'originSiteId',
+                'travelMinutes',
+                'distanceKm',
+                'isHomeSite',
             ]);
+        });
+
+        it('prefers a candidate closer to the shift site', function () {
+            const input = wardInput({
+                constraints: { minRestMinutes: 0 },
+                employees: [
+                    { id: 'near', tags: ['nurse'], timeOff: [], homeSiteId: 'alpha' },
+                    { id: 'far', tags: ['nurse'], timeOff: [], homeSiteId: 'beta' },
+                ],
+                shifts: [
+                    {
+                        id: 'day',
+                        name: 'Day',
+                        startTime: '08:00',
+                        endTime: '16:00',
+                        dates: ['2026-01-05'],
+                        siteId: 'alpha',
+                    },
+                ],
+                sites: [
+                    { id: 'alpha', lat: 0, lng: 0 },
+                    { id: 'beta', lat: 0, lng: 1 },
+                ],
+                travelSpeedKmh: 60,
+            });
+            const candidates = rankCandidates(input, 'day@2026-01-05', []);
+            expect(candidates[0].employeeId).to.equal('near');
+            expect(candidates[0].isHomeSite).to.equal(true);
+            expect(candidates[0].travelMinutes).to.equal(0);
+            expect(candidates[1].travelMinutes).to.be.greaterThan(0);
         });
     });
 

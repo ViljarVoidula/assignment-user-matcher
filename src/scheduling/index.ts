@@ -21,6 +21,11 @@ export {
 // Time model, exported so hosts can resolve the same wall-clock the engine does.
 export { PeriodClock, type MinuteRange, type ClockRange } from './time';
 
+// The dated occurrences a host draws its planning grid from. Exported so a
+// grid addresses the same `<templateId>@<date>` ids the engine judges, rather
+// than a re-derivation of them that can drift.
+export { expandShiftInstances } from './model';
+
 // Rule-authoring arithmetic (no jurisdiction values, just the conversions
 // people get wrong — notably weekly-average → rolling-window-total).
 export { hours, days, weeklyAverageOver } from './rules';
@@ -63,6 +68,7 @@ export type {
     Severity,
     ShiftInstance,
     ShiftTemplate,
+    Site,
     TimeOffEntry,
     WeeklyRestRule,
     WorkingTimeLimits,

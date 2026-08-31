@@ -116,6 +116,9 @@ export {
     ScheduleValidationError,
     DEFAULT_MIN_REST_MINUTES,
     PeriodClock,
+    // The dated occurrences a host draws a planning grid from, with the same
+    // `<templateId>@<date>` ids every other call refers to.
+    expandShiftInstances,
     // Operational APIs: validate a hand-edited roster, explain a candidate,
     // repair around a call-in, diagnose an impossible problem.
     checkCompliance,
@@ -155,6 +158,7 @@ export {
     type Severity,
     type ShiftInstance,
     type ShiftTemplate,
+    type Site,
     type TimeOffEntry,
     type WeeklyRestRule,
     type WorkingTimeLimits,

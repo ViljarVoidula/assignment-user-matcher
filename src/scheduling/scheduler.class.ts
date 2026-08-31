@@ -150,7 +150,7 @@ export class ShiftScheduler {
             provenance: {
                 engineVersion: ENGINE_VERSION,
                 seed,
-                rulesHash: hashRules(input.rules, input.constraints, input.objectives),
+                rulesHash: hashRules(input.rules, input.constraints, input.objectives, input.sites, input.travelSpeedKmh),
                 dutyClassificationNotes: dutyNotes(ctx),
                 // Nothing in this module consumes a behavioural or predictive
                 // per-worker signal, so the claim is structural rather than a

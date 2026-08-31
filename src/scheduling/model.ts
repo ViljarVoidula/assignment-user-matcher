@@ -43,9 +43,43 @@ import { createDefaultConstraints } from './constraints/constraint';
 import { DEFAULT_MIN_REST_MINUTES } from './constraints/min-rest';
 import { assertValidOvertimeRule } from './constraints/overtime';
 import type { TimelineEntry } from './engine/timeline';
+import { buildSiteIndex } from './sites';
 import { PeriodClock, MINUTES_PER_DAY, addDays, assertIsoDate, daysBetween, isoWeekday, parseTimeOfDay } from './time';
 
 export { daysBetween, addDays } from './time';
+
+/**
+ * Expand a whole input's templates into the dated occurrences the engine will
+ * judge — the grid a host draws before anything is assigned.
+ *
+ * It takes the `ScheduleInput` rather than a clock so the caller cannot hand in
+ * a period clock built on a different timezone or length than the solve will
+ * use: the ids and wall-clock minutes here are the ones every later call
+ * (`explainCandidate`, `checkCompliance`, a returned `ScheduledAssignment`)
+ * refers to.
+ */
+export function expandShiftInstances(input: ScheduleInput): ShiftInstance[] {
+    assertIsoDate(input.period.startDate, 'period.startDate');
+    assertIsoDate(input.period.endDate, 'period.endDate');
+    const periodDays = daysBetween(input.period.startDate, input.period.endDate) + 1;
+    if (periodDays <= 0) throw new ScheduleValidationError('period.endDate must not precede period.startDate');
+
+    const clock = new PeriodClock(input.period.startDate, periodDays, input.period.timeZone ?? 'UTC');
+    const publicHolidays = new Set(input.calendar?.publicHolidays ?? []);
+    for (const date of publicHolidays) assertIsoDate(date, 'calendar.publicHolidays');
+
+    const context = { nightRule: input.rules?.nightWork, publicHolidays };
+    const instances: ShiftInstance[] = [];
+    const seen = new Set<string>();
+    for (const template of input.shifts) {
+        for (const inst of expandTemplate(template, clock, periodDays, context)) {
+            if (seen.has(inst.id)) throw new ScheduleValidationError(`Duplicate shift instance id "${inst.id}"`);
+            seen.add(inst.id);
+            instances.push(inst);
+        }
+    }
+    return instances;
+}
 
 /** Expand one template into its dated instances inside the period. */
 export function expandTemplate(
@@ -292,6 +326,7 @@ function buildHistory(
             end,
             workingMinutes: entry.workingMinutes ?? end - start,
             tag: entry.shiftTypeTag,
+            siteId: entry.siteId,
             historical: true,
         });
         out.set(personId, entries);
@@ -311,6 +346,7 @@ export function buildModel(input: ScheduleInput): ModelContext {
 
     const clock = new PeriodClock(input.period.startDate, periodDays, input.period.timeZone ?? 'UTC');
     const rules = input.rules ?? {};
+    const siteIndex = buildSiteIndex(input.sites, input.travelSpeedKmh);
     const publicHolidays = new Set(input.calendar?.publicHolidays ?? []);
     for (const date of publicHolidays) assertIsoDate(date, 'calendar.publicHolidays');
 
@@ -384,6 +420,7 @@ export function buildModel(input: ScheduleInput): ModelContext {
         employeeTags,
         instances,
         instanceById,
+        siteIndex,
         employeeBlockedIntervals,
         minRestMinutes: input.constraints?.minRestMinutes ?? rules.dailyRest?.minMinutes ?? DEFAULT_MIN_REST_MINUTES,
         constraints: resolveConstraints(input.constraints, rules, input.objectives),

@@ -39,6 +39,9 @@ import { contractLimits } from './contract';
 import { overtime } from './overtime';
 import { dutyQuotas } from './duty-quota';
 import { costObjective } from './cost';
+import { siteEligibility } from './site-eligibility';
+import { siteTravelGap } from './site-travel-gap';
+import { siteHomePreference } from './site-home';
 
 export interface DefaultConstraintOptions {
     /** Minimum rest between consecutive assignments, in minutes. */
@@ -86,12 +89,23 @@ export function createDefaultConstraints(options: DefaultConstraintOptions): Sch
 
     // Always-on person-scoped rules: they no-op unless the employee carries the
     // relevant data, so they cost nothing for simple rosters.
-    constraints.push(availability(), qualification(), groupComposition(), protections(), contractLimits());
+    constraints.push(
+        availability(),
+        qualification(),
+        groupComposition(),
+        protections(),
+        contractLimits(),
+        siteEligibility(),
+        siteTravelGap(),
+    );
 
     // The cost term is score-only: its verdict always passes, so it steers the
     // search without ever appearing as a violation.
     const costWeight = options.objectives?.costWeightPerEuro;
     if (costWeight !== undefined && costWeight > 0) constraints.push(costObjective(costWeight));
+
+    const homeSiteWeight = options.objectives?.homeSiteWeight;
+    if (homeSiteWeight !== undefined && homeSiteWeight > 0) constraints.push(siteHomePreference(homeSiteWeight));
 
     return constraints;
 }

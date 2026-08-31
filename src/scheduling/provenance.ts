@@ -12,7 +12,7 @@
  * to key an audit record. It is deliberately dependency-free.
  */
 
-import type { ConstraintOptions, ObjectiveWeights, WorkingTimeRules } from './types';
+import type { ConstraintOptions, ObjectiveWeights, Site, WorkingTimeRules } from './types';
 
 /**
  * A stable digest of the rule set, constraint options and objective weights.
@@ -25,6 +25,8 @@ export function hashRules(
     rules: WorkingTimeRules | undefined,
     options: ConstraintOptions | undefined,
     objectives?: ObjectiveWeights,
+    sites?: Site[],
+    travelSpeedKmh?: number,
 ): string {
     const payload = stableStringify({
         rules: rules ?? null,
@@ -35,8 +37,21 @@ export function hashRules(
         overrides: options?.overrides ?? null,
         custom: (options?.custom ?? []).map((c) => ({ id: c.id, hardness: c.hardness, weight: c.weight ?? null })),
         objectives: objectives ?? null,
+        sites: sites ? sites.map(siteDigest) : null,
+        travelSpeedKmh: travelSpeedKmh ?? null,
     });
     return fnv1a64(payload);
+}
+
+function siteDigest(site: Site) {
+    return {
+        id: site.id,
+        lat: site.lat ?? null,
+        lng: site.lng ?? null,
+        travelMinutesTo: site.travelMinutesTo
+            ? Object.fromEntries(Object.entries(site.travelMinutesTo).sort(([a], [b]) => (a < b ? -1 : 1)))
+            : null,
+    };
 }
 
 /** JSON with object keys sorted recursively. */
