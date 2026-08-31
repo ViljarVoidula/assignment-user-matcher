@@ -2,12 +2,19 @@
 
 [![npm version](https://badge.fury.io/js/assignment-user-matcher.svg)](https://badge.fury.io/js/assignment-user-matcher)
 [![CI Pipeline](https://github.com/ViljarVoidula/assignment-user-matcher/actions/workflows/npm-publish.yml/badge.svg)](https://github.com/ViljarVoidula/assignment-user-matcher/actions/workflows/npm-publish.yml)
+[![5xer Cloud](https://img.shields.io/badge/%E2%98%81%EF%B8%8F_5xer_Cloud-Sign_up-7C3AED)](https://5xer.com)
 
 <!-- Add other badges if you have them, e.g., build status, test coverage -->
 
 **Tired of inefficiently assigning tasks or struggling to connect the right users with the right work? `assignment-user-matcher` is a specialized Node.js library designed for high-performance, near real-time matching of a smaller pool of users to a large volume of assignments, primarily based on shared tags and priority.**
 
 It leverages the speed and efficiency of Redis to deliver a robust solution perfect for scenarios like call centers, customer support queues, back-office operations, and more.
+
+> ### ☁️ Don't want to run your own Redis?
+>
+> **[5xer Cloud](https://5xer.com)** offers this matching engine as a fully managed service — no infrastructure, no maintenance sweeps, no Redis ops. On top of that, you get a polished no-code UI: a mobile-friendly PWA where workers see their assignments, accept, and complete work from anywhere — no client to install, no code to write.
+>
+> **[Sign up at 5xer.com →](https://5xer.com)** — getting started is free.
 
 ## The Challenge: Efficiently Connecting Users to Work
 
