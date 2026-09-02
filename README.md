@@ -1623,6 +1623,12 @@ This demonstrates the library's impressive performance even with large numbers o
 
 A companion engine for **rostering**: generating fair, constraint-compliant timetables that assign employees to shifts over a period. Unlike the matcher, this module is **pure and Redis-free** — `solveSchedule(input)` is a synchronous in-process function; wrap it in your own queue if you need one.
 
+**Import it from the `assignment-user-matcher/scheduling` subpath** to get the engine without the Redis-backed matcher. The root barrel pulls in `redis`; this one pulls nothing but the scheduler, so it loads in a browser, a Web Worker or an edge runtime as well as in Node. (Every example below uses the root import for continuity; the subpath exports the same names.)
+
+```ts
+import { solveSchedule } from 'assignment-user-matcher/scheduling';
+```
+
 ```ts
 import { solveSchedule } from 'assignment-user-matcher';
 

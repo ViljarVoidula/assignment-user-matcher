@@ -1,6 +1,6 @@
 {
     "name": "assignment-user-matcher",
-    "version": "1.13.0",
+    "version": "1.14.0",
     "repository": {
         "type": "git",
         "url": "https://github.com/ViljarVoidula/assignment-user-matcher"
@@ -17,6 +17,18 @@
             "types": "./dist/index.d.ts",
             "require": "./dist/index.js",
             "import": "./dist/index.js"
+        },
+        "./scheduling": {
+            "types": "./dist/scheduling/index.d.ts",
+            "require": "./dist/scheduling/index.js",
+            "import": "./dist/scheduling/index.js"
+        }
+    },
+    "typesVersions": {
+        "*": {
+            "scheduling": [
+                "dist/scheduling/index.d.ts"
+            ]
         }
     },
     "author": "Viljar Võidula",
