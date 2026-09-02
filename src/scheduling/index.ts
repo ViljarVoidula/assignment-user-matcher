@@ -30,6 +30,16 @@ export { expandShiftInstances } from './model';
 // people get wrong — notably weekly-average → rolling-window-total).
 export { hours, days, weeklyAverageOver } from './rules';
 
+// Contracted-hours arithmetic, exported so a host resolves `fte` to the same
+// weekly figure the engine plans against (for pay estimates, planned-hours
+// reports) rather than a second derivation that can drift.
+export {
+    DEFAULT_CONTRACT_HOURS_WEIGHT,
+    contractedPeriodMinutes,
+    fullTimeWeeklyMinutes,
+    resolveContractedWeeklyMinutes,
+} from './contract-hours';
+
 export type {
     AssignmentPair,
     AvailabilityRule,
@@ -38,6 +48,8 @@ export type {
     ConsecutiveRule,
     ConstraintOptions,
     ConstraintViolation,
+    ContractHoursRule,
+    ContractHoursSummary,
     DailyRestRule,
     DutyClassification,
     DutyQuota,

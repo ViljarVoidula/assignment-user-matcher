@@ -42,6 +42,7 @@ import { ScheduleValidationError } from './types';
 import { createDefaultConstraints } from './constraints/constraint';
 import { DEFAULT_MIN_REST_MINUTES } from './constraints/min-rest';
 import { assertValidOvertimeRule } from './constraints/overtime';
+import { DEFAULT_CONTRACT_HOURS_WEIGHT, contractedPeriodMinutes, resolveContractedWeeklyMinutes } from './contract-hours';
 import type { TimelineEntry } from './engine/timeline';
 import { buildSiteIndex } from './sites';
 import { PeriodClock, MINUTES_PER_DAY, addDays, assertIsoDate, daysBetween, isoWeekday, parseTimeOfDay } from './time';
@@ -268,6 +269,22 @@ function validateEmployee(employee: Employee): void {
     }
 }
 
+function assertValidContractRule(rule: WorkingTimeRules['contract'], owner: string): void {
+    if (!rule) return;
+    for (const [field, value] of [
+        ['fullTimeWeeklyMinutes', rule.fullTimeWeeklyMinutes],
+        ['maxOverMinutes', rule.maxOverMinutes],
+        ['maxUnderMinutes', rule.maxUnderMinutes],
+    ] as const) {
+        if (value !== undefined && (!Number.isFinite(value) || value < 0)) {
+            throw new ScheduleValidationError(`${owner}: contract.${field} must be a non-negative number`);
+        }
+    }
+    if (rule.fullTimeWeeklyMinutes !== undefined && rule.fullTimeWeeklyMinutes === 0) {
+        throw new ScheduleValidationError(`${owner}: contract.fullTimeWeeklyMinutes must be positive`);
+    }
+}
+
 /**
  * Merge the global rule set with one person's overrides.
  *
@@ -383,6 +400,26 @@ export function buildModel(input: ScheduleInput): ModelContext {
         employeesOfPerson.set(personId, [...(employeesOfPerson.get(personId) ?? []), employee.id]);
     }
 
+    // The contracted week resolves exactly once, against the rules that apply
+    // to the person (a per-person override may carry its own full-time week),
+    // and every rule reads the resolved figure from the context.
+    const contractedWeeklyMinutes = new Map<string, number>();
+    const contractedPeriod = new Map<string, number>();
+    for (const employee of input.employees) {
+        const weekly = resolveContractedWeeklyMinutes(employee, rulesByEmployee.get(employee.id) ?? rules);
+        if (weekly === undefined) continue;
+        contractedWeeklyMinutes.set(employee.id, weekly);
+        contractedPeriod.set(employee.id, contractedPeriodMinutes(weekly, periodDays));
+    }
+    const contractHoursWeight = input.objectives?.contractHoursWeight ?? DEFAULT_CONTRACT_HOURS_WEIGHT;
+    if (!Number.isFinite(contractHoursWeight) || contractHoursWeight < 0) {
+        throw new ScheduleValidationError(`objectives.contractHoursWeight must be a non-negative number`);
+    }
+    if (rules.contract) assertValidContractRule(rules.contract, 'rules');
+    for (const employee of input.employees) {
+        if (employee.rules?.contract) assertValidContractRule(employee.rules.contract, `employee "${employee.id}"`);
+    }
+
     const absences = new Map<string, Array<{ start: number; end: number; kind?: string }>>();
     for (const absence of input.absences ?? []) {
         const span = spanToMinutes(absence.from, absence.to, clock, 'absences');
@@ -427,6 +464,9 @@ export function buildModel(input: ScheduleInput): ModelContext {
         clock,
         rules,
         rulesByEmployee,
+        contractedWeeklyMinutes,
+        contractedPeriodMinutes: contractedPeriod,
+        contractHoursWeight,
         personIdOf,
         employeesOfPerson,
         history: buildHistory(input.history, clock, personIdOf),

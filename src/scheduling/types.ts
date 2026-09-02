@@ -110,8 +110,21 @@ export interface AvailabilityRule {
 /** Contract shape — hours-based or day-count. */
 export interface EmployeeContract {
     kind: 'hours' | 'days';
-    /** Target contractual minutes per week, used for pro-rata fairness. */
+    /**
+     * Contracted minutes per week. Sets the person's overtime baseline, their
+     * pro-rata fairness share and — through `rules.contract` and the
+     * contract-hours objective — the period total the solver plans them
+     * towards. Takes precedence over `fte`.
+     */
     weeklyMinutes?: number;
+    /**
+     * Fraction of a full-time week, `0 < fte <= 1` (0.5 is half-time). Resolved
+     * to weekly minutes against `rules.contract.fullTimeWeeklyMinutes`, falling
+     * back to `rules.overtime.ordinaryPerWeekMinutes`; with neither the engine
+     * rejects the input rather than guess a working week. Ignored when
+     * `weeklyMinutes` is set.
+     */
+    fte?: number;
     /** Day-count contracts: maximum working days in the period (e.g. FR forfait jours). */
     maxDaysInPeriod?: number;
     /** Hard bounds over the period, in minutes. */
@@ -206,6 +219,8 @@ export interface WorkingTimeRules {
     workingTime?: WorkingTimeLimits;
     /** The ordinary-vs-overtime split and its caps. */
     overtime?: OvertimeRule;
+    /** Contracted hours: the full-time week `fte` is a fraction of, and how far a plan may stray from a person's contract. */
+    contract?: ContractHoursRule;
     /** Rolling volume caps on particular duty types, matched on `shiftTypeTag`. */
     dutyQuotas?: DutyQuota[];
     consecutive?: ConsecutiveRule;
@@ -339,6 +354,43 @@ export interface OvertimeRule {
      */
     compensation?: 'timeOff' | 'pay';
     /** Legal source echoed into verdicts and violations. */
+    citation?: string;
+}
+
+/**
+ * Contracted hours as a planning fact.
+ *
+ * A contracted week already sets a person's overtime baseline (`overtime`) and
+ * pro-rata fairness share (`fairness[].proRataByContract`). This family makes
+ * it steer the roster itself. The contracted *period* total is
+ * `weeklyMinutes × periodDays / 7`; the solver's soft objective pulls every
+ * person with a known contract towards that total (weight
+ * `objectives.contractHoursWeight`), so a half-time worker is planned half the
+ * hours of a full-timer rather than filled to the statutory ceiling.
+ *
+ * The two bounds are optional because whether over-contract time is a breach
+ * or merely overtime is the caller's regime: a workspace whose `overtime` rule
+ * governs the surplus omits `maxOverMinutes`; one whose part-timers must not
+ * exceed their agreed hours sets it to 0.
+ */
+export interface ContractHoursRule {
+    /**
+     * The full-time week that `contract.fte` is a fraction of, in minutes.
+     * Falls back to `overtime.ordinaryPerWeekMinutes`. Required (one or the
+     * other) for any employee with an `fte`.
+     */
+    fullTimeWeeklyMinutes?: number;
+    /**
+     * Hard cap: minutes a person may be planned *over* their contracted period
+     * total. `0` means never over contract. Omit for no hard cap.
+     */
+    maxOverMinutes?: number;
+    /**
+     * Soft report: a shortfall larger than this against the contracted period
+     * total is surfaced as a violation. Omit to leave shortfalls to the
+     * objective and the result summary.
+     */
+    maxUnderMinutes?: number;
     citation?: string;
 }
 
@@ -741,6 +793,8 @@ export interface ScheduleResult {
     ledger?: LedgerEntry[];
     /** Per-person cost breakdown when a cost model was supplied. */
     cost?: { totalCents: number; byEmployee: Record<string, number> };
+    /** Planned against contracted hours, for every employee whose contracted week resolves. */
+    contractHours?: ContractHoursSummary[];
 }
 
 /** Identifying stamp for a solve. */
@@ -783,6 +837,27 @@ export interface ObjectiveWeights {
      * this is declared data, kept outside AI Act Annex III point 4(b).
      */
     homeSiteWeight?: number;
+    /**
+     * Soft-score points per *hour* a person is planned away from their
+     * contracted period total (see `ContractHoursRule`). Applies only to
+     * employees whose contracted week resolves. Defaults to 1; `0` switches the
+     * term off.
+     */
+    contractHoursWeight?: number;
+}
+
+/** One person's planned hours set against their contract. */
+export interface ContractHoursSummary {
+    employeeId: string;
+    /** The contracted week, explicit or resolved from `fte`. */
+    weeklyMinutes: number;
+    /** As supplied, or derived from `weeklyMinutes` when a full-time week is known. */
+    fte?: number;
+    /** The contracted week pro-rated to the period. */
+    contractedMinutes: number;
+    plannedMinutes: number;
+    /** `plannedMinutes − contractedMinutes`; negative is a shortfall. */
+    deltaMinutes: number;
 }
 
 /** A dated obligation created by an assignment. */
@@ -878,6 +953,17 @@ export interface ModelContext {
     /** Rules after merging the global set with each person's overrides. */
     rules: WorkingTimeRules;
     rulesByEmployee: Map<string, WorkingTimeRules>;
+    /**
+     * Each employee's contracted week in minutes — explicit `weeklyMinutes` or
+     * `fte` resolved against the full-time week — for those who have one. Every
+     * rule that reads a contracted week reads it here, so `fte` and
+     * `weeklyMinutes` can never disagree between overtime and fairness.
+     */
+    contractedWeeklyMinutes: Map<string, number>;
+    /** The contracted week pro-rated to the period, for the same employees. */
+    contractedPeriodMinutes: Map<string, number>;
+    /** Resolved `objectives.contractHoursWeight`. */
+    contractHoursWeight: number;
     /** Employee id → the natural person it belongs to (CJEU C-585/19). */
     personIdOf: Map<string, string>;
     /** Person id → the employee records that share it. */

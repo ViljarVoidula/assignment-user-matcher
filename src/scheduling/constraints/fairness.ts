@@ -139,7 +139,7 @@ function shareWeights(state: SearchState, rule: FairnessRule, employeeIds: strin
             weights.set(id, 1);
             continue;
         }
-        const weekly = state.ctx.employeeById.get(id)?.contract?.weeklyMinutes;
+        const weekly = state.ctx.contractedWeeklyMinutes.get(id);
         weights.set(id, weekly && weekly > 0 ? weekly : 1);
     }
     return weights;

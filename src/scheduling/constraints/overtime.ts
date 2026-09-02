@@ -81,7 +81,9 @@ export function overtime(rule: OvertimeRule): SchedulingConstraint {
             const citation = applied.citation ?? OVERTIME_CITATION;
 
             const employee = state.ctx.employeeById.get(pair.employeeId);
-            const weeklyOrdinary = employee?.contract?.weeklyMinutes ?? applied.ordinaryPerWeekMinutes;
+            // The contracted week is resolved once in the model (explicit
+            // minutes or `fte` × full-time week), never re-derived here.
+            const weeklyOrdinary = state.ctx.contractedWeeklyMinutes.get(pair.employeeId) ?? applied.ordinaryPerWeekMinutes;
 
             const timeline = timelineFor(state, pair.employeeId);
             const range = rangeOf(inst);
@@ -182,7 +184,7 @@ export function overtimeLedger(state: SearchState): LedgerEntry[] {
 
 /** Working minutes past the pro-rated weekly baseline over the whole period. */
 function periodOvertimeMinutes(state: SearchState, employee: Employee, rule: OvertimeRule): number {
-    const weeklyOrdinary = employee.contract?.weeklyMinutes ?? rule.ordinaryPerWeekMinutes;
+    const weeklyOrdinary = state.ctx.contractedWeeklyMinutes.get(employee.id) ?? rule.ordinaryPerWeekMinutes;
     if (weeklyOrdinary === undefined) return 0;
     const baseline = Math.round((weeklyOrdinary * state.ctx.periodDays) / 7);
     return Math.max(0, (state.minutesByEmployee.get(employee.id) ?? 0) - baseline);

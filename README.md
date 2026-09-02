@@ -1341,6 +1341,9 @@ pnpm benchmark:learning -- 300 8000 10 20260611
 # arguments: <users> <assignmentsPerRound> <rounds> <seed>
 ```
 
+Set `REDIS_URL` to benchmark against a non-default Redis endpoint. Benchmark
+runs use isolated, unique key prefixes and never call `FLUSHDB`.
+
 Output includes:
 
 1. Per-mode throughput and latency (`baseline`, `learning-shadow`, `learning-live`)
@@ -1685,6 +1688,10 @@ Rules cover: daily rest (rolling window, reduction allowances, clock-band contai
 Break entitlements are checked against shift design: `unpaidBreakMinutes` (deducted from working time) and `paidBreakMinutes` (working time, and the only thing that discharges a `paid: true` break rule). Deadline arithmetic that needs a "now" — notably whether a cancellation of a published assignment fell inside `notice.cancellationDeadlineMinutes` — is anchored by the optional `asOf` input; without it every cancellation is treated as late, the conservative reading.
 
 **Overtime** is regulated separately from total working time where national law does so. `rules.overtime` defines the ordinary baseline (`ordinaryPerDayMinutes` / `ordinaryPerWeekMinutes`; a person's `contract.weeklyMinutes` overrides the weekly figure, so a part-timer's overtime starts at their agreed hours), caps the overtime portion per rolling 24h or per rolling window, and with `requiresConsent` makes any overtime conditional on the employee's recorded `overtimeConsent`. With `compensation: 'timeOff'`, each employee's period overtime accrues a `timeOffInLieu` entry in `result.ledger`.
+
+**Contracted hours and part-time.** A person's contracted week is stated either as minutes (`contract.weeklyMinutes`) or as a fraction of full time (`contract.fte`, `0 < fte <= 1`, e.g. `0.5` for half-time). An `fte` resolves against `rules.contract.fullTimeWeeklyMinutes`, falling back to `rules.overtime.ordinaryPerWeekMinutes`; with neither the input is rejected rather than a working week guessed. The resolved week is read in one place (`ModelContext.contractedWeeklyMinutes`) by everything that needs it: the overtime baseline, pro-rata fairness (`proRataByContract`), and the **contract-hours objective**, which pulls every person with a contract towards `weekly × periodDays / 7` at the soft level (`objectives.contractHoursWeight`, default `1` point per hour of deviation, `0` to disable) — so a half-timer is planned half the hours of a full-timer instead of being filled to the statutory ceiling. Two optional bounds on `rules.contract`: `maxOverMinutes` (hard cap at contract plus the allowance; `0` means never over contract — omit when your `overtime` rule governs the surplus) and `maxUnderMinutes` (a shortfall beyond it is reported as a soft violation). `result.contractHours` / `ComplianceReport.contractHours` list planned against contracted minutes per person, and `rankCandidates` reports `contractDeltaMinutes` and ranks people with contract headroom ahead of those a shift would push over.
+
+**Public holidays** are caller-supplied ISO dates in `calendar.publicHolidays`. They mark `ShiftInstance.isPublicHoliday`, which drives `restDays.holidayAllowed` and `compensatoryRestWithinDays.holiday`, the `holidays` fairness dimension and the `holiday` cost premium. The engine ships no holiday calendar — a host resolves the roster's location to dates and passes them in.
 
 **Duty-type quotas** (`rules.dutyQuotas`) cap how much of one duty type a person may hold over a rolling window, matched on `shiftTypeTag` — e.g. "at most 30 hours of stand-by in any 28 days". `maxMinutes` counts _elapsed_ duty minutes (a stand-by cap limits clock occupation, which is exactly the time a duty classification keeps out of the working-time budget); `maxCount` caps occurrences.
 

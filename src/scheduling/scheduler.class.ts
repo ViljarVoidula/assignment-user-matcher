@@ -27,6 +27,7 @@ import { cancellationLedger } from './constraints/notice';
 import { protectionLedger } from './constraints/protections';
 import { overtimeLedger } from './constraints/overtime';
 import { rosterCost } from './cost';
+import { contractHoursSummary } from './contract-hours';
 import { createPrng } from './engine/prng';
 import { collectAggregateViolations, collectPairViolations } from './engine/verdicts';
 import { hashRules } from './provenance';
@@ -137,6 +138,7 @@ export class ShiftScheduler {
             ...overtimeLedger(state),
         ];
         const cost = rosterCost(state);
+        const contractHours = contractHoursSummary(state);
 
         return {
             status,
@@ -159,6 +161,7 @@ export class ShiftScheduler {
             },
             ...(ledger.length ? { ledger } : {}),
             ...(cost ? { cost } : {}),
+            ...(contractHours.length ? { contractHours } : {}),
         };
     }
 }

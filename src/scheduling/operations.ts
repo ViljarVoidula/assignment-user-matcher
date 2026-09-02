@@ -26,6 +26,7 @@ import type {
     ScheduleInput,
     ScheduledAssignment,
     SearchState,
+    ContractHoursSummary,
 } from './types';
 import { buildModel } from './model';
 import { propagate } from './engine/propagation';
@@ -35,6 +36,7 @@ import { collectAggregateViolations, collectPairViolations, verdictsFor } from '
 import { solveSchedule } from './scheduler.class';
 import { preferenceScore } from './constraints/availability';
 import { marginalCostCents } from './cost';
+import { contractHoursSummary } from './contract-hours';
 import { distanceKmBetween, travelMinutesBetween } from './sites';
 import { compensatoryRestLedger } from './constraints/rest-days';
 import { cancellationLedger } from './constraints/notice';
@@ -44,6 +46,8 @@ import { MINUTES_PER_DAY } from './time';
 
 /** Soft-ranking weight for travel minutes in `rankCandidates`. */
 const TRAVEL_MINUTE_WEIGHT = 1;
+/** Soft-ranking weight per hour a candidate would be pushed over their contracted period total. */
+const CONTRACT_HOUR_WEIGHT = 10;
 
 /* ------------------------------------------------------------------------- */
 /* Compliance                                                                 */
@@ -61,6 +65,8 @@ export interface ComplianceReport {
      * never validate as "compliant but owing nothing".
      */
     ledger: LedgerEntry[];
+    /** Planned against contracted hours — the same summary the solver reports for the same assignments. */
+    contractHours: ContractHoursSummary[];
 }
 
 /**
@@ -122,6 +128,7 @@ export function checkCompliance(input: ScheduleInput, roster: ScheduledAssignmen
         violations,
         verdicts,
         ledger,
+        contractHours: contractHoursSummary(state),
     };
 }
 
@@ -173,6 +180,12 @@ export interface RepairCandidate {
     marginalCostCents: number;
     /** How far below their fair share of extra work this person is. Higher means more owed. */
     fairnessDebt: number;
+    /**
+     * Where this shift would leave the person against their contracted period
+     * total: `(planned + this shift) − contracted`, negative while still under
+     * contract. Only for employees whose contracted week resolves.
+     */
+    contractDeltaMinutes?: number;
     /** Lower is a better call. */
     rank: number;
     rationale: string;
@@ -302,6 +315,15 @@ export function rankCandidates(
                 ? distanceKmBetween(ctx.siteIndex, originSiteId, inst.siteId)
                 : undefined;
         const isHomeSite = employee.homeSiteId !== undefined && employee.homeSiteId === inst.siteId;
+        // Contract headroom: a person still short of their contracted hours is
+        // a better call than one this shift would push past them — declared
+        // terms and realised counts only, nothing behavioural.
+        const contracted = ctx.contractedPeriodMinutes.get(employee.id);
+        const contractDeltaMinutes =
+            contracted === undefined
+                ? undefined
+                : (state.minutesByEmployee.get(employee.id) ?? 0) + inst.workingMinutes - contracted;
+        const contractPenalty = contractDeltaMinutes === undefined ? 0 : Math.max(0, contractDeltaMinutes) / 60;
 
         candidates.push({
             employeeId: employee.id,
@@ -311,13 +333,18 @@ export function rankCandidates(
             blockers,
             marginalCostCents: costCents,
             fairnessDebt,
+            ...(contractDeltaMinutes !== undefined ? { contractDeltaMinutes } : {}),
             originSiteId,
             travelMinutes,
             distanceKm,
             isHomeSite,
             // Ineligible candidates sort to the bottom but stay visible.
             rank: eligible
-                ? costCents / 100 - fairnessDebt * 10 + preference * 5 + (travelMinutes ?? 0) * TRAVEL_MINUTE_WEIGHT
+                ? costCents / 100 -
+                  fairnessDebt * 10 +
+                  preference * 5 +
+                  (travelMinutes ?? 0) * TRAVEL_MINUTE_WEIGHT +
+                  contractPenalty * CONTRACT_HOUR_WEIGHT
                 : Number.MAX_SAFE_INTEGER,
             rationale: rationaleFor(
                 eligible,
@@ -329,6 +356,7 @@ export function rankCandidates(
                 distanceKm,
                 originSiteId,
                 isHomeSite,
+                contractDeltaMinutes,
             ),
         });
     }
@@ -346,10 +374,18 @@ function rationaleFor(
     distanceKm: number | undefined,
     originSiteId: string | undefined,
     isHomeSite: boolean,
+    contractDeltaMinutes?: number,
 ): string {
     if (!eligible) return blockers.map((b) => b.message).join('; ') || 'not eligible';
     const parts = [`€${(costCents / 100).toFixed(2)} marginal cost`];
     if (fairnessDebt > 0) parts.push(`${fairnessDebt.toFixed(1)} fewer extra shifts than average`);
+    if (contractDeltaMinutes !== undefined) {
+        parts.push(
+            contractDeltaMinutes > 0
+                ? `${(contractDeltaMinutes / 60).toFixed(1)}h over contract with this shift`
+                : `${(-contractDeltaMinutes / 60).toFixed(1)}h under contract with this shift`,
+        );
+    }
     if (preference < 0) parts.push('prefers this window');
     if (preference > 0) parts.push('would rather avoid this window');
     if (isHomeSite) {

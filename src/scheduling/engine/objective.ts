@@ -28,6 +28,7 @@
 import type { FairnessRule, ModelContext, SearchState } from '../types';
 import { fairnessPenalty } from '../constraints/fairness';
 import { preferencePenalty } from '../constraints/availability';
+import { contractHoursPenalty } from '../contract-hours';
 
 export const UNFILLED_WEIGHT = 10_000;
 export const TAG_SHORTFALL_WEIGHT = 5_000;
@@ -150,6 +151,10 @@ export function scoreLex(
     // Preferred/avoid availability windows are scored, not advisory: avoided
     // assignments cost, preferred ones credit, weighted per rule.
     totals.soft += preferencePenalty(state);
+    // Contracted hours steer the plan: each person with a known contract is
+    // pulled towards their pro-rated period total, so a half-timer is planned
+    // half the hours rather than filled to the statutory ceiling.
+    totals.soft += contractHoursPenalty(state);
     if (objective === 'balanced') totals.soft += hoursVariance(ctx, state) / 60; // hours-scale variance term
 
     return totals;

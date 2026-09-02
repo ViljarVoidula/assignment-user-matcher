@@ -18,7 +18,9 @@
  */
 
 import type { ConstraintViolation, RuleVerdict, SchedulingConstraint } from '../types';
-import { fail, fromVerdict, h, instanceOf, pass, timelineFor, MINUTES_PER_DAY } from './support';
+import { fail, fromVerdict, h, instanceOf, pass, rulesFor, timelineFor, MINUTES_PER_DAY } from './support';
+
+export const CONTRACT_HOURS_CITATION = 'Contract of employment; Directive 97/81/EC cl. 4 (pro rata temporis)';
 
 export function contractLimits(): SchedulingConstraint {
     const constraint = fromVerdict({
@@ -89,23 +91,51 @@ export function contractLimits(): SchedulingConstraint {
                     });
                 }
 
-                if (contract.maxPeriodMinutes !== undefined) {
-                    const worked = attributable.reduce((sum, e) => {
-                        const overlap = Math.min(e.end, periodWindow.end) - Math.max(e.start, periodWindow.start);
-                        const span = e.end - e.start;
-                        return sum + (span > 0 ? Math.round((e.workingMinutes * Math.max(0, overlap)) / span) : 0);
-                    }, 0);
-                    if (worked > contract.maxPeriodMinutes) {
-                        return fail(
-                            'contract',
-                            'hard',
-                            `employee "${pair.employeeId}" would work ${h(worked)}, over their ${h(contract.maxPeriodMinutes)} contract maximum`,
-                            { actual: worked, required: contract.maxPeriodMinutes, unit: 'minutes' },
-                        );
-                    }
+                const contracted = state.ctx.contractedPeriodMinutes.get(pair.employeeId);
+                const maxOver = rulesFor(state.ctx, pair.employeeId).contract?.maxOverMinutes;
+                if (contract.maxPeriodMinutes === undefined && contracted === undefined) {
+                    return pass('contract', 'within contract limits');
                 }
 
-                return pass('contract', 'within contract limits');
+                const worked = attributable.reduce((sum, e) => {
+                    const overlap = Math.min(e.end, periodWindow.end) - Math.max(e.start, periodWindow.start);
+                    const span = e.end - e.start;
+                    return sum + (span > 0 ? Math.round((e.workingMinutes * Math.max(0, overlap)) / span) : 0);
+                }, 0);
+                if (contract.maxPeriodMinutes !== undefined && worked > contract.maxPeriodMinutes) {
+                    return fail(
+                        'contract',
+                        'hard',
+                        `employee "${pair.employeeId}" would work ${h(worked)}, over their ${h(contract.maxPeriodMinutes)} contract maximum`,
+                        { actual: worked, required: contract.maxPeriodMinutes, unit: 'minutes' },
+                    );
+                }
+                // The contracted week pro-rated to the period, plus whatever
+                // surplus the rules allow. Whether the surplus is a breach or
+                // merely overtime is the caller's regime, which is why the cap
+                // is opt-in.
+                if (contracted !== undefined && maxOver !== undefined && worked > contracted + maxOver) {
+                    return fail(
+                        'contract',
+                        'hard',
+                        `employee "${pair.employeeId}" would work ${h(worked)}, over their ${h(contracted)} contracted for the period` +
+                            (maxOver > 0 ? ` (${h(maxOver)} over allowed)` : ''),
+                        {
+                            actual: worked,
+                            required: contracted + maxOver,
+                            unit: 'minutes',
+                            citation: rulesFor(state.ctx, pair.employeeId).contract?.citation ?? CONTRACT_HOURS_CITATION,
+                        },
+                    );
+                }
+
+                return contracted === undefined
+                    ? pass('contract', 'within contract limits')
+                    : pass('contract', `${h(worked)} of ${h(contracted)} contracted for the period`, {
+                          actual: worked,
+                          required: contracted,
+                          unit: 'minutes',
+                      });
             });
         },
     });
@@ -117,17 +147,38 @@ export function contractLimits(): SchedulingConstraint {
         const out: ConstraintViolation[] = [];
         for (const employee of state.ctx.employees) {
             const contract = employee.contract;
-            if (!contract || contract.kind === 'days' || contract.minPeriodMinutes === undefined) continue;
+            if (!contract) continue;
             const worked = state.minutesByEmployee.get(employee.id) ?? 0;
-            if (worked >= contract.minPeriodMinutes) continue;
+            if (contract.kind !== 'days' && contract.minPeriodMinutes !== undefined && worked < contract.minPeriodMinutes) {
+                out.push({
+                    constraintId: 'contract',
+                    severity: 'hard',
+                    employeeId: employee.id,
+                    message: `employee "${employee.id}" is rostered ${h(worked)}, below their ${h(contract.minPeriodMinutes)} contract minimum`,
+                    actual: worked,
+                    required: contract.minPeriodMinutes,
+                    unit: 'minutes',
+                });
+            }
+            // A shortfall against the contracted week is a report, not a
+            // breach: the roster is short of what the person is owed, which
+            // the manager needs to see, but blocking on it would stall the
+            // very assignments that close it.
+            const rule = rulesFor(state.ctx, employee.id).contract;
+            const contracted = state.ctx.contractedPeriodMinutes.get(employee.id);
+            if (rule?.maxUnderMinutes === undefined || contracted === undefined) continue;
+            const shortfall = contracted - worked;
+            if (shortfall <= rule.maxUnderMinutes) continue;
+            const fte = contract.fte !== undefined ? ` (${contract.fte} FTE)` : '';
             out.push({
                 constraintId: 'contract',
-                severity: 'hard',
+                severity: 'soft',
                 employeeId: employee.id,
-                message: `employee "${employee.id}" is rostered ${h(worked)}, below their ${h(contract.minPeriodMinutes)} contract minimum`,
+                message: `employee "${employee.id}" is planned ${h(worked)} against ${h(contracted)} contracted for the period${fte}, ${h(shortfall)} short`,
                 actual: worked,
-                required: contract.minPeriodMinutes,
+                required: contracted - rule.maxUnderMinutes,
                 unit: 'minutes',
+                citation: rule.citation ?? CONTRACT_HOURS_CITATION,
             });
         }
         return out;
