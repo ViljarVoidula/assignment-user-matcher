@@ -21,7 +21,7 @@ What the employer owes instead. Recorded in the result, not solved for.
 
 #### Defined in
 
-[src/scheduling/types.ts:133](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L133)
+[src/scheduling/types.ts:146](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L146)
 
 ___
 
@@ -35,4 +35,4 @@ which mandates a day-work alternative rather than mere unavailability.
 
 #### Defined in
 
-[src/scheduling/types.ts:131](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L131)
+[src/scheduling/types.ts:144](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L144)

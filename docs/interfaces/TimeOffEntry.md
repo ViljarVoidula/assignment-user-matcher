@@ -21,7 +21,7 @@ ISO date, YYYY-MM-DD.
 
 #### Defined in
 
-[src/scheduling/types.ts:162](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L162)
+[src/scheduling/types.ts:175](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L175)
 
 ___
 
@@ -33,4 +33,4 @@ Optional shift-instance id (`<templateId>@<date>`); when set only that instance 
 
 #### Defined in
 
-[src/scheduling/types.ts:164](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L164)
+[src/scheduling/types.ts:177](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L177)

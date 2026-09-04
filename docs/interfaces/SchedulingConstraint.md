@@ -34,7 +34,7 @@ Legal source, echoed into every violation and verdict this rule produces.
 
 #### Defined in
 
-[src/scheduling/types.ts:941](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L941)
+[src/scheduling/types.ts:1040](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L1040)
 
 ___
 
@@ -47,7 +47,7 @@ Lexicographic level. `'hard'` breaches are never accepted by construction;
 
 #### Defined in
 
-[src/scheduling/types.ts:937](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L937)
+[src/scheduling/types.ts:1036](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L1036)
 
 ___
 
@@ -57,7 +57,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:932](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L932)
+[src/scheduling/types.ts:1031](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L1031)
 
 ___
 
@@ -69,7 +69,7 @@ Drives soft/medium score contribution, violation severity and repair priority.
 
 #### Defined in
 
-[src/scheduling/types.ts:939](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L939)
+[src/scheduling/types.ts:1038](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L1038)
 
 ## Methods
 
@@ -98,7 +98,7 @@ infeasible region instead of sitting on a plateau.
 
 #### Defined in
 
-[src/scheduling/types.ts:953](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L953)
+[src/scheduling/types.ts:1052](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L1052)
 
 ___
 
@@ -123,7 +123,7 @@ the surrounding sequence should implement it.
 
 #### Defined in
 
-[src/scheduling/types.ts:959](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L959)
+[src/scheduling/types.ts:1058](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L1058)
 
 ___
 
@@ -147,7 +147,7 @@ cannot see these.
 
 #### Defined in
 
-[src/scheduling/types.ts:965](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L965)
+[src/scheduling/types.ts:1064](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L1064)
 
 ___
 
@@ -170,7 +170,7 @@ Human-readable breach description for the violation report, or null when complia
 
 #### Defined in
 
-[src/scheduling/types.ts:969](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L969)
+[src/scheduling/types.ts:1068](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L1068)
 
 ___
 
@@ -193,7 +193,7 @@ Prune ineligible (employee, shiftInstance) pairs before search, in place on `eli
 
 #### Defined in
 
-[src/scheduling/types.ts:943](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L943)
+[src/scheduling/types.ts:1042](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L1042)
 
 ___
 
@@ -216,4 +216,4 @@ Structured judgement for explanations and swap validation.
 
 #### Defined in
 
-[src/scheduling/types.ts:967](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L967)
+[src/scheduling/types.ts:1066](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L1066)

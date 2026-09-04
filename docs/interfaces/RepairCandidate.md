@@ -7,6 +7,7 @@
 ### Properties
 
 - [blockers](RepairCandidate.md#blockers)
+- [contractDeltaMinutes](RepairCandidate.md#contractdeltaminutes)
 - [distanceKm](RepairCandidate.md#distancekm)
 - [eligible](RepairCandidate.md#eligible)
 - [employeeId](RepairCandidate.md#employeeid)
@@ -30,7 +31,21 @@ Failing rules only, for a compact "why not" list.
 
 #### Defined in
 
-[src/scheduling/operations.ts:172](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L172)
+[src/scheduling/operations.ts:179](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L179)
+
+___
+
+### contractDeltaMinutes
+
+• `Optional` **contractDeltaMinutes**: `number`
+
+Where this shift would leave the person against their contracted period
+total: `(planned + this shift) − contracted`, negative while still under
+contract. Only for employees whose contracted week resolves.
+
+#### Defined in
+
+[src/scheduling/operations.ts:188](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L188)
 
 ___
 
@@ -42,7 +57,7 @@ Straight-line distance from origin to the shift's site, when minutes are unavail
 
 #### Defined in
 
-[src/scheduling/operations.ts:184](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L184)
+[src/scheduling/operations.ts:197](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L197)
 
 ___
 
@@ -52,7 +67,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/operations.ts:169](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L169)
+[src/scheduling/operations.ts:176](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L176)
 
 ___
 
@@ -62,7 +77,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/operations.ts:167](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L167)
+[src/scheduling/operations.ts:174](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L174)
 
 ___
 
@@ -74,7 +89,7 @@ How far below their fair share of extra work this person is. Higher means more o
 
 #### Defined in
 
-[src/scheduling/operations.ts:175](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L175)
+[src/scheduling/operations.ts:182](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L182)
 
 ___
 
@@ -86,7 +101,7 @@ Whether the shift is at this employee's home site.
 
 #### Defined in
 
-[src/scheduling/operations.ts:186](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L186)
+[src/scheduling/operations.ts:199](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L199)
 
 ___
 
@@ -96,7 +111,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/operations.ts:173](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L173)
+[src/scheduling/operations.ts:180](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L180)
 
 ___
 
@@ -108,7 +123,7 @@ Site the candidate is travelling from (same-day assignment, then home site).
 
 #### Defined in
 
-[src/scheduling/operations.ts:180](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L180)
+[src/scheduling/operations.ts:193](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L193)
 
 ___
 
@@ -120,7 +135,7 @@ Lower is a better call.
 
 #### Defined in
 
-[src/scheduling/operations.ts:177](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L177)
+[src/scheduling/operations.ts:190](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L190)
 
 ___
 
@@ -130,7 +145,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/operations.ts:178](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L178)
+[src/scheduling/operations.ts:191](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L191)
 
 ___
 
@@ -140,7 +155,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/operations.ts:168](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L168)
+[src/scheduling/operations.ts:175](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L175)
 
 ___
 
@@ -152,7 +167,7 @@ Estimated travel minutes from origin to the shift's site.
 
 #### Defined in
 
-[src/scheduling/operations.ts:182](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L182)
+[src/scheduling/operations.ts:195](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L195)
 
 ___
 
@@ -162,4 +177,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/operations.ts:170](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L170)
+[src/scheduling/operations.ts:177](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L177)

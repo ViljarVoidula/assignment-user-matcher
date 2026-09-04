@@ -19,6 +19,7 @@
 import type { ModelContext } from '../types';
 import type { PropagationResult } from './propagation';
 import { assign, type InternalState } from './state';
+import { rulesFor } from '../constraints/support';
 
 /** Whether assigning the pair keeps every hard constraint satisfied. */
 export function hardCompliant(ctx: ModelContext, state: InternalState, employeeId: string, instanceId: string): boolean {
@@ -60,8 +61,16 @@ function rankCandidate(
     }
 
     if (objective === 'balanced') {
-        // Less-loaded employees first so hours equalize.
-        rank += (state.minutesByEmployee.get(employeeId) ?? 0) / 60;
+        // Less-loaded employees first so hours equalize — measured against the
+        // hours each of them is owed, not against zero. Raw minutes read a
+        // quarter-timer on 15h as emptier than a full-timer on 30h, so cover
+        // lands on the smallest contracts and pushes them furthest over; the
+        // distance from a contracted total is the load a person actually
+        // carries. Without a contract there is nothing to measure against, so
+        // absolute hours remain the only reading.
+        const planned = state.minutesByEmployee.get(employeeId) ?? 0;
+        const contracted = ctx.contractedPeriodMinutes.get(employeeId);
+        rank += (contracted === undefined ? planned : planned - contracted) / 60;
         reasons.push('selected to balance hours');
     } else {
         reasons.push('eligible under all constraints');
@@ -92,17 +101,48 @@ export function constructionOrder(ctx: ModelContext, propagation: PropagationRes
  */
 function hoursOwed(ctx: ModelContext, state: InternalState, employeeId: string): number {
     const planned = state.minutesByEmployee.get(employeeId) ?? 0;
-    const contracted = ctx.contractHoursWeight > 0 ? ctx.contractedPeriodMinutes.get(employeeId) : undefined;
+    const contracted = ceilingFor(ctx, employeeId);
     if (contracted !== undefined) return Math.max(0, contracted - planned);
     const floor = ctx.employeeById.get(employeeId)?.minHoursForPeriod;
     return floor !== undefined ? Math.max(0, floor * 60 - planned) : 0;
 }
 
-/** Whether adding `workingMinutes` leaves the employee closer to their target. */
+/**
+ * How far the top-up may plan this person: their contracted period total, plus
+ * whatever surplus the rules already allow (`contract.maxOverMinutes`).
+ *
+ * The allowance is the caller's stated position on over-contract work, and the
+ * `contract` rule enforces it as a hard cap. Reading it here is what lets a
+ * part-timer whose remaining room is smaller than any shift be planned at all —
+ * five hours short of a 20h contract with only 7.5h shifts on offer is a
+ * shortfall no roster can close without it. `undefined` (the default) keeps the
+ * contracted total as a strict ceiling.
+ */
+function ceilingFor(ctx: ModelContext, employeeId: string): number | undefined {
+    if (!(ctx.contractHoursWeight > 0)) return undefined;
+    const contracted = ctx.contractedPeriodMinutes.get(employeeId);
+    if (contracted === undefined) return undefined;
+    return contracted + (rulesFor(ctx, employeeId).contract?.maxOverMinutes ?? 0);
+}
+
+/**
+ * Whether the top-up may add `workingMinutes` to this person.
+ *
+ * A contracted total is a ceiling here, not a target to land nearest to: the
+ * shift is added only while it keeps them at or under contract. Judging it by
+ * distance instead would plan a half-timer on 15h of a 20h contract a further
+ * 7.5h shift — 2.5h over reads as "closer" than 5h short — and the roster would
+ * buy hours nobody asked for to shrink a deviation. Work beyond contract is a
+ * decision an employer makes (and `rules.contract.maxOverMinutes` bounds), never
+ * something the engine helps itself to.
+ *
+ * `minHoursForPeriod` is a floor rather than a contracted total, so it is
+ * judged the only way a floor can be: keep adding while the person is under it.
+ */
 function closesGap(ctx: ModelContext, state: InternalState, employeeId: string, workingMinutes: number): boolean {
     const planned = state.minutesByEmployee.get(employeeId) ?? 0;
-    const contracted = ctx.contractHoursWeight > 0 ? ctx.contractedPeriodMinutes.get(employeeId) : undefined;
-    if (contracted !== undefined) return Math.abs(planned + workingMinutes - contracted) < Math.abs(planned - contracted);
+    const contracted = ceilingFor(ctx, employeeId);
+    if (contracted !== undefined) return planned + workingMinutes <= contracted;
     const floor = ctx.employeeById.get(employeeId)?.minHoursForPeriod;
     return floor !== undefined && planned < floor * 60;
 }

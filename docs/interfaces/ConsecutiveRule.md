@@ -24,7 +24,7 @@ The classic is Night → Early ("quick return").
 
 #### Defined in
 
-[src/scheduling/types.ts:378](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L378)
+[src/scheduling/types.ts:430](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L430)
 
 ___
 
@@ -36,7 +36,7 @@ e.g. Finland 5, Netherlands 7.
 
 #### Defined in
 
-[src/scheduling/types.ts:371](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L371)
+[src/scheduling/types.ts:423](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L423)
 
 ___
 
@@ -48,7 +48,7 @@ e.g. Portugal's 6.
 
 #### Defined in
 
-[src/scheduling/types.ts:369](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L369)
+[src/scheduling/types.ts:421](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L421)
 
 ___
 
@@ -60,4 +60,4 @@ Rest owed once the night run ends: NL 2760 (46h), FI 1440 (24h).
 
 #### Defined in
 
-[src/scheduling/types.ts:373](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L373)
+[src/scheduling/types.ts:425](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L425)

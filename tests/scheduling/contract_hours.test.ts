@@ -428,6 +428,36 @@ describe('contracted hours', function () {
             expect(result.assignments).to.have.length(10);
         });
 
+        it('never plans anyone past their contracted total to shrink a deviation', function () {
+            // Six 9h shifts and a half-timer on 20h: two of them are 18h, and a
+            // third would be 27h — nearer to 20h than 18h is, and still wrong.
+            const nine = WEEK_DATES.slice(0, 6).map((d, i) => shift(`n${i}`, '08:00', '17:00', [d], { minEmployees: 1 }));
+            const result = solveSchedule({
+                period: WEEK,
+                shifts: nine,
+                employees: [emp('half', { contract: { kind: 'hours', fte: 0.5 } }), ...team()],
+                rules: FULL_TIME,
+                timeBudgetMs: 200,
+                seed: 5,
+            });
+            const half = result.contractHours!.find((row) => row.employeeId === 'half')!;
+            expect(half.plannedMinutes).to.be.at.most(20 * H);
+
+            // Unless the rules already allow a surplus: then the top-up may
+            // plan into it, because the employer has said how far over is fine.
+            const allowed = solveSchedule({
+                period: WEEK,
+                shifts: nine,
+                employees: [emp('half', { contract: { kind: 'hours', fte: 0.5 } }), ...team()],
+                rules: { contract: { fullTimeWeeklyMinutes: 40 * H, maxOverMinutes: 8 * H } },
+                timeBudgetMs: 200,
+                seed: 5,
+            });
+            const stretched = allowed.contractHours!.find((row) => row.employeeId === 'half')!;
+            expect(stretched.plannedMinutes).to.be.at.most(28 * H);
+            expect(stretched.plannedMinutes).to.be.greaterThan(half.plannedMinutes);
+        });
+
         it('never overstaffs past maxEmployees, and never past a hard maxOverMinutes cap', function () {
             const capped = solveSchedule({
                 period: WEEK,

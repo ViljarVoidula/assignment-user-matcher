@@ -9,6 +9,7 @@ Contract shape — hours-based or day-count.
 ### Properties
 
 - [endDate](EmployeeContract.md#enddate)
+- [fte](EmployeeContract.md#fte)
 - [kind](EmployeeContract.md#kind)
 - [maxDaysInPeriod](EmployeeContract.md#maxdaysinperiod)
 - [maxPeriodMinutes](EmployeeContract.md#maxperiodminutes)
@@ -25,7 +26,23 @@ Last day the contract runs; shifts after it are ineligible.
 
 #### Defined in
 
-[src/scheduling/types.ts:121](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L121)
+[src/scheduling/types.ts:134](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L134)
+
+___
+
+### fte
+
+• `Optional` **fte**: `number`
+
+Fraction of a full-time week, `0 < fte <= 1` (0.5 is half-time). Resolved
+to weekly minutes against `rules.contract.fullTimeWeeklyMinutes`, falling
+back to `rules.overtime.ordinaryPerWeekMinutes`; with neither the engine
+rejects the input rather than guess a working week. Ignored when
+`weeklyMinutes` is set.
+
+#### Defined in
+
+[src/scheduling/types.ts:127](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L127)
 
 ___
 
@@ -35,7 +52,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:112](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L112)
+[src/scheduling/types.ts:112](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L112)
 
 ___
 
@@ -47,7 +64,7 @@ Day-count contracts: maximum working days in the period (e.g. FR forfait jours).
 
 #### Defined in
 
-[src/scheduling/types.ts:116](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L116)
+[src/scheduling/types.ts:129](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L129)
 
 ___
 
@@ -57,7 +74,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L119)
+[src/scheduling/types.ts:132](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L132)
 
 ___
 
@@ -69,7 +86,7 @@ Hard bounds over the period, in minutes.
 
 #### Defined in
 
-[src/scheduling/types.ts:118](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L118)
+[src/scheduling/types.ts:131](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L131)
 
 ___
 
@@ -77,8 +94,11 @@ ___
 
 • `Optional` **weeklyMinutes**: `number`
 
-Target contractual minutes per week, used for pro-rata fairness.
+Contracted minutes per week. Sets the person's overtime baseline, their
+pro-rata fairness share and — through `rules.contract` and the
+contract-hours objective — the period total the solver plans them
+towards. Takes precedence over `fte`.
 
 #### Defined in
 
-[src/scheduling/types.ts:114](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L114)
+[src/scheduling/types.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L119)

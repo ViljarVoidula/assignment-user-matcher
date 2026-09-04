@@ -23,7 +23,7 @@ Additional caller-supplied constraints, evaluated alongside the built-ins.
 
 #### Defined in
 
-[src/scheduling/types.ts:602](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L602)
+[src/scheduling/types.ts:654](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L654)
 
 ___
 
@@ -36,7 +36,7 @@ the next. Defaults to 660 (11h), the Directive 2003/88/EC Art 3 floor.
 
 #### Defined in
 
-[src/scheduling/types.ts:592](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L592)
+[src/scheduling/types.ts:644](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L644)
 
 ___
 
@@ -50,7 +50,7 @@ impossible cases.
 
 #### Defined in
 
-[src/scheduling/types.ts:598](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L598)
+[src/scheduling/types.ts:650](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L650)
 
 ___
 
@@ -62,4 +62,4 @@ Override built-in hardness/weight by constraint id.
 
 #### Defined in
 
-[src/scheduling/types.ts:600](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L600)
+[src/scheduling/types.ts:652](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L652)

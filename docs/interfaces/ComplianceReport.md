@@ -7,6 +7,7 @@
 ### Properties
 
 - [compliant](ComplianceReport.md#compliant)
+- [contractHours](ComplianceReport.md#contracthours)
 - [ledger](ComplianceReport.md#ledger)
 - [verdicts](ComplianceReport.md#verdicts)
 - [violations](ComplianceReport.md#violations)
@@ -19,7 +20,19 @@
 
 #### Defined in
 
-[src/scheduling/operations.ts:53](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L53)
+[src/scheduling/operations.ts:57](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L57)
+
+___
+
+### contractHours
+
+• **contractHours**: [`ContractHoursSummary`](ContractHoursSummary.md)[]
+
+Planned against contracted hours — the same summary the solver reports for the same assignments.
+
+#### Defined in
+
+[src/scheduling/operations.ts:69](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L69)
 
 ___
 
@@ -34,7 +47,7 @@ never validate as "compliant but owing nothing".
 
 #### Defined in
 
-[src/scheduling/operations.ts:63](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L63)
+[src/scheduling/operations.ts:67](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L67)
 
 ___
 
@@ -46,7 +59,7 @@ Per-assignment verdicts for every rule that had something to say.
 
 #### Defined in
 
-[src/scheduling/operations.ts:56](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L56)
+[src/scheduling/operations.ts:60](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L60)
 
 ___
 
@@ -56,4 +69,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/operations.ts:54](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/operations.ts#L54)
+[src/scheduling/operations.ts:58](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/operations.ts#L58)

@@ -24,7 +24,7 @@ on average. Estonia requires 36h every week *and* 48h on average.
 
 #### Defined in
 
-[src/scheduling/types.ts:263](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L263)
+[src/scheduling/types.ts:278](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L278)
 
 ___
 
@@ -36,7 +36,7 @@ Averaging window in days; Art 16(a) caps this at 14.
 
 #### Defined in
 
-[src/scheduling/types.ts:265](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L265)
+[src/scheduling/types.ts:280](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L280)
 
 ___
 
@@ -48,7 +48,7 @@ Continuous rest required per window: 2100 (35h), 2160 (36h), 2880 (48h).
 
 #### Defined in
 
-[src/scheduling/types.ts:256](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L256)
+[src/scheduling/types.ts:271](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L271)
 
 ___
 
@@ -60,4 +60,4 @@ Length of the window in days. Normally 7.
 
 #### Defined in
 
-[src/scheduling/types.ts:258](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L258)
+[src/scheduling/types.ts:273](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L273)

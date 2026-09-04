@@ -22,6 +22,7 @@ individual opt-outs and hazardous-work status are expressed.
 - [aggregation](WorkingTimeRules.md#aggregation)
 - [breaks](WorkingTimeRules.md#breaks)
 - [consecutive](WorkingTimeRules.md#consecutive)
+- [contract](WorkingTimeRules.md#contract)
 - [dailyRest](WorkingTimeRules.md#dailyrest)
 - [dutyQuotas](WorkingTimeRules.md#dutyquotas)
 - [engagement](WorkingTimeRules.md#engagement)
@@ -50,7 +51,7 @@ How to aggregate a person's assignments across records.
 
 #### Defined in
 
-[src/scheduling/types.ts:227](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L227)
+[src/scheduling/types.ts:242](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L242)
 
 ___
 
@@ -60,7 +61,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:220](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L220)
+[src/scheduling/types.ts:235](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L235)
 
 ___
 
@@ -70,7 +71,19 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:211](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L211)
+[src/scheduling/types.ts:226](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L226)
+
+___
+
+### contract
+
+• `Optional` **contract**: [`ContractHoursRule`](ContractHoursRule.md)
+
+Contracted hours: the full-time week `fte` is a fraction of, and how far a plan may stray from a person's contract.
+
+#### Defined in
+
+[src/scheduling/types.ts:223](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L223)
 
 ___
 
@@ -80,7 +93,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:204](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L204)
+[src/scheduling/types.ts:217](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L217)
 
 ___
 
@@ -92,7 +105,7 @@ Rolling volume caps on particular duty types, matched on `shiftTypeTag`.
 
 #### Defined in
 
-[src/scheduling/types.ts:210](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L210)
+[src/scheduling/types.ts:225](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L225)
 
 ___
 
@@ -102,7 +115,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:222](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L222)
+[src/scheduling/types.ts:237](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L237)
 
 ___
 
@@ -114,7 +127,7 @@ Fairness dimensions to equalise. Soft by nature.
 
 #### Defined in
 
-[src/scheduling/types.ts:225](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L225)
+[src/scheduling/types.ts:240](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L240)
 
 ___
 
@@ -135,7 +148,7 @@ not gaps — a distinct shape from `dailyRest`.
 
 #### Defined in
 
-[src/scheduling/types.ts:218](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L218)
+[src/scheduling/types.ts:233](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L233)
 
 ___
 
@@ -145,7 +158,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:219](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L219)
+[src/scheduling/types.ts:234](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L234)
 
 ___
 
@@ -155,7 +168,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:223](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L223)
+[src/scheduling/types.ts:238](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L238)
 
 ___
 
@@ -167,7 +180,7 @@ The ordinary-vs-overtime split and its caps.
 
 #### Defined in
 
-[src/scheduling/types.ts:208](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L208)
+[src/scheduling/types.ts:221](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L221)
 
 ___
 
@@ -177,7 +190,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:221](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L221)
+[src/scheduling/types.ts:236](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L236)
 
 ___
 
@@ -187,7 +200,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:205](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L205)
+[src/scheduling/types.ts:218](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L218)
 
 ___
 
@@ -197,4 +210,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:206](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L206)
+[src/scheduling/types.ts:219](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L219)

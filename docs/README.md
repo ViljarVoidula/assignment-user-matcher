@@ -4,12 +4,19 @@ assignment-user-matcher / [Exports](modules.md)
 
 [![npm version](https://badge.fury.io/js/assignment-user-matcher.svg)](https://badge.fury.io/js/assignment-user-matcher)
 [![CI Pipeline](https://github.com/ViljarVoidula/assignment-user-matcher/actions/workflows/npm-publish.yml/badge.svg)](https://github.com/ViljarVoidula/assignment-user-matcher/actions/workflows/npm-publish.yml)
+[![5xer Cloud](https://img.shields.io/badge/%E2%98%81%EF%B8%8F_5xer_Cloud-Sign_up-7C3AED)](https://5xer.com)
 
 <!-- Add other badges if you have them, e.g., build status, test coverage -->
 
 **Tired of inefficiently assigning tasks or struggling to connect the right users with the right work? `assignment-user-matcher` is a specialized Node.js library designed for high-performance, near real-time matching of a smaller pool of users to a large volume of assignments, primarily based on shared tags and priority.**
 
 It leverages the speed and efficiency of Redis to deliver a robust solution perfect for scenarios like call centers, customer support queues, back-office operations, and more.
+
+> ### ☁️ Don't want to run your own Redis?
+>
+> **[5xer Cloud](https://5xer.com)** offers this matching engine as a fully managed service — no infrastructure, no maintenance sweeps, no Redis ops. On top of that, you get a polished no-code UI: a mobile-friendly PWA where workers see their assignments, accept, and complete work from anywhere — no client to install, no code to write.
+>
+> **[Sign up at 5xer.com →](https://5xer.com)** — getting started is free.
 
 ## The Challenge: Efficiently Connecting Users to Work
 
@@ -1336,6 +1343,9 @@ pnpm benchmark:learning -- 300 8000 10 20260611
 # arguments: <users> <assignmentsPerRound> <rounds> <seed>
 ```
 
+Set `REDIS_URL` to benchmark against a non-default Redis endpoint. Benchmark
+runs use isolated, unique key prefixes and never call `FLUSHDB`.
+
 Output includes:
 
 1. Per-mode throughput and latency (`baseline`, `learning-shadow`, `learning-live`)
@@ -1614,6 +1624,12 @@ This demonstrates the library's impressive performance even with large numbers o
 
 A companion engine for **rostering**: generating fair, constraint-compliant timetables that assign employees to shifts over a period. Unlike the matcher, this module is **pure and Redis-free** — `solveSchedule(input)` is a synchronous in-process function; wrap it in your own queue if you need one.
 
+**Import it from the `assignment-user-matcher/scheduling` subpath** to get the engine without the Redis-backed matcher. The root barrel pulls in `redis`; this one pulls nothing but the scheduler, so it loads in a browser, a Web Worker or an edge runtime as well as in Node. (Every example below uses the root import for continuity; the subpath exports the same names.)
+
+```ts
+import { solveSchedule } from 'assignment-user-matcher/scheduling';
+```
+
 ```ts
 import { solveSchedule } from 'assignment-user-matcher';
 
@@ -1679,6 +1695,10 @@ Rules cover: daily rest (rolling window, reduction allowances, clock-band contai
 Break entitlements are checked against shift design: `unpaidBreakMinutes` (deducted from working time) and `paidBreakMinutes` (working time, and the only thing that discharges a `paid: true` break rule). Deadline arithmetic that needs a "now" — notably whether a cancellation of a published assignment fell inside `notice.cancellationDeadlineMinutes` — is anchored by the optional `asOf` input; without it every cancellation is treated as late, the conservative reading.
 
 **Overtime** is regulated separately from total working time where national law does so. `rules.overtime` defines the ordinary baseline (`ordinaryPerDayMinutes` / `ordinaryPerWeekMinutes`; a person's `contract.weeklyMinutes` overrides the weekly figure, so a part-timer's overtime starts at their agreed hours), caps the overtime portion per rolling 24h or per rolling window, and with `requiresConsent` makes any overtime conditional on the employee's recorded `overtimeConsent`. With `compensation: 'timeOff'`, each employee's period overtime accrues a `timeOffInLieu` entry in `result.ledger`.
+
+**Contracted hours and part-time.** A person's contracted week is stated either as minutes (`contract.weeklyMinutes`) or as a fraction of full time (`contract.fte`, `0 < fte <= 1`, e.g. `0.5` for half-time). An `fte` resolves against `rules.contract.fullTimeWeeklyMinutes`, falling back to `rules.overtime.ordinaryPerWeekMinutes`; with neither the input is rejected rather than a working week guessed. The resolved week is read in one place (`ModelContext.contractedWeeklyMinutes`) by everything that needs it: the overtime baseline, pro-rata fairness (`proRataByContract`), and the **contract-hours objective**, which pulls every person with a contract towards `weekly × periodDays / 7` at the soft level (`objectives.contractHoursWeight`, default `1` point per hour of deviation, `0` to disable) — so a half-timer is planned half the hours of a full-timer instead of being filled to the statutory ceiling. Two optional bounds on `rules.contract`: `maxOverMinutes` (hard cap at contract plus the allowance; `0` means never over contract — omit when your `overtime` rule governs the surplus) and `maxUnderMinutes` (a shortfall beyond it is reported as a soft violation). `result.contractHours` / `ComplianceReport.contractHours` list planned against contracted minutes per person, and `rankCandidates` reports `contractDeltaMinutes` and ranks people with contract headroom ahead of those a shift would push over. Cover is a floor, not a ceiling: once every slot has its `minEmployees`, the solver keeps adding people to shifts that still have room (under `maxEmployees`, every hard rule intact) while the shift fits **inside** their contracted total, or while they are under a `minHoursForPeriod` floor — so two full-timers on a roster whose minimum cover is 56h are each planned their 40h rather than 28h. The ceiling for this pass is the contracted total **plus whatever `rules.contract.maxOverMinutes` already allows**, never a target to land nearest to: with no allowance stated, a half-timer on 15h of a 20h contract is not given a further 7.5h shift, because 2.5h over is not "closer" enough to be worth hours nobody asked for. State an allowance and the top-up plans into it, which is what lets a part-timer be filled at all when no shift is small enough to fit the room left. Set `objectives.fillToContract: false` (or a zero `contractHoursWeight`) to staff minimum cover only and let contracted hours merely distribute the demand; a `maxEmployees` on the template or a hard `maxOverMinutes` bounds the top-up either way.
+
+**Public holidays** are caller-supplied ISO dates in `calendar.publicHolidays`. They mark `ShiftInstance.isPublicHoliday`, which drives `restDays.holidayAllowed` and `compensatoryRestWithinDays.holiday`, the `holidays` fairness dimension and the `holiday` cost premium. The engine ships no holiday calendar — a host resolves the roster's location to dates and passes them in.
 
 **Duty-type quotas** (`rules.dutyQuotas`) cap how much of one duty type a person may hold over a rolling window, matched on `shiftTypeTag` — e.g. "at most 30 hours of stand-by in any 28 days". `maxMinutes` counts _elapsed_ duty minutes (a stand-by cap limits clock occupation, which is exactly the time a duty classification keeps out of the working-time budget); `maxCount` caps occurrences.
 

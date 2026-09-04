@@ -12,10 +12,27 @@ rather than being internal tuning.
 
 ### Properties
 
+- [contractHoursWeight](ObjectiveWeights.md#contracthoursweight)
 - [costWeightPerEuro](ObjectiveWeights.md#costweightpereuro)
+- [fillToContract](ObjectiveWeights.md#filltocontract)
 - [homeSiteWeight](ObjectiveWeights.md#homesiteweight)
 
 ## Properties
+
+### contractHoursWeight
+
+• `Optional` **contractHoursWeight**: `number`
+
+Soft-score points per *hour* a person is planned away from their
+contracted period total (see `ContractHoursRule`). Applies only to
+employees whose contracted week resolves. Defaults to 1; `0` switches the
+term off.
+
+#### Defined in
+
+[src/scheduling/types.ts:846](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L846)
+
+___
 
 ### costWeightPerEuro
 
@@ -29,7 +46,26 @@ summary still use the cost model either way.
 
 #### Defined in
 
-[src/scheduling/types.ts:778](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L778)
+[src/scheduling/types.ts:832](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L832)
+
+___
+
+### fillToContract
+
+• `Optional` **fillToContract**: `boolean`
+
+Whether the solver plans people *up to* their contracted period total
+(or their `minHoursForPeriod` floor) by staffing shifts beyond
+`minEmployees`. Defaults to `true`: a full-timer is owed their week
+whether or not minimum cover needs them, so once every slot is covered
+the solver keeps adding assignments while they close a contract
+shortfall, every hard rule still holds, and the shift is under its
+`maxEmployees`. `false` staffs minimum cover only, so contracted hours
+only *distribute* the demand and never grow it.
+
+#### Defined in
+
+[src/scheduling/types.ts:857](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L857)
 
 ___
 
@@ -44,4 +80,4 @@ this is declared data, kept outside AI Act Annex III point 4(b).
 
 #### Defined in
 
-[src/scheduling/types.ts:785](https://github.com/ViljarVoidula/assignment-user-matcher/blob/32161ff8553e4314f98a57fd735f2b5fec02e537/src/scheduling/types.ts#L785)
+[src/scheduling/types.ts:839](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L839)
