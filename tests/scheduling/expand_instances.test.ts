@@ -210,7 +210,7 @@ describe('demand overrides', () => {
         expect(instances.has('day@2026-12-27')).to.equal(false);
     });
 
-    it('takes the template\'s own shape on a day it opens, and can be shut again', () => {
+    it("takes the template's own shape on a day it opens, and can be shut again", () => {
         const instances = byId(
             expandShiftInstances(
                 input({
