@@ -181,6 +181,7 @@ export {
     type Severity,
     type ShiftInstance,
     type ShiftTemplate,
+    type ShiftDemandOverride,
     type Site,
     type SiteIndex,
     type TimeOffEntry,

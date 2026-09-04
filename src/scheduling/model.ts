@@ -26,6 +26,7 @@
  */
 
 import type {
+    ShiftDemandOverride,
     AvailabilityRule,
     ConstraintOptions,
     Employee,
@@ -103,27 +104,47 @@ export function expandTemplate(
         throw new ScheduleValidationError(`Shift template "${template.id}" has maxEmployees below minEmployees`);
     }
 
+    const overrides = validateDemandOverrides(template);
+
     const startTod = parseTimeOfDay(template.startTime, `shift "${template.id}".startTime`);
     const endTodRaw = parseTimeOfDay(template.endTime, `shift "${template.id}".endTime`);
     // Overnight shifts roll the end into the next day explicitly; a same-time
     // start/end is treated as a full 24h shift, never zero length.
     const overnight = endTodRaw <= startTod;
 
-    const dates: string[] = [];
+    // The template's own pattern, then the dates an override opens on top of it.
+    // A weekday-only shift that has to open for one weekend is a temporary fact
+    // like any other here, and the alternative — widening the template's
+    // `daysOfWeek` — would open every weekend from then on.
+    const onPattern = new Set<string>();
     if (template.dates) {
         for (const d of template.dates) {
             assertIsoDate(d, `shift "${template.id}".dates`);
             const offset = clock.dayIndexOf(d);
-            if (offset >= 0 && offset < periodDays) dates.push(d);
+            if (offset >= 0 && offset < periodDays) onPattern.add(d);
         }
     } else {
         for (let i = 0; i < periodDays; i++) {
             const d = clock.dateAt(i);
-            if (!template.daysOfWeek || template.daysOfWeek.includes(isoWeekday(d))) dates.push(d);
+            if (!template.daysOfWeek || template.daysOfWeek.includes(isoWeekday(d))) onPattern.add(d);
         }
     }
+    const candidates = new Set(onPattern);
+    for (const override of overrides) {
+        if (override.runs !== true) continue;
+        for (let i = 0; i < periodDays; i++) {
+            const d = clock.dateAt(i);
+            if (d < override.from || d > override.to) continue;
+            if (override.daysOfWeek?.length && !override.daysOfWeek.includes(isoWeekday(d))) continue;
+            candidates.add(d);
+        }
+    }
+    const dates = [...candidates].sort();
 
-    return dates.map((date) => {
+    const instances: ShiftInstance[] = [];
+    for (const date of dates) {
+        const demand = resolveDemand(template, overrides, date, onPattern.has(date));
+        if (!demand) continue;
         const startMinute = clock.toPeriodMinutes(date, template.startTime, `shift "${template.id}".startTime`);
         const endDate = overnight ? addDays(date, 1) : date;
         const endMinute = clock.toPeriodMinutes(endDate, template.endTime, `shift "${template.id}".endTime`);
@@ -151,7 +172,7 @@ export function expandTemplate(
         const nightMinutes = context.nightRule ? clock.minutesInClockRange(range, context.nightRule.window) : 0;
         const nightThreshold = context.nightRule?.qualifiesAfterMinutes ?? 180;
 
-        return {
+        const instance: ShiftInstance = {
             id: `${template.id}@${date}`,
             templateId: template.id,
             name: template.name,
@@ -162,11 +183,11 @@ export function expandTemplate(
             workingMinutes,
             paidBreakMinutes: paidBreak,
             unpaidBreakMinutes: unpaidBreak,
-            minEmployees: template.minEmployees ?? 1,
-            maxEmployees: template.maxEmployees,
-            tagRequirements: template.tagRequirements ?? {},
-            tagMaximums: template.tagMaximums ?? {},
-            requiredTags: template.requiredTags ?? [],
+            minEmployees: demand.minEmployees,
+            maxEmployees: demand.maxEmployees,
+            tagRequirements: demand.tagRequirements,
+            tagMaximums: demand.tagMaximums,
+            requiredTags: demand.requiredTags,
             shiftTypeTag: template.shiftTypeTag,
             siteId: template.siteId,
             duty: template.duty,
@@ -176,7 +197,119 @@ export function expandTemplate(
             isSunday: isoWeekday(date) === 7,
             isPublicHoliday: context.publicHolidays.has(date),
         };
+        if (demand.label !== undefined) instance.demandLabel = demand.label;
+        instances.push(instance);
+    }
+    return instances;
+}
+
+/** The staffing shape one occurrence is judged against, after its overrides. */
+interface ResolvedDemand {
+    minEmployees: number;
+    maxEmployees: number | undefined;
+    tagRequirements: Record<string, number>;
+    tagMaximums: Record<string, number>;
+    requiredTags: string[];
+    label?: string;
+}
+
+function validateDemandOverrides(template: ShiftTemplate): ShiftDemandOverride[] {
+    const overrides = template.demandOverrides ?? [];
+    if (!Array.isArray(overrides)) {
+        throw new ScheduleValidationError(`Shift template "${template.id}" has non-array demandOverrides`);
+    }
+    overrides.forEach((override, index) => {
+        const field = `shift "${template.id}".demandOverrides[${index}]`;
+        assertIsoDate(override.from, `${field}.from`);
+        assertIsoDate(override.to, `${field}.to`);
+        if (override.to < override.from) throw new ScheduleValidationError(`${field}: to precedes from`);
+        if (override.daysOfWeek !== undefined) {
+            const ok =
+                Array.isArray(override.daysOfWeek) &&
+                override.daysOfWeek.every((d) => Number.isInteger(d) && d >= 1 && d <= 7);
+            if (!ok) throw new ScheduleValidationError(`${field}: daysOfWeek must be ISO weekdays 1..7`);
+        }
+        for (const key of ['minEmployees', 'extraEmployees'] as const) {
+            const value = override[key];
+            if (value !== undefined && (!Number.isInteger(value) || value < 0)) {
+                throw new ScheduleValidationError(`${field}: invalid ${key}`);
+            }
+        }
+        if (
+            override.maxEmployees !== undefined &&
+            override.maxEmployees !== null &&
+            (!Number.isInteger(override.maxEmployees) || override.maxEmployees < 0)
+        ) {
+            throw new ScheduleValidationError(`${field}: invalid maxEmployees`);
+        }
     });
+    return overrides;
+}
+
+/**
+ * Fold the overrides matching `date` onto the template's standing demand.
+ *
+ * Applied in order, later wins per field, `extraEmployees` accumulates. A
+ * minimum raised above the template's standing maximum lifts that maximum with
+ * it: "the most it can take" was said of the ordinary day, and "three at the
+ * peak" plainly means three. Only a maximum the override itself states is held
+ * against the resolved minimum — that combination is a shape nobody can staff.
+ */
+function resolveDemand(
+    template: ShiftTemplate,
+    overrides: ShiftDemandOverride[],
+    date: string,
+    onPattern: boolean,
+): ResolvedDemand | null {
+    let min = template.minEmployees ?? 1;
+    let max: number | undefined = template.maxEmployees;
+    let extra = 0;
+    let maxStated = false;
+    let runs = true;
+    const demand: ResolvedDemand = {
+        minEmployees: min,
+        maxEmployees: max,
+        tagRequirements: template.tagRequirements ?? {},
+        tagMaximums: template.tagMaximums ?? {},
+        requiredTags: template.requiredTags ?? [],
+    };
+    const weekday = isoWeekday(date);
+    // A date the template's own pattern does not cover is only here because an
+    // override opened it, so it starts closed: a later override setting
+    // `runs: false` over the same stretch has to be able to shut it again.
+    if (!onPattern) runs = false;
+    let matched = false;
+    for (const override of overrides) {
+        if (date < override.from || date > override.to) continue;
+        if (override.daysOfWeek && !override.daysOfWeek.includes(weekday)) continue;
+        matched = true;
+        if (override.minEmployees !== undefined) min = override.minEmployees;
+        if (override.maxEmployees !== undefined) {
+            max = override.maxEmployees ?? undefined;
+            maxStated = true;
+        }
+        if (override.extraEmployees !== undefined) extra += override.extraEmployees;
+        if (override.tagRequirements !== undefined) demand.tagRequirements = override.tagRequirements;
+        if (override.tagMaximums !== undefined) demand.tagMaximums = override.tagMaximums;
+        if (override.requiredTags !== undefined) demand.requiredTags = override.requiredTags;
+        if (override.runs !== undefined) runs = override.runs;
+        if (override.label !== undefined) demand.label = override.label;
+    }
+    if (!matched) return demand;
+    if (!runs) return null;
+    demand.minEmployees = min + extra;
+    demand.maxEmployees = max === undefined ? undefined : max + extra;
+    if (demand.maxEmployees !== undefined && demand.maxEmployees < demand.minEmployees) {
+        if (!maxStated) {
+            demand.maxEmployees = demand.minEmployees;
+            return demand;
+        }
+        throw new ScheduleValidationError(
+            `Shift template "${template.id}" resolves to maxEmployees below minEmployees on ${date}` +
+                (demand.label ? ` (${demand.label})` : ''),
+        );
+    }
+    return demand;
 }
 
 /**

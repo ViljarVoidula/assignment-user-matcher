@@ -399,10 +399,12 @@ describe('contracted hours', function () {
         });
     });
     describe('filling to contract', function () {
-        // Seven daily 8h shifts, one person required on each, no cap on
-        // assignees. Minimum cover is 56h; two full-timers are owed 80h.
+        // Seven daily 8h shifts, one person required and a second allowed on
+        // each. Minimum cover is 56h; two full-timers are owed 80h. The
+        // `maxEmployees` is load-bearing: a shift that states no maximum has no
+        // room, so the top-up leaves it at the one person it asked for.
         const daily = (extra: Partial<ShiftTemplate> = {}) =>
-            WEEK_DATES.map((d, i) => shift(`d${i}`, '09:00', '17:00', [d], { minEmployees: 1, ...extra }));
+            WEEK_DATES.map((d, i) => shift(`d${i}`, '09:00', '17:00', [d], { minEmployees: 1, maxEmployees: 2, ...extra }));
         const team = () => [
             emp('full-a', { contract: { kind: 'hours', fte: 1 } }),
             emp('full-b', { contract: { kind: 'hours', fte: 1 } }),
@@ -431,7 +433,9 @@ describe('contracted hours', function () {
         it('never plans anyone past their contracted total to shrink a deviation', function () {
             // Six 9h shifts and a half-timer on 20h: two of them are 18h, and a
             // third would be 27h — nearer to 20h than 18h is, and still wrong.
-            const nine = WEEK_DATES.slice(0, 6).map((d, i) => shift(`n${i}`, '08:00', '17:00', [d], { minEmployees: 1 }));
+            const nine = WEEK_DATES.slice(0, 6).map((d, i) =>
+                shift(`n${i}`, '08:00', '17:00', [d], { minEmployees: 1, maxEmployees: 3 }),
+            );
             const result = solveSchedule({
                 period: WEEK,
                 shifts: nine,
@@ -483,6 +487,22 @@ describe('contracted hours', function () {
             expect(hours.get('full-b')).to.be.at.most(40 * H);
         });
 
+        it('adds nobody to a shift that states no maximum, however short the team is', function () {
+            // The failure this guards: five people contracted to a month of
+            // full-time work, and twenty-two shifts that each need one person.
+            // Unbounded, every person landed on every shift — a hundred and ten
+            // assignments, all lawful, none of them wanted.
+            const result = solveSchedule({
+                period: WEEK,
+                shifts: daily({ maxEmployees: undefined }),
+                employees: team(),
+                rules: FULL_TIME,
+                timeBudgetMs: 200,
+                seed: 3,
+            });
+            expect(result.assignments).to.have.length(7);
+        });
+
         it('stops at minimum cover with objectives.fillToContract: false or a zero contract weight', function () {
             for (const objectives of [{ fillToContract: false }, { contractHoursWeight: 0 }]) {
                 const result = solveSchedule({
@@ -501,7 +521,7 @@ describe('contracted hours', function () {
         it('fills towards a per-employee minHoursForPeriod floor without a contract', function () {
             const result = solveSchedule({
                 period: WEEK,
-                shifts: daily(),
+                shifts: daily({ maxEmployees: 3 }),
                 employees: [emp('a', { minHoursForPeriod: 40 }), emp('b', { minHoursForPeriod: 40 })],
                 timeBudgetMs: 200,
                 seed: 3,

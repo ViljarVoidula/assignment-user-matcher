@@ -556,6 +556,61 @@ export interface ClockRangeConfig {
     to: string;
 }
 
+/**
+ * A date-bounded change to a template's demand: a peak fortnight that needs
+ * two more people on every shift, a closure, a week when a licence holder must
+ * be on the desk. The template stays the standing rule; an override is the
+ * temporary one, and it is gone the day after `to` without anybody editing the
+ * shift back.
+ *
+ * Overrides are applied in array order to every date in `[from, to]` (and on a
+ * listed weekday, when `daysOfWeek` is given). A later override wins field by
+ * field over an earlier one; `extraEmployees` adds up across all that match.
+ * `runs` decides whether the shift happens on a date at all, in **both**
+ * directions — so an override can open a weekday-only shift for one weekend as
+ * well as close it for a bank holiday. The result is an ordinary `ShiftInstance`, so the
+ * solver, `checkCompliance`, `explainCandidate` and a host's grid all read the
+ * same headcount without knowing an override existed — only `demandLabel`
+ * tells them why.
+ */
+export interface ShiftDemandOverride {
+    /** Inclusive ISO date (YYYY-MM-DD) the override starts applying. */
+    from: string;
+    /** Inclusive ISO date it stops applying. Equal to `from` for a single day. */
+    to: string;
+    /** Only these ISO weekdays (1 Mon .. 7 Sun) inside the range. Absent means every day. */
+    daysOfWeek?: number[];
+    /** Why — carried onto every occurrence it touches as `ShiftInstance.demandLabel`. */
+    label?: string;
+    /** Replaces the template's minimum on these dates. */
+    minEmployees?: number;
+    /** Replaces the template's maximum. `null` removes it, leaving no room above cover. */
+    maxEmployees?: number | null;
+    /**
+     * Added to the minimum, and to the maximum when one is in force, rather than
+     * replacing them — "two more than usual" without restating the usual.
+     */
+    extraEmployees?: number;
+    /** Replaces the template's per-tag minimums. */
+    tagRequirements?: Record<string, number>;
+    /** Replaces the template's per-tag maximums. */
+    tagMaximums?: Record<string, number>;
+    /** Replaces the tags every assignee must hold. */
+    requiredTags?: string[];
+    /**
+     * Whether the shift runs on these dates at all, overriding the template's
+     * own `dates`/`daysOfWeek`.
+     *
+     * `false` is a closure. `true` is the inverse and the reason this is one
+     * field rather than a `cancel` flag: a weekday-only shift that has to open
+     * for one weekend is the same kind of temporary fact as one that has to
+     * close for a bank holiday, and expressing it by editing the template's
+     * `daysOfWeek` would open **every** weekend from then on. Omit it to leave
+     * the template's own pattern deciding.
+     */
+    runs?: boolean;
+}
+
 /** A recurring or dated shift definition. Times are local time-of-day `HH:MM` or `HH:MM:SS`. */
 export interface ShiftTemplate {
     id: string;
@@ -579,6 +634,12 @@ export interface ShiftTemplate {
     tagMaximums?: Record<string, number>;
     /** Tags every assignee must hold, checked against date-valid qualifications. */
     requiredTags?: string[];
+    /**
+     * Temporary changes to the demand above, each bounded to a date range —
+     * peak periods, closures, a stretch that needs a particular qualification.
+     * See `ShiftDemandOverride` for how they combine.
+     */
+    demandOverrides?: ShiftDemandOverride[];
     /**
      * Classification tag for sequence rules — `'night'`, `'early'`, `'late'`.
      * `ConsecutiveRule.forbiddenSuccessions` matches on this.
@@ -910,6 +971,12 @@ export interface ShiftInstance {
     durationMinutes: number;
     minEmployees: number;
     tagRequirements: Record<string, number>;
+    /**
+     * The label of the last labelled `ShiftDemandOverride` that shaped this
+     * occurrence, so a grid can say *why* Tuesday needs three when the template
+     * says one. Absent when no override touched it.
+     */
+    demandLabel?: string;
 
     /**
      * Minutes that count as working time — the span less unpaid breaks, scaled

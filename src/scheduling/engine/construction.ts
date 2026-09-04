@@ -60,6 +60,8 @@ function rankCandidate(
         }
     }
 
+    const planned = state.minutesByEmployee.get(employeeId) ?? 0;
+    const contracted = ctx.contractedPeriodMinutes.get(employeeId);
     if (objective === 'balanced') {
         // Less-loaded employees first so hours equalize — measured against the
         // hours each of them is owed, not against zero. Raw minutes read a
@@ -68,10 +70,20 @@ function rankCandidate(
         // distance from a contracted total is the load a person actually
         // carries. Without a contract there is nothing to measure against, so
         // absolute hours remain the only reading.
-        const planned = state.minutesByEmployee.get(employeeId) ?? 0;
-        const contracted = ctx.contractedPeriodMinutes.get(employeeId);
         rank += (contracted === undefined ? planned : planned - contracted) / 60;
         reasons.push('selected to balance hours');
+    } else if (contracted !== undefined) {
+        // Furthest from their contract first, even under the standard
+        // objective. `contractHoursPenalty` sums |planned − contracted|, which
+        // is *flat* under redistribution while everybody is still short: with
+        // less work than the team is contracted for, moving a shift from the
+        // person on 67h to the person on none leaves the score untouched, and
+        // the search has no reason to prefer either. The objective cannot
+        // separate those rosters, so construction has to — otherwise a team
+        // whose demand is thinner than its payroll gets one person loaded and
+        // one with nothing, both scoring identically.
+        rank += (planned - contracted) / 60;
+        reasons.push('furthest from their contracted hours');
     } else {
         reasons.push('eligible under all constraints');
     }
@@ -154,9 +166,17 @@ function closesGap(ctx: ModelContext, state: InternalState, employeeId: string, 
  * shifts with room. Each pick is the eligible, hard-compliant shift that
  * closes the most of the gap, preferring the least-staffed occurrence so the
  * extra headcount spreads rather than piles onto one day. Repeats until no
- * assignment would bring anyone closer to their target. `maxEmployees` is
- * enforced by the group-composition rule inside `hardCompliant`, and the
- * cheap size check here merely skips the constraint pass for full shifts.
+ * assignment would bring anyone closer to their target.
+ *
+ * **Room is `maxEmployees`, and a shift that states none has none.** A shift
+ * asking for one person needs one person; a second body there does not do a
+ * second body's work, and planning one would be inventing demand to absorb
+ * contracted hours. Left unbounded this pass staffs everybody on everything —
+ * five full-timers on twenty-two single-person shifts came out as a hundred
+ * and ten assignments, all of them lawful and none of them wanted. So the
+ * caller states where extra people are useful, the same way they state every
+ * other fact about the work, and `maxEmployees` is that statement. Filling
+ * unstaffed cover is a different matter and stays the greedy fill's job.
  */
 export function fillToContract(
     ctx: ModelContext,
@@ -181,7 +201,11 @@ export function fillToContract(
                 const inst = ctx.instanceById.get(instanceId);
                 if (!inst || inst.workingMinutes <= 0 || state.isAssigned(entry.employeeId, instanceId)) continue;
                 const staffed = state.assignments.get(instanceId)?.size ?? 0;
-                if (inst.maxEmployees !== undefined && staffed >= inst.maxEmployees) continue;
+                // `maxEmployees ?? minEmployees`: unstated room is no room.
+                // `hardCompliant` below re-checks the declared maximum through
+                // the group-composition rule; this is the bound that keeps an
+                // unstated one from meaning "unlimited".
+                if (staffed >= (inst.maxEmployees ?? inst.minEmployees)) continue;
                 if (!closesGap(ctx, state, entry.employeeId, inst.workingMinutes)) continue;
                 // Largest gap closed first, then the least-staffed occurrence,
                 // then earliest start; seeded jitter breaks exact ties.
