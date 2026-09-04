@@ -398,4 +398,90 @@ describe('contracted hours', function () {
             expect(ranked[1].rationale).to.match(/over contract/);
         });
     });
+    describe('filling to contract', function () {
+        // Seven daily 8h shifts, one person required on each, no cap on
+        // assignees. Minimum cover is 56h; two full-timers are owed 80h.
+        const daily = (extra: Partial<ShiftTemplate> = {}) =>
+            WEEK_DATES.map((d, i) => shift(`d${i}`, '09:00', '17:00', [d], { minEmployees: 1, ...extra }));
+        const team = () => [
+            emp('full-a', { contract: { kind: 'hours', fte: 1 } }),
+            emp('full-b', { contract: { kind: 'hours', fte: 1 } }),
+        ];
+        const planned = (result: ReturnType<typeof solveSchedule>) =>
+            new Map(result.contractHours!.map((row) => [row.employeeId, row.plannedMinutes]));
+
+        it('plans full-timers to their contracted hours beyond minimum cover when the shift allows it', function () {
+            const result = solveSchedule({
+                period: WEEK,
+                shifts: daily(),
+                employees: team(),
+                rules: FULL_TIME,
+                timeBudgetMs: 300,
+                seed: 3,
+            });
+            expect(result.stats.unfilledSlots).to.equal(0);
+            expect(result.violations.filter((v) => v.severity === 'hard')).to.deep.equal([]);
+            const hours = planned(result);
+            expect(hours.get('full-a')).to.equal(40 * H);
+            expect(hours.get('full-b')).to.equal(40 * H);
+            // Ten assignments over seven shifts: three days are double-staffed.
+            expect(result.assignments).to.have.length(10);
+        });
+
+        it('never overstaffs past maxEmployees, and never past a hard maxOverMinutes cap', function () {
+            const capped = solveSchedule({
+                period: WEEK,
+                shifts: daily({ maxEmployees: 1 }),
+                employees: team(),
+                rules: FULL_TIME,
+                timeBudgetMs: 200,
+                seed: 3,
+            });
+            expect(capped.assignments).to.have.length(7);
+
+            const noOver = solveSchedule({
+                period: WEEK,
+                shifts: daily(),
+                employees: [emp('half', { contract: { kind: 'hours', fte: 0.5 } }), ...team()],
+                rules: { contract: { fullTimeWeeklyMinutes: 40 * H, maxOverMinutes: 0 } },
+                timeBudgetMs: 200,
+                seed: 3,
+            });
+            const hours = planned(noOver);
+            expect(hours.get('half')).to.be.at.most(20 * H);
+            expect(hours.get('full-a')).to.be.at.most(40 * H);
+            expect(hours.get('full-b')).to.be.at.most(40 * H);
+        });
+
+        it('stops at minimum cover with objectives.fillToContract: false or a zero contract weight', function () {
+            for (const objectives of [{ fillToContract: false }, { contractHoursWeight: 0 }]) {
+                const result = solveSchedule({
+                    period: WEEK,
+                    shifts: daily(),
+                    employees: team(),
+                    rules: FULL_TIME,
+                    objectives,
+                    timeBudgetMs: 100,
+                    seed: 3,
+                });
+                expect(result.assignments, JSON.stringify(objectives)).to.have.length(7);
+            }
+        });
+
+        it('fills towards a per-employee minHoursForPeriod floor without a contract', function () {
+            const result = solveSchedule({
+                period: WEEK,
+                shifts: daily(),
+                employees: [emp('a', { minHoursForPeriod: 40 }), emp('b', { minHoursForPeriod: 40 })],
+                timeBudgetMs: 200,
+                seed: 3,
+            });
+            const byEmployee = new Map<string, number>();
+            for (const a of result.assignments) byEmployee.set(a.employeeId, (byEmployee.get(a.employeeId) ?? 0) + 8 * H);
+            // A floor, not a target: nobody is left under it, and nothing
+            // penalises landing over it.
+            expect(byEmployee.get('a')).to.be.at.least(40 * H);
+            expect(byEmployee.get('b')).to.be.at.least(40 * H);
+        });
+    });
 });

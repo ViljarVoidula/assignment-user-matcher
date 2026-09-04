@@ -6,6 +6,14 @@
  * pair is only ever assigned when every hard constraint's `delta` is 0, so a
  * constructed state is always hard-compliant; shortfalls surface as unfilled
  * slots, not breaches.
+ *
+ * Cover is the floor, not the ceiling. Once every slot has its `minEmployees`
+ * a second pass tops people up towards the hours they are owed — the
+ * contracted period total, or a `minHoursForPeriod` floor — by adding them to
+ * shifts that still have room. Without it a full-timer only ever receives a
+ * share of minimum cover: with more contracted hours on the payroll than the
+ * demand needs, everyone lands short and the contract-hours objective has no
+ * move that could close the gap, because nothing ever staffs past the minimum.
  */
 
 import type { ModelContext } from '../types';
@@ -77,8 +85,91 @@ export function constructionOrder(ctx: ModelContext, propagation: PropagationRes
 }
 
 /**
+ * Minutes an employee is still owed against their target, or 0 when nothing
+ * pulls them upward. A contracted total is symmetric — the objective penalises
+ * surplus as much as shortfall — so only a shift that leaves the person
+ * *closer* to it counts as progress; a bare `minHoursForPeriod` is a floor.
+ */
+function hoursOwed(ctx: ModelContext, state: InternalState, employeeId: string): number {
+    const planned = state.minutesByEmployee.get(employeeId) ?? 0;
+    const contracted = ctx.contractHoursWeight > 0 ? ctx.contractedPeriodMinutes.get(employeeId) : undefined;
+    if (contracted !== undefined) return Math.max(0, contracted - planned);
+    const floor = ctx.employeeById.get(employeeId)?.minHoursForPeriod;
+    return floor !== undefined ? Math.max(0, floor * 60 - planned) : 0;
+}
+
+/** Whether adding `workingMinutes` leaves the employee closer to their target. */
+function closesGap(ctx: ModelContext, state: InternalState, employeeId: string, workingMinutes: number): boolean {
+    const planned = state.minutesByEmployee.get(employeeId) ?? 0;
+    const contracted = ctx.contractHoursWeight > 0 ? ctx.contractedPeriodMinutes.get(employeeId) : undefined;
+    if (contracted !== undefined) return Math.abs(planned + workingMinutes - contracted) < Math.abs(planned - contracted);
+    const floor = ctx.employeeById.get(employeeId)?.minHoursForPeriod;
+    return floor !== undefined && planned < floor * 60;
+}
+
+/**
+ * Top people up towards their contracted hours once cover is met.
+ *
+ * Most-owed person first, so the biggest shortfall gets first pick of the
+ * shifts with room. Each pick is the eligible, hard-compliant shift that
+ * closes the most of the gap, preferring the least-staffed occurrence so the
+ * extra headcount spreads rather than piles onto one day. Repeats until no
+ * assignment would bring anyone closer to their target. `maxEmployees` is
+ * enforced by the group-composition rule inside `hardCompliant`, and the
+ * cheap size check here merely skips the constraint pass for full shifts.
+ */
+export function fillToContract(
+    ctx: ModelContext,
+    state: InternalState,
+    propagation: PropagationResult,
+    rand: () => number,
+): void {
+    if (!ctx.fillToContract) return;
+    const owed = ctx.employees
+        .map((e) => ({ employeeId: e.id, owed: hoursOwed(ctx, state, e.id) }))
+        .filter((e) => e.owed > 0);
+    if (owed.length === 0) return;
+
+    const exhausted = new Set<string>();
+    for (;;) {
+        owed.sort((a, b) => b.owed - a.owed || (a.employeeId < b.employeeId ? -1 : 1));
+        let progressed = false;
+        for (const entry of owed) {
+            if (entry.owed <= 0 || exhausted.has(entry.employeeId)) continue;
+            let best: { instanceId: string; rank: number } | undefined;
+            for (const instanceId of propagation.eligibility.get(entry.employeeId) ?? []) {
+                const inst = ctx.instanceById.get(instanceId);
+                if (!inst || inst.workingMinutes <= 0 || state.isAssigned(entry.employeeId, instanceId)) continue;
+                const staffed = state.assignments.get(instanceId)?.size ?? 0;
+                if (inst.maxEmployees !== undefined && staffed >= inst.maxEmployees) continue;
+                if (!closesGap(ctx, state, entry.employeeId, inst.workingMinutes)) continue;
+                // Largest gap closed first, then the least-staffed occurrence,
+                // then earliest start; seeded jitter breaks exact ties.
+                const gain = Math.min(inst.workingMinutes, entry.owed);
+                const rank = -gain * 1_000 + staffed * 10 + inst.startMinute / MINUTES_PER_PERIOD_SCALE + rand();
+                if (!best || rank < best.rank) {
+                    if (hardCompliant(ctx, state, entry.employeeId, instanceId)) best = { instanceId, rank };
+                }
+            }
+            if (!best) {
+                exhausted.add(entry.employeeId);
+                continue;
+            }
+            assign(state, entry.employeeId, best.instanceId, ['added to reach contracted hours']);
+            entry.owed = hoursOwed(ctx, state, entry.employeeId);
+            progressed = true;
+        }
+        if (!progressed) return;
+    }
+}
+
+/** Scales a period minute into a sub-unit tie-break term below the staffing step. */
+const MINUTES_PER_PERIOD_SCALE = 1_000_000;
+
+/**
  * Greedily staff `instanceIds` (default: everything, most-constrained first).
- * Shared by initial construction and LNS repair.
+ * Shared by initial construction and LNS repair. The full pass (no
+ * `instanceIds`) also tops people up to their contracted hours afterwards.
  */
 export function greedyFill(
     ctx: ModelContext,
@@ -115,4 +206,5 @@ export function greedyFill(
             need--;
         }
     }
+    if (!instanceIds) fillToContract(ctx, state, propagation, rand);
 }

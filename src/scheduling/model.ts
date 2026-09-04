@@ -415,6 +415,10 @@ export function buildModel(input: ScheduleInput): ModelContext {
     if (!Number.isFinite(contractHoursWeight) || contractHoursWeight < 0) {
         throw new ScheduleValidationError(`objectives.contractHoursWeight must be a non-negative number`);
     }
+    const fillToContract = input.objectives?.fillToContract ?? true;
+    if (typeof fillToContract !== 'boolean') {
+        throw new ScheduleValidationError(`objectives.fillToContract must be a boolean`);
+    }
     if (rules.contract) assertValidContractRule(rules.contract, 'rules');
     for (const employee of input.employees) {
         if (employee.rules?.contract) assertValidContractRule(employee.rules.contract, `employee "${employee.id}"`);
@@ -467,6 +471,7 @@ export function buildModel(input: ScheduleInput): ModelContext {
         contractedWeeklyMinutes,
         contractedPeriodMinutes: contractedPeriod,
         contractHoursWeight,
+        fillToContract,
         personIdOf,
         employeesOfPerson,
         history: buildHistory(input.history, clock, personIdOf),

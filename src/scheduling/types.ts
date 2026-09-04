@@ -844,6 +844,17 @@ export interface ObjectiveWeights {
      * term off.
      */
     contractHoursWeight?: number;
+    /**
+     * Whether the solver plans people *up to* their contracted period total
+     * (or their `minHoursForPeriod` floor) by staffing shifts beyond
+     * `minEmployees`. Defaults to `true`: a full-timer is owed their week
+     * whether or not minimum cover needs them, so once every slot is covered
+     * the solver keeps adding assignments while they close a contract
+     * shortfall, every hard rule still holds, and the shift is under its
+     * `maxEmployees`. `false` staffs minimum cover only, so contracted hours
+     * only *distribute* the demand and never grow it.
+     */
+    fillToContract?: boolean;
 }
 
 /** One person's planned hours set against their contract. */
@@ -964,6 +975,8 @@ export interface ModelContext {
     contractedPeriodMinutes: Map<string, number>;
     /** Resolved `objectives.contractHoursWeight`. */
     contractHoursWeight: number;
+    /** Resolved `objectives.fillToContract`. */
+    fillToContract: boolean;
     /** Employee id → the natural person it belongs to (CJEU C-585/19). */
     personIdOf: Map<string, string>;
     /** Person id → the employee records that share it. */
