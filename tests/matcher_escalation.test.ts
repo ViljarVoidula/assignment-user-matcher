@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import type { AssignmentLifecycleEvent } from '../src/types/matcher';
@@ -15,7 +15,7 @@ describe('Escalation policies (response deadlines)', function () {
     const prefix = 'escalation_test:';
 
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
 
         matcher = new Matcher(redisClient, {
@@ -29,7 +29,7 @@ describe('Escalation policies (response deadlines)', function () {
     });
 
     beforeEach(async function () {
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
         events = [];
         // Deadlines are Date.now()-scored zsets: faking Date lets tests
         // fast-forward past them instead of sleeping in real time. Timers

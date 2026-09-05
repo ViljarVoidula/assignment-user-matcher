@@ -23,7 +23,7 @@ Cost inputs. All money is in minor units (cents) to keep arithmetic integral.
 
 #### Defined in
 
-[src/scheduling/types.ts:151](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L151)
+[src/scheduling/types.ts:151](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L151)
 
 ___
 
@@ -35,7 +35,7 @@ Minutes in the period after which overtime rates apply.
 
 #### Defined in
 
-[src/scheduling/types.ts:153](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L153)
+[src/scheduling/types.ts:153](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L153)
 
 ___
 
@@ -45,7 +45,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:154](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L154)
+[src/scheduling/types.ts:154](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L154)
 
 ___
 
@@ -57,7 +57,7 @@ Premium multipliers by predicate, applied to the minutes actually inside each ba
 
 #### Defined in
 
-[src/scheduling/types.ts:163](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L163)
+[src/scheduling/types.ts:163](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L163)
 
 ___
 
@@ -71,7 +71,7 @@ Defaults to `'max'`.
 
 #### Defined in
 
-[src/scheduling/types.ts:169](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L169)
+[src/scheduling/types.ts:169](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L169)
 
 ___
 
@@ -86,4 +86,4 @@ wage (`0.1`); unset means the remainder is unpaid.
 
 #### Defined in
 
-[src/scheduling/types.ts:161](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L161)
+[src/scheduling/types.ts:161](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L161)

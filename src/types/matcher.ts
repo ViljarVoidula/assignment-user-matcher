@@ -1296,6 +1296,66 @@ export type MatcherOptions = {
     /** TTL for archived episodes awaiting external feedback in ms (default: 604800000 = 7 days) */
     learningFeedbackTtlMs?: number;
     /**
+     * SGD update rule (default: 'normalized').
+     *
+     * - `'normalized'`: the gradient step is divided by the active feature
+     *   vector's squared norm and the update is norm-clipped, so a wide
+     *   feature vector cannot make the model diverge.
+     * - `'raw'`: the pre-1.16 rule, `w += lr * error * x`. Kept for
+     *   reproducing existing models; it diverges once enough features are
+     *   active at once (22 unit features at lr 0.1 is already unstable).
+     */
+    learningUpdateMode?: LearningUpdateMode;
+    /** L2 regularization coefficient applied per update (default: 0) */
+    learningL2?: number;
+    /** Maximum L2 norm of a single model update (default: 1) */
+    learningMaxUpdateNorm?: number;
+    /** Absolute cap on any single learned weight (default: 100) */
+    learningMaxWeightMagnitude?: number;
+    /**
+     * Maximum absolute contribution the learning layer may add to a
+     * candidate's effective priority (default: unbounded for backward
+     * compatibility). Set it to keep learned preference from outranking
+     * business priority or SLA bands.
+     */
+    learningMaxBoost?: number;
+    /**
+     * How reward observations are counted into per-tag evidence
+     * (default: 'per-event', the legacy behaviour).
+     */
+    learningRewardAccounting?: LearningRewardAccounting;
+    /**
+     * Selection policy over eligible candidates (default: 'jitter', the
+     * legacy behaviour). `'epsilon-greedy'` replaces the unlogged positive
+     * score jitter with a named policy whose actual selection probability is
+     * recorded on every committed decision, which is what off-policy
+     * evaluation needs.
+     */
+    learningExplorationPolicy?: LearningExplorationPolicy;
+    /** Random source for exploration; defaults to Math.random. Inject for reproducible tests. */
+    learningRng?: () => number;
+    /** Opt-in multi-target reward modelling (acceptance / success / quality) */
+    learningTargets?: LearningTargetsOptions;
+    /**
+     * Emit worker-performance features (per-tag acceptance/success rates,
+     * handling time, workload, urgency interactions) from aggregates
+     * batch-loaded once per matching pass. Requires enableAutoRoutingWeights
+     * for the per-tag aggregates. Default: false.
+     */
+    enableLearningPerformanceFeatures?: boolean;
+    /** Shrinkage strength pulling per-worker rates toward the team prior (default: 5) */
+    learningPerformancePriorStrength?: number;
+    /**
+     * Maximum age of an outcome/feedback event relative to its attempt, in ms.
+     * Later events are rejected and counted as `staleEvents`
+     * (default: the episode feedback TTL).
+     */
+    learningMaxFeedbackAgeMs?: number;
+    /** Reject any single feedback signal whose magnitude exceeds this (default: 1e6) */
+    learningMaxSignalMagnitude?: number;
+    /** Clamp any computed reward to this magnitude before training (default: 100) */
+    learningMaxRewardMagnitude?: number;
+    /**
      * Track per-user, per-tag reward statistics and enable automatic
      * routingWeights generation from RL outcomes (requires enableLearning).
      * Default: false.
@@ -1681,22 +1741,171 @@ export interface LearningAssignmentContext {
     [key: string]: any;
 }
 
-/** Pluggable feature extractor for the learning layer */
-export type LearningFeatureExtractor = (user: User, assignment: LearningAssignmentContext) => LearningFeatures;
+/**
+ * Per-pass performance aggregates for one worker, batch-loaded once before
+ * scoring so no feature costs a per-candidate Redis read.
+ */
+export interface LearningWorkerPerformance {
+    /** Shrunk P(accept) estimate, per tag and overall */
+    acceptanceRate?: Record<string, number>;
+    overallAcceptanceRate?: number;
+    /** Shrunk P(success | accepted) estimate, per tag and overall */
+    successRate?: Record<string, number>;
+    overallSuccessRate?: number;
+    /** Mean handling time in ms, per tag; absent when unobserved */
+    handlingTimeMs?: Record<string, number>;
+    /** Number of independent attempts backing the per-tag estimates */
+    attempts?: Record<string, number>;
+    /** Current backlog size at decision time */
+    backlog?: number;
+    /** Effective backlog cap for this worker */
+    backlogLimit?: number;
+}
+
+/** Ambient context available to a feature extractor at decision time */
+export interface LearningFeatureContext {
+    /** Aggregates for the worker being scored (absent when unavailable) */
+    performance?: LearningWorkerPerformance;
+    /** Team-wide priors the per-worker estimates are shrunk toward */
+    priors?: { acceptanceRate?: number; successRate?: number; handlingTimeMs?: number };
+    /** Decision timestamp used for all deadline arithmetic in this pass */
+    now?: number;
+}
+
+/**
+ * Pluggable feature extractor for the learning layer.
+ *
+ * The third parameter is optional and additive: extractors written against
+ * the two-argument signature keep working unchanged.
+ */
+export type LearningFeatureExtractor = (
+    user: User,
+    assignment: LearningAssignmentContext,
+    context?: LearningFeatureContext,
+) => LearningFeatures;
+
+/**
+ * Prediction targets the learning layer can model separately.
+ *
+ * - `acceptance`: will the worker take the offer? One binary label per
+ *   committed attempt, resolved by accept / reject / response expiry.
+ * - `successGivenAcceptance`: conditional on acceptance, did the work finish?
+ *   One binary label per accepted attempt.
+ * - `quality`: normalized external quality in [0, 1]. Trained only when a
+ *   quality observation actually arrives — missing quality is unknown, never
+ *   zero.
+ */
+export type LearningRewardTarget = 'acceptance' | 'successGivenAcceptance' | 'quality';
+
+/**
+ * Multi-target reward configuration (opt-in). When absent the layer keeps
+ * the legacy behaviour: one model, one scalar reward per lifecycle outcome.
+ */
+export interface LearningTargetsOptions {
+    /** Targets to model. Default when enabled: acceptance + successGivenAcceptance. */
+    targets?: LearningRewardTarget[];
+    /**
+     * Utility combination used for ranking:
+     * `P(accept) * (successWeight * P(success|accept) + qualityWeight * E[quality])`,
+     * plus `acceptanceWeight * P(accept)`. Defaults: acceptance 0, success 1,
+     * quality 0 (or 1 when `quality` is the only non-acceptance target).
+     */
+    acceptanceWeight?: number;
+    successWeight?: number;
+    qualityWeight?: number;
+    /** Per-target learning-rate overrides (default: the shared learning rate). */
+    learningRates?: Partial<Record<LearningRewardTarget, number>>;
+    /**
+     * Treat a system-side cancellation (`failAssignment` with
+     * `systemFault: true`, SLA expiry of an accepted item) as a
+     * `successGivenAcceptance` = 0 label. Default false: a system fault is
+     * not the worker's failure, so it produces no label at all.
+     */
+    systemFaultCountsAsFailure?: boolean;
+}
+
+/** Component predictions behind a combined learning utility */
+export interface LearningPrediction {
+    /** The value used for ranking */
+    utility: number;
+    /** Per-target component predictions (probabilities for binary targets) */
+    components: Partial<Record<LearningRewardTarget, number>>;
+}
+
+/**
+ * How reward observations are counted into per-user/per-tag statistics.
+ *
+ * - `per-event` (default, legacy): every lifecycle outcome and every feedback
+ *   call is one observation. Multiple events on one attempt inflate the
+ *   evidence count.
+ * - `per-attempt`: one observation per committed attempt, written at the
+ *   terminal outcome with the attempt's accrued reward. Late feedback
+ *   *revises* that observation instead of adding another, so evidence counts
+ *   are independent attempts — which is what the veto sample floors assume.
+ */
+export type LearningRewardAccounting = 'per-event' | 'per-attempt';
+
+/** SGD update rule for the online model */
+export type LearningUpdateMode = 'raw' | 'normalized';
+
+/** Exploration policy used when selecting among eligible candidates */
+export type LearningExplorationPolicy = 'greedy' | 'epsilon-greedy' | 'jitter';
+
+/**
+ * In-memory context produced while scoring a candidate and carried to the
+ * claim, so a decision is only ever committed for the worker who actually
+ * won the assignment.
+ */
+export interface LearningDecisionContext {
+    features: LearningFeatures;
+    predictedReward: number;
+    /** Per-target component predictions, when multi-target modelling is on */
+    components?: Partial<Record<LearningRewardTarget, number>>;
+    /** Assignment tags captured at decision time */
+    tags?: string[];
+    /** Probability with which the policy actually selected this candidate */
+    propensity?: number;
+    /** Name of the selection policy that produced `propensity` */
+    policy?: LearningExplorationPolicy;
+    /** Number of admissible candidates the choice was made from */
+    candidateCount?: number;
+    /** Feature-extractor contract version */
+    featureVersion?: number;
+    /** Model generation this prediction was made against */
+    generation?: number;
+}
 
 /** Stored decision context awaiting an outcome */
 export interface LearningDecisionRecord {
+    /** Unique id of this attempt — the key the record is stored under */
+    decisionId: string;
     userId: string;
     assignmentId: string;
     features: LearningFeatures;
     predictedReward: number;
+    /** Per-target component predictions, when multi-target modelling is on */
+    components?: Partial<Record<LearningRewardTarget, number>>;
     /** Assignment tags captured at decision time (used for auto routing weights) */
     tags?: string[];
+    /** Probability with which the policy selected this candidate */
+    propensity?: number;
+    /** Selection policy that produced `propensity` */
+    policy?: LearningExplorationPolicy;
+    /** Number of admissible candidates the choice was made from */
+    candidateCount?: number;
+    /** Feature-extractor contract version */
+    featureVersion?: number;
+    /** Model generation this decision was committed against */
+    generation?: number;
+    /** Sum of rewards applied to this attempt so far (per-attempt accounting) */
+    accruedReward?: number;
     timestamp: number;
 }
 
 /** Archived episode retained after a terminal outcome for late external feedback */
 export interface LearningEpisodeRecord {
+    /** Unique id of the attempt this episode closes */
+    decisionId: string;
     userId: string;
     assignmentId: string;
     features: LearningFeatures;
@@ -1704,6 +1913,12 @@ export interface LearningEpisodeRecord {
     outcome?: LearningOutcome;
     /** Assignment tags captured at decision time (used for auto routing weights) */
     tags?: string[];
+    /** Model generation this decision was committed against */
+    generation?: number;
+    /** Reward already written into per-tag statistics (per-attempt accounting) */
+    appliedTagReward?: number;
+    /** When that per-tag contribution was written (needed to revise it under decay) */
+    tagStatsAt?: number;
     timestamp: number;
 }
 
@@ -1719,8 +1934,23 @@ export interface LearningSample {
 /** Per-user, per-tag reward statistics aggregated from lifecycle outcomes */
 export interface LearningTagStat {
     tag: string;
-    /** Number of reward observations for this tag */
+    /**
+     * Decayed observation weight for this tag. With no decay configured this
+     * is the raw observation count; with decay it is the sum of observation
+     * weights, which is NOT a sample size — see `effectiveSampleSize`.
+     */
     count: number;
+    /**
+     * Kish effective sample size of the decayed observations,
+     * `sum(w)^2 / sum(w^2)`. Equal to `count` without decay. Evidence
+     * thresholds (veto sample floors) are judged against this, never the
+     * decayed weight sum.
+     */
+    effectiveSampleSize?: number;
+    /** Sum of squared observation weights, retained so `effectiveSampleSize` is computable */
+    sumWeightsSq?: number;
+    /** Lifetime count of independent attempts observed for this tag, never decayed */
+    attempts?: number;
     /** Sum of observed rewards for this tag */
     rewardSum: number;
     /** rewardSum / count (0 when no observations) */
@@ -1799,11 +2029,82 @@ export interface AutoRoutingWeightsOptions {
      * Must return values in [0, 1).
      */
     rng?: () => number;
+    /**
+     * Posterior family used for uncertainty.
+     *
+     * - `'gaussian'` (default): normal posterior over the mean reward, with a
+     *   prior variance floor so repeated identical observations never become
+     *   infinitely certain.
+     * - `'bernoulli'`: Beta-Bernoulli posterior over rewards rescaled into
+     *   [0, 1] by `rewardRange`. Appropriate when the reward really is a
+     *   success indicator; do not use it on arbitrary continuous rewards.
+     */
+    rewardModel?: 'gaussian' | 'bernoulli';
+    /**
+     * Reward scale `[min, max]` (default `[-1, 1]`). Sets the default prior
+     * variance and the mapping used by the `'bernoulli'` reward model.
+     * The `'ucb1'` exploration coefficient is only portable within a fixed
+     * scale — state it explicitly if your rewards are not in [-1, 1].
+     */
+    rewardRange?: [number, number];
+    /**
+     * Prior variance for the `'gaussian'` reward model
+     * (default: `((max - min) / 4) ** 2`). Acts as a floor: five identical
+     * observations still leave a non-zero standard error, so uncertainty
+     * reflects evidence rather than coincidence.
+     */
+    priorVariance?: number;
+    /**
+     * Strength of the prior in pseudo-observations (default: 2). Higher
+     * values shrink under-sampled tags harder toward the prior.
+     */
+    priorStrength?: number;
+    /**
+     * Time after a tag's last observation at which a learned veto lapses and
+     * the tag returns at `priorWeight` for reassessment (default: undefined =
+     * vetoes never lapse). Prefer setting this over permanent exclusion: a
+     * hard veto with no recovery path means a worker who improved, or whose
+     * bad run was circumstantial, can never be re-evaluated.
+     */
+    vetoCooldownMs?: number;
+    /**
+     * Judge `minTotalSamples` against this count of independent attempts
+     * instead of the sum of per-tag counts. One assignment carrying three
+     * tags is one attempt, not three, and summing tags lets correlated
+     * evidence clear a worker-level floor on its own.
+     */
+    totalAttempts?: number;
+}
+
+/** Per-tag rationale for a synthesized routing weight. */
+export interface AutoWeightExplanation {
+    tag: string;
+    /** The weight this tag was assigned */
+    weight: number;
+    /** What happened, and why */
+    decision: 'veto' | 'scored' | 'prior' | 'cooldown' | 'insufficient-evidence' | 'unobserved';
+    /** Posterior mean reward estimate */
+    estimate?: number;
+    /** Posterior standard error of that estimate */
+    uncertainty?: number;
+    /** Lower/upper credible bounds at the configured z */
+    lowerBound?: number;
+    upperBound?: number;
+    /** Independent attempts backing the estimate */
+    attempts?: number;
+    /** Kish effective sample size after decay */
+    effectiveSampleSize?: number;
+    /** Epoch ms of the most recent observation */
+    lastObservedAt?: number;
+    /** Configured decay half-life, if any */
+    decayHalfLifeMs?: number;
+    /** Epoch ms at which a lapsed veto would be reassessed */
+    reassessAt?: number;
 }
 
 /** Aggregate learning statistics */
 export interface LearningStats {
-    /** Number of recorded match decisions */
+    /** Number of recorded match decisions (== committed attempts) */
     decisions: number;
     /** Number of reward updates applied */
     rewards: number;
@@ -1811,6 +2112,20 @@ export interface LearningStats {
     totalReward: number;
     /** totalReward / rewards (0 when no rewards) */
     averageReward: number;
+    /** Events rejected as replays of an already-applied event */
+    duplicateEvents: number;
+    /** Events rejected because their attempt context had expired */
+    staleEvents: number;
+    /** Events rejected because no attempt context exists for the assignment */
+    orphanEvents: number;
+    /** Events rejected because the attempt belonged to a superseded model generation */
+    supersededEvents: number;
+    /** Assignment-addressed feedback rejected as ambiguous between two attempts */
+    ambiguousFeedback: number;
+    /** Feedback rejected by validation (non-finite, out of range, empty) */
+    invalidFeedback: number;
+    /** Current model generation (bumped by resetLearningModel) */
+    generation: number;
 }
 
 // ============================================================================

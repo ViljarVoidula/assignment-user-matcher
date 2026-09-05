@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { workflow } from '../src/workflow-builder';
@@ -62,7 +62,7 @@ describe('Workflow escalate-on-timeout', function () {
             .build();
 
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
 
         matcher = new Matcher(redisClient, {
@@ -76,9 +76,9 @@ describe('Workflow escalate-on-timeout', function () {
     });
 
     beforeEach(async function () {
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
         transitions = [];
-        // flushAll drops the consumer group; the drain recreates it (and
+        // flushDb drops the consumer group; the drain recreates it (and
         // returns 0 for that pass), so prime it before the run starts.
         await matcher.processWorkflowEvents(1);
         await matcher.addUser({ id: 'ines', tags: ['sev:1', 'oncall-primary'] });

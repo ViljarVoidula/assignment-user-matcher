@@ -39,7 +39,7 @@ person's history to answer a window question.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:368](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/engine/timeline.ts#L368)
+[src/scheduling/engine/timeline.ts:368](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/engine/timeline.ts#L368)
 
 ## Methods
 
@@ -60,7 +60,7 @@ person's history to answer a window question.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:384](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/engine/timeline.ts#L384)
+[src/scheduling/engine/timeline.ts:384](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/engine/timeline.ts#L384)
 
 ___
 
@@ -82,7 +82,7 @@ The person's timeline, created empty on first use.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:375](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/engine/timeline.ts#L375)
+[src/scheduling/engine/timeline.ts:375](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/engine/timeline.ts#L375)
 
 ___
 
@@ -96,7 +96,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:392](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/engine/timeline.ts#L392)
+[src/scheduling/engine/timeline.ts:392](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/engine/timeline.ts#L392)
 
 ___
 
@@ -117,4 +117,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:388](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/engine/timeline.ts#L388)
+[src/scheduling/engine/timeline.ts:388](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/engine/timeline.ts#L388)

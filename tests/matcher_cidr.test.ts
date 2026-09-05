@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 import { parseIPv6, isIpInCidr } from '../src/utils/cidr';
 
@@ -9,7 +9,7 @@ describe('Matcher CIDR/Network Matching Tests', function () {
     let redisClient: any;
 
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
 
         matcher = new Matcher(redisClient, {
@@ -20,7 +20,7 @@ describe('Matcher CIDR/Network Matching Tests', function () {
     });
 
     beforeEach(async function () {
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
     });
 
     after(async function () {
@@ -364,7 +364,7 @@ describe('Matcher CIDR/Network Matching Tests', function () {
                 redisPrefix: 'cidr_dualstack_test:',
                 enableDefaultMatching: false,
             });
-            await dualStackMatcher.redisClient.flushAll();
+            await dualStackMatcher.redisClient.flushDb();
 
             await dualStackMatcher.addUser({
                 id: 'user_ipv4',
@@ -517,7 +517,7 @@ describe('Matcher CIDR/Network Matching Tests', function () {
                 redisPrefix: 'cidr_strict_test:',
                 enableDefaultMatching: false, // Disable default matching to test strict tag matching
             });
-            await strictMatcher.redisClient.flushAll();
+            await strictMatcher.redisClient.flushDb();
 
             // User with correct IP but wrong tags
             await strictMatcher.addUser({

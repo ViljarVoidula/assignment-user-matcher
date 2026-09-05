@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 import { calculateMatchScore, explainMatchScore } from '../src/scoring/match-score';
 import type { MatchDecisionTrace, MatchTraceReason } from '../src/types/matcher';
@@ -13,12 +13,12 @@ describe('Matcher Decision Traces & Explainability', function () {
     let redisClient: any;
 
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
     });
 
     beforeEach(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
 
     after(async function () {

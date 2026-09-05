@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 import { createKeyBuilders } from '../src/utils/keys';
 import type { WorkflowDefinition, WorkflowTransition } from '../src/types/matcher';
@@ -18,13 +18,13 @@ describe('Workflow runs through the facade', function () {
     const transitions: WorkflowTransition[] = [];
 
     before(async function () {
-        redisClient = await createClient({}).connect();
+        redisClient = await createTestClient().connect();
         matcher = new Matcher(redisClient, {
             enableWorkflows: true,
             matchExpirationMs: 60000,
             onWorkflowEvent: (t) => transitions.push(t),
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
     });
 
     beforeEach(function () {
@@ -32,7 +32,7 @@ describe('Workflow runs through the facade', function () {
     });
 
     after(async function () {
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
         await redisClient.quit();
     });
 

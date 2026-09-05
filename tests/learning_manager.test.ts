@@ -1,4 +1,4 @@
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 import { LearningManager } from '../src/managers/LearningManager';
 import { extractMatchFeatures, cosineSimilarity } from '../src/learning/features';
@@ -58,9 +58,9 @@ describe('LearningManager - Integration Tests', function () {
     const keys = createKeyBuilders({ prefix: 'test-learning:' });
 
     before(async function () {
-        redisClient = createClient({});
+        redisClient = createTestClient();
         await redisClient.connect();
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
 
     beforeEach(function () {
@@ -73,7 +73,7 @@ describe('LearningManager - Integration Tests', function () {
     });
 
     afterEach(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
 
     after(async function () {

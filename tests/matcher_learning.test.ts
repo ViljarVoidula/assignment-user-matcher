@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 
 describe('Matcher Learning Layer - Integration Tests', function () {
@@ -7,13 +7,13 @@ describe('Matcher Learning Layer - Integration Tests', function () {
     let redisClient: any;
 
     before(async function () {
-        redisClient = createClient({});
+        redisClient = createTestClient();
         await redisClient.connect();
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
 
     afterEach(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
 
     after(async function () {

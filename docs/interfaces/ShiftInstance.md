@@ -9,6 +9,7 @@ One expanded, dated occurrence of a shift template.
 ### Properties
 
 - [date](ShiftInstance.md#date)
+- [demandLabel](ShiftInstance.md#demandlabel)
 - [durationMinutes](ShiftInstance.md#durationminutes)
 - [duty](ShiftInstance.md#duty)
 - [endMinute](ShiftInstance.md#endminute)
@@ -42,7 +43,21 @@ ISO date the shift starts on.
 
 #### Defined in
 
-[src/scheduling/types.ts:904](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L904)
+[src/scheduling/types.ts:965](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L965)
+
+___
+
+### demandLabel
+
+• `Optional` **demandLabel**: `string`
+
+The label of the last labelled `ShiftDemandOverride` that shaped this
+occurrence, so a grid can say *why* Tuesday needs three when the template
+says one. Absent when no override touched it.
+
+#### Defined in
+
+[src/scheduling/types.ts:979](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L979)
 
 ___
 
@@ -54,7 +69,7 @@ Elapsed duration in minutes, always positive.
 
 #### Defined in
 
-[src/scheduling/types.ts:910](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L910)
+[src/scheduling/types.ts:971](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L971)
 
 ___
 
@@ -64,7 +79,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:934](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L934)
+[src/scheduling/types.ts:1001](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1001)
 
 ___
 
@@ -76,7 +91,7 @@ Minutes since period epoch when the shift ends; may exceed 24h for overnight shi
 
 #### Defined in
 
-[src/scheduling/types.ts:908](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L908)
+[src/scheduling/types.ts:969](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L969)
 
 ___
 
@@ -88,7 +103,7 @@ Unique id: `<templateId>@<date>`.
 
 #### Defined in
 
-[src/scheduling/types.ts:900](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L900)
+[src/scheduling/types.ts:961](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L961)
 
 ___
 
@@ -100,7 +115,7 @@ Whether it counts as a night shift under `NightWorkRule.qualifiesAfterMinutes`.
 
 #### Defined in
 
-[src/scheduling/types.ts:938](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L938)
+[src/scheduling/types.ts:1005](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1005)
 
 ___
 
@@ -110,7 +125,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:942](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L942)
+[src/scheduling/types.ts:1009](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1009)
 
 ___
 
@@ -120,7 +135,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:941](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L941)
+[src/scheduling/types.ts:1008](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1008)
 
 ___
 
@@ -130,7 +145,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:929](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L929)
+[src/scheduling/types.ts:996](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L996)
 
 ___
 
@@ -140,7 +155,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:911](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L911)
+[src/scheduling/types.ts:972](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L972)
 
 ___
 
@@ -150,7 +165,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:902](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L902)
+[src/scheduling/types.ts:963](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L963)
 
 ___
 
@@ -162,7 +177,7 @@ Minutes of this occurrence falling inside the configured night band.
 
 #### Defined in
 
-[src/scheduling/types.ts:936](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L936)
+[src/scheduling/types.ts:1003](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1003)
 
 ___
 
@@ -174,7 +189,7 @@ Paid break minutes declared by the template. Count as working time.
 
 #### Defined in
 
-[src/scheduling/types.ts:922](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L922)
+[src/scheduling/types.ts:989](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L989)
 
 ___
 
@@ -184,7 +199,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:931](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L931)
+[src/scheduling/types.ts:998](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L998)
 
 ___
 
@@ -194,7 +209,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:932](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L932)
+[src/scheduling/types.ts:999](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L999)
 
 ___
 
@@ -204,7 +219,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:933](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L933)
+[src/scheduling/types.ts:1000](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1000)
 
 ___
 
@@ -216,7 +231,7 @@ Minutes since period epoch (midnight of `period.startDate`) when the shift start
 
 #### Defined in
 
-[src/scheduling/types.ts:906](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L906)
+[src/scheduling/types.ts:967](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L967)
 
 ___
 
@@ -226,7 +241,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:930](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L930)
+[src/scheduling/types.ts:997](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L997)
 
 ___
 
@@ -236,7 +251,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:912](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L912)
+[src/scheduling/types.ts:973](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L973)
 
 ___
 
@@ -246,7 +261,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:901](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L901)
+[src/scheduling/types.ts:962](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L962)
 
 ___
 
@@ -260,7 +275,7 @@ is duty occupation, not rest.
 
 #### Defined in
 
-[src/scheduling/types.ts:928](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L928)
+[src/scheduling/types.ts:995](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L995)
 
 ___
 
@@ -272,7 +287,7 @@ ISO weekday 1..7 of the start day.
 
 #### Defined in
 
-[src/scheduling/types.ts:940](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L940)
+[src/scheduling/types.ts:1007](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1007)
 
 ___
 
@@ -287,4 +302,4 @@ clock without counting as work.
 
 #### Defined in
 
-[src/scheduling/types.ts:920](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L920)
+[src/scheduling/types.ts:987](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L987)

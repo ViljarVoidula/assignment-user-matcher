@@ -34,7 +34,7 @@ exceed their agreed hours sets it to 0.
 
 #### Defined in
 
-[src/scheduling/types.ts:394](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L394)
+[src/scheduling/types.ts:394](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L394)
 
 ___
 
@@ -48,7 +48,7 @@ other) for any employee with an `fte`.
 
 #### Defined in
 
-[src/scheduling/types.ts:382](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L382)
+[src/scheduling/types.ts:382](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L382)
 
 ___
 
@@ -61,7 +61,7 @@ total. `0` means never over contract. Omit for no hard cap.
 
 #### Defined in
 
-[src/scheduling/types.ts:387](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L387)
+[src/scheduling/types.ts:387](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L387)
 
 ___
 
@@ -75,4 +75,4 @@ objective and the result summary.
 
 #### Defined in
 
-[src/scheduling/types.ts:393](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L393)
+[src/scheduling/types.ts:393](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L393)

@@ -25,11 +25,23 @@
  *
  * Pure module: no Redis access, O(number of tags) per call.
  */
-import type { AutoRoutingWeightsOptions, AutoRoutingWeightsPolicy, LearningTagStat } from '../types/matcher';
+import type {
+    AutoRoutingWeightsOptions,
+    AutoRoutingWeightsPolicy,
+    AutoWeightExplanation,
+    LearningTagStat,
+} from '../types/matcher';
 
-export const DEFAULT_AUTO_WEIGHTS_OPTIONS: Required<
-    Omit<AutoRoutingWeightsOptions, 'priorWeight' | 'maxDeltaPerSync' | 'decayHalfLifeMs' | 'rng'>
-> & {
+type OptionalAutoWeightsKeys =
+    | 'priorWeight'
+    | 'maxDeltaPerSync'
+    | 'decayHalfLifeMs'
+    | 'rng'
+    | 'priorVariance'
+    | 'vetoCooldownMs'
+    | 'totalAttempts';
+
+export const DEFAULT_AUTO_WEIGHTS_OPTIONS: Required<Omit<AutoRoutingWeightsOptions, OptionalAutoWeightsKeys>> & {
     priorWeight: number;
 } = {
     minSamples: 5,
@@ -42,16 +54,22 @@ export const DEFAULT_AUTO_WEIGHTS_OPTIONS: Required<
     minTotalSamples: 0,
     minSamplesForVeto: 5, // defaults to minSamples for backward compatibility
     terminalOnlyTagStats: false,
+    rewardModel: 'gaussian',
+    rewardRange: [-1, 1],
+    priorStrength: 2,
 };
 
-function resolveOptions(options?: AutoRoutingWeightsOptions): Required<
-    Omit<AutoRoutingWeightsOptions, 'priorWeight' | 'maxDeltaPerSync' | 'decayHalfLifeMs' | 'rng'>
-> & {
+type ResolvedAutoWeightsOptions = Required<Omit<AutoRoutingWeightsOptions, OptionalAutoWeightsKeys>> & {
     priorWeight: number;
     maxDeltaPerSync?: number;
     decayHalfLifeMs?: number;
+    vetoCooldownMs?: number;
+    totalAttempts?: number;
+    priorVariance: number;
     rng: () => number;
-} {
+};
+
+function resolveOptions(options?: AutoRoutingWeightsOptions): ResolvedAutoWeightsOptions {
     const maxWeight = options?.maxWeight ?? DEFAULT_AUTO_WEIGHTS_OPTIONS.maxWeight;
     return {
         minSamples: options?.minSamples ?? DEFAULT_AUTO_WEIGHTS_OPTIONS.minSamples,
@@ -66,6 +84,22 @@ function resolveOptions(options?: AutoRoutingWeightsOptions): Required<
         priorWeight: options?.priorWeight ?? Math.round(maxWeight / 2),
         maxDeltaPerSync: options?.maxDeltaPerSync,
         decayHalfLifeMs: options?.decayHalfLifeMs,
+        vetoCooldownMs: options?.vetoCooldownMs,
+        totalAttempts: options?.totalAttempts,
+        rewardModel: options?.rewardModel ?? DEFAULT_AUTO_WEIGHTS_OPTIONS.rewardModel,
+        rewardRange: options?.rewardRange ?? DEFAULT_AUTO_WEIGHTS_OPTIONS.rewardRange,
+        priorStrength: options?.priorStrength ?? DEFAULT_AUTO_WEIGHTS_OPTIONS.priorStrength,
+        // Variance of a uniform draw over the reward range is (range^2)/12;
+        // (range/4)^2 is the slightly wider, deliberately conservative
+        // default — a prior that is too tight is a prior that vetoes.
+        priorVariance:
+            options?.priorVariance ??
+            Math.pow(
+                ((options?.rewardRange ?? DEFAULT_AUTO_WEIGHTS_OPTIONS.rewardRange)[1] -
+                    (options?.rewardRange ?? DEFAULT_AUTO_WEIGHTS_OPTIONS.rewardRange)[0]) /
+                    4,
+                2,
+            ),
         rng: options?.rng ?? Math.random,
     };
 }
@@ -74,44 +108,152 @@ function isManualTag(tag: string, existingWeights?: Record<string, number>): boo
     return !!existingWeights && tag in existingWeights;
 }
 
+/**
+ * Evidence backing a tag, in independent attempts.
+ *
+ * The decayed weight sum (`count`) is NOT a sample size: scaling every weight
+ * equally leaves it looking like fewer observations than were actually seen,
+ * and after a long idle period it approaches zero without anything having
+ * been learned or forgotten in kind. Sample floors are therefore judged
+ * against, in order of preference: the never-decayed lifetime attempt count,
+ * the Kish effective sample size, and only then the raw count.
+ */
+function evidence(stat: LearningTagStat): number {
+    if (typeof stat.attempts === 'number' && stat.attempts > 0) return stat.attempts;
+    if (typeof stat.effectiveSampleSize === 'number' && stat.effectiveSampleSize > 0) return stat.effectiveSampleSize;
+    return stat.count;
+}
+
+/** Posterior over a tag's mean reward, always with non-zero uncertainty. */
+interface Posterior {
+    mean: number;
+    /** Standard error of the posterior mean */
+    se: number;
+    /** Beta parameters, when the reward model is Bernoulli */
+    alpha?: number;
+    beta?: number;
+}
+
+/**
+ * Prior-backed posterior over the mean reward.
+ *
+ * The pre-1.16 code took `sqrt(variance / count)` straight from the observed
+ * moments, so five identical observations produced variance 0 and therefore a
+ * confidence interval of zero width — total certainty from five samples, and
+ * the `'confidence'` policy would hard-veto on it. A prior floor is what
+ * makes "I have seen the same thing five times" different from "I know".
+ */
+function posterior(stat: LearningTagStat, opts: ResolvedAutoWeightsOptions): Posterior {
+    const n = Math.max(0, evidence(stat));
+    const k = Math.max(0, opts.priorStrength);
+    const [lo, hi] = opts.rewardRange;
+
+    if (opts.rewardModel === 'bernoulli') {
+        // Rescale rewards into [0, 1] and treat the tag as a Beta-Bernoulli
+        // arm. Only sound when the reward genuinely is a success indicator —
+        // applying Bernoulli formulas to arbitrary continuous rewards is the
+        // error this option exists to make explicit rather than implicit.
+        const span = hi - lo || 1;
+        const p = Math.max(0, Math.min(1, (stat.meanReward - lo) / span));
+        const alpha = 1 + p * n;
+        const beta = 1 + (1 - p) * n;
+        const total = alpha + beta;
+        const mean = alpha / total;
+        const variance = (alpha * beta) / (total * total * (total + 1));
+        return { mean: lo + mean * span, se: Math.sqrt(variance) * span, alpha, beta };
+    }
+
+    const observedVariance = stat.variance ?? opts.priorVariance;
+    // Normal-inverse-chi-square style shrinkage: the prior contributes k
+    // pseudo-observations of variance priorVariance.
+    const varPost = (n * observedVariance + k * opts.priorVariance) / (n + k);
+    const priorMean = (lo + hi) / 2;
+    const mean = (n * stat.meanReward + k * priorMean) / (n + k);
+    return { mean, se: Math.sqrt(varPost / (n + k)) };
+}
+
+/** Marsaglia-Tsang gamma sampler (shape >= 1 via boost for shape < 1). */
+function sampleGamma(shape: number, rng: () => number): number {
+    if (shape < 1) return sampleGamma(shape + 1, rng) * Math.pow(Math.max(rng(), 1e-12), 1 / shape);
+    const d = shape - 1 / 3;
+    const c = 1 / Math.sqrt(9 * d);
+    for (let i = 0; i < 1000; i++) {
+        const z = acklamInverseNormal(rng());
+        const v = Math.pow(1 + c * z, 3);
+        if (v <= 0) continue;
+        const u = Math.max(rng(), 1e-12);
+        if (Math.log(u) < 0.5 * z * z + d - d * v + d * Math.log(v)) return d * v;
+    }
+    return d;
+}
+
+/** Beta draw as the ratio of two gamma draws. */
+function sampleBeta(alpha: number, beta: number, rng: () => number): number {
+    const x = sampleGamma(alpha, rng);
+    const y = sampleGamma(beta, rng);
+    return x + y > 0 ? x / (x + y) : 0.5;
+}
+
+/**
+ * Whether a learned veto is admissible for a tag.
+ *
+ * `minSamplesForVeto` applies to learned and manually-weighted tags alike:
+ * the floor exists because a hard veto removes eligibility outright, and that
+ * consequence does not depend on where the previous weight came from. (It
+ * still defaults to `minSamples`, so nothing changes for callers that never
+ * set it.)
+ */
 function canVeto(
-    policy: AutoRoutingWeightsPolicy,
     stat: LearningTagStat,
     vetoScore: number,
-    opts: ReturnType<typeof resolveOptions>,
-    existingWeights?: Record<string, number>,
-): boolean {
-    const manual = isManualTag(stat.tag, existingWeights);
-    const effectiveMinSamples = manual ? opts.minSamplesForVeto : opts.minSamples;
-    if (stat.count < effectiveMinSamples) return false;
+    opts: ResolvedAutoWeightsOptions,
+    now: number,
+): { veto: boolean; cooldown: boolean } {
+    if (evidence(stat) < opts.minSamplesForVeto) return { veto: false, cooldown: false };
 
-    return vetoScore <= opts.vetoThreshold;
+    // A veto with no recovery path is permanent exclusion. When a cooldown is
+    // configured and the last observation predates it, the tag is released
+    // for reassessment instead of staying vetoed on stale evidence.
+    if (opts.vetoCooldownMs !== undefined && stat.lastUpdatedAt && now - stat.lastUpdatedAt > opts.vetoCooldownMs) {
+        return { veto: false, cooldown: true };
+    }
+
+    return { veto: vetoScore <= opts.vetoThreshold, cooldown: false };
 }
 
 function tagScore(
     policy: AutoRoutingWeightsPolicy,
     stat: LearningTagStat,
     totalCount: number,
-    opts: ReturnType<typeof resolveOptions>,
-): { ucb: number; lcb: number; sample: number } {
-    const mean = stat.meanReward;
-    const se = stat.standardError ?? 0;
+    opts: ResolvedAutoWeightsOptions,
+): { ucb: number; lcb: number; sample: number; post: Posterior } {
+    const post = posterior(stat, opts);
+    const mean = post.mean;
+    const se = post.se;
 
     if (policy === 'confidence') {
         const z = opts.confidenceZ;
-        return { ucb: mean + z * se, lcb: mean - z * se, sample: mean };
+        return { ucb: mean + z * se, lcb: mean - z * se, sample: mean, post };
     }
 
     if (policy === 'thompson') {
-        // Gaussian Thompson sample: mean + Z(rng) * se, where Z is the normal
-        // inverse CDF approximated by the Acklam/Bailey approximation.
-        const sample = se > 0 ? mean + acklamInverseNormal(opts.rng()) * se : mean;
-        return { ucb: sample, lcb: sample, sample };
+        let sample: number;
+        if (opts.rewardModel === 'bernoulli' && post.alpha !== undefined && post.beta !== undefined) {
+            const [lo, hi] = opts.rewardRange;
+            sample = lo + sampleBeta(post.alpha, post.beta, opts.rng) * (hi - lo);
+        } else {
+            // Gaussian Thompson draw: mean + Z(rng) * se, where Z is the
+            // normal inverse CDF (Acklam/Bailey approximation). The posterior
+            // se is prior-backed, so the draw is never degenerate.
+            sample = mean + acklamInverseNormal(opts.rng()) * se;
+        }
+        return { ucb: sample, lcb: sample, sample, post };
     }
 
-    // 'ucb1'
-    const ucb = mean + opts.explorationBonus * Math.sqrt(Math.log(totalCount + 1) / stat.count);
-    return { ucb, lcb: mean, sample: ucb };
+    // 'ucb1' — kept bit-compatible with the pre-1.16 formula (raw observed
+    // mean, raw count) so existing deployments' weights do not shift.
+    const ucb = stat.meanReward + opts.explorationBonus * Math.sqrt(Math.log(totalCount + 1) / Math.max(1e-9, stat.count));
+    return { ucb, lcb: stat.meanReward, sample: ucb, post };
 }
 
 function normalizedWeight(score: number, maxWeight: number): number {
@@ -194,43 +336,104 @@ export function synthesizeRoutingWeights(
     knownTags?: string[],
     existingWeights?: Record<string, number>,
 ): Record<string, number> {
+    const weights: Record<string, number> = {};
+    for (const row of explainRoutingWeights(stats, options, knownTags, existingWeights)) {
+        weights[row.tag] = row.weight;
+    }
+    return weights;
+}
+
+/**
+ * The same synthesis, with the reasoning attached: estimate, uncertainty,
+ * evidence, last observation, decay settings and next reassessment per tag.
+ *
+ * A hard veto changes who can be given work at all, so "the model said so"
+ * is not an adequate account of it. `synthesizeRoutingWeights` is this
+ * function with the explanations dropped.
+ */
+export function explainRoutingWeights(
+    stats: LearningTagStat[],
+    options?: AutoRoutingWeightsOptions,
+    knownTags?: string[],
+    existingWeights?: Record<string, number>,
+    now: number = Date.now(),
+): AutoWeightExplanation[] {
     const opts = resolveOptions(options);
 
-    const totalCount = stats.reduce((sum, s) => sum + s.count, 0);
+    // Worker-level evidence floors count independent attempts. Summing
+    // per-tag counts would let one assignment carrying five tags clear a
+    // five-sample floor on its own — correlated evidence, counted five times.
+    const totalCount = opts.totalAttempts ?? stats.reduce((sum, s) => sum + s.count, 0);
     if (opts.minTotalSamples > 0 && totalCount < opts.minTotalSamples) {
-        return {};
+        return [];
     }
+    const explorationTotal = stats.reduce((sum, s) => sum + s.count, 0);
 
-    const weights: Record<string, number> = {};
+    const rows: AutoWeightExplanation[] = [];
+    const seen = new Set<string>();
 
     for (const stat of stats) {
-        if (stat.count < opts.minSamples) {
-            // Not enough evidence yet: use the existing weight as a warm
-            // prior if available, otherwise fall back to the flat prior.
-            weights[stat.tag] = existingWeights?.[stat.tag] ?? opts.priorWeight;
+        seen.add(stat.tag);
+        const attempts = evidence(stat);
+        const base: AutoWeightExplanation = {
+            tag: stat.tag,
+            weight: 0,
+            decision: 'scored',
+            attempts: stat.attempts,
+            effectiveSampleSize: stat.effectiveSampleSize,
+            lastObservedAt: stat.lastUpdatedAt,
+            decayHalfLifeMs: opts.decayHalfLifeMs,
+        };
+
+        if (attempts < opts.minSamples) {
+            rows.push({
+                ...base,
+                decision: 'insufficient-evidence',
+                weight: existingWeights?.[stat.tag] ?? opts.priorWeight,
+            });
             continue;
         }
 
-        const { ucb, lcb, sample } = tagScore(opts.policy, stat, totalCount, opts);
+        const { ucb, sample, post } = tagScore(opts.policy, stat, explorationTotal, opts);
         const weightScore = opts.policy === 'thompson' ? sample : ucb;
         // Veto decisions are deterministic and conservative: 'confidence'
         // requires the WHOLE interval below the threshold (ucb), 'thompson'
         // and 'ucb1' judge the raw mean — never a random draw, never an
         // uncertainty-widened lower bound.
         const vetoScore = opts.policy === 'confidence' ? ucb : stat.meanReward;
+        const z = opts.confidenceZ;
 
-        if (canVeto(opts.policy, stat, vetoScore, opts, existingWeights)) {
-            weights[stat.tag] = 0;
+        const detail: AutoWeightExplanation = {
+            ...base,
+            estimate: post.mean,
+            uncertainty: post.se,
+            lowerBound: post.mean - z * post.se,
+            upperBound: post.mean + z * post.se,
+        };
+
+        const { veto, cooldown } = canVeto(stat, vetoScore, opts, now);
+        if (veto) {
+            rows.push({ ...detail, decision: 'veto', weight: 0 });
+            continue;
+        }
+        if (cooldown) {
+            rows.push({
+                ...detail,
+                decision: 'cooldown',
+                weight: existingWeights?.[stat.tag] ?? opts.priorWeight,
+                reassessAt: stat.lastUpdatedAt !== undefined ? stat.lastUpdatedAt + (opts.vetoCooldownMs ?? 0) : undefined,
+            });
             continue;
         }
 
-        // Map score (clamped to [-1, 1]) onto [1, maxWeight].
-        weights[stat.tag] = normalizedWeight(weightScore, opts.maxWeight);
+        rows.push({ ...detail, weight: normalizedWeight(weightScore, opts.maxWeight) });
     }
 
     if (knownTags) {
         for (const tag of knownTags) {
-            if (!(tag in weights)) weights[tag] = existingWeights?.[tag] ?? opts.priorWeight;
+            if (seen.has(tag)) continue;
+            seen.add(tag);
+            rows.push({ tag, weight: existingWeights?.[tag] ?? opts.priorWeight, decision: 'unobserved' });
         }
     }
 
@@ -238,9 +441,11 @@ export function synthesizeRoutingWeights(
     // keep the existing value until sufficient evidence overrides it.
     if (existingWeights) {
         for (const [tag, existing] of Object.entries(existingWeights)) {
-            if (!(tag in weights)) weights[tag] = existing;
+            if (seen.has(tag)) continue;
+            seen.add(tag);
+            rows.push({ tag, weight: existing, decision: 'prior' });
         }
     }
 
-    return weights;
+    return rows;
 }

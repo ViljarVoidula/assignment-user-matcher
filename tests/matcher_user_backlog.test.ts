@@ -1,14 +1,12 @@
 import { expect } from 'chai';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import AssignmentMatcher from '../src/matcher.class';
 
 describe('Per-User Backlog Cap Tests', async function () {
     let redisClient: any;
 
     before(async function () {
-        redisClient = createClient({
-            url: 'redis://localhost:6379',
-        });
+        redisClient = createTestClient();
         await redisClient.connect();
         await redisClient.flushDb();
     });

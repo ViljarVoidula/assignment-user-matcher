@@ -176,11 +176,30 @@ describe('synthesizeRoutingWeights (v2 policies)', function () {
             expect(weights['manual-bad']).to.equal(0);
         });
 
-        it('still vetoes learned-only tags at the normal sample bar', function () {
-            const weights = synthesizeRoutingWeights([stat('learned-bad', 5, -4.5)], {
+        it('applies the veto sample bar to learned-only tags too', function () {
+            // The floor exists because a veto removes eligibility outright,
+            // and that consequence does not depend on whether the previous
+            // weight was operator-set or learned. Below the bar the tag keeps
+            // a scored weight; above it, the same bad mean vetoes.
+            const belowBar = synthesizeRoutingWeights([stat('learned-bad', 5, -4.5)], {
                 minSamples: 5,
                 vetoThreshold: -0.5,
                 minSamplesForVeto: 20,
+            });
+            expect(belowBar['learned-bad']).to.be.greaterThan(0);
+
+            const atBar = synthesizeRoutingWeights([stat('learned-bad', 20, -18)], {
+                minSamples: 5,
+                vetoThreshold: -0.5,
+                minSamplesForVeto: 20,
+            });
+            expect(atBar['learned-bad']).to.equal(0);
+        });
+
+        it('vetoes at minSamples when minSamplesForVeto is not configured', function () {
+            const weights = synthesizeRoutingWeights([stat('learned-bad', 5, -4.5)], {
+                minSamples: 5,
+                vetoThreshold: -0.5,
             });
             expect(weights['learned-bad']).to.equal(0);
         });

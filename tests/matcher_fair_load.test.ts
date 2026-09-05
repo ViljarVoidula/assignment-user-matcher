@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 import sinon from 'sinon';
 
@@ -8,7 +8,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
     let redisClient: any;
 
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
     });
 
@@ -27,7 +27,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             // scores 150 < weak's 200 and the work alternates.
             fairnessLoadPenalty: 150,
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
 
         await matcher.addUser({ id: 'strong', tags: ['plumbing'], routingWeights: { plumbing: 200 } });
         await matcher.addUser({ id: 'weak', tags: ['plumbing'], routingWeights: { plumbing: 100 } });
@@ -50,7 +50,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             relevantBatchSize: 20,
             enableFairTiebreaker: true,
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
 
         await matcher.addUser({ id: 'strong', tags: ['plumbing'], routingWeights: { plumbing: 200 } });
         await matcher.addUser({ id: 'weak', tags: ['plumbing'], routingWeights: { plumbing: 100 } });
@@ -74,7 +74,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             // assignments: 300 - 2 * 60 = 180 < weak's 200.
             fairnessLoadPenalty: 60,
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
 
         await matcher.addUser({
             id: 'strong',
@@ -106,7 +106,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             // goes to whoever carries less work.
             fairnessTieBand: 10,
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
 
         await matcher.addUser({
             id: 'busy',
@@ -136,7 +136,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             // higher score wins even though that user is busier.
             fairnessTieBand: 3,
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
 
         await matcher.addUser({
             id: 'busy',
@@ -162,7 +162,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             relevantBatchSize: 20,
             fairness: 'spread-work',
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
 
         await matcher.addUser({ id: 'strong', tags: ['plumbing'], routingWeights: { plumbing: 200 } });
         await matcher.addUser({ id: 'weak', tags: ['plumbing'], routingWeights: { plumbing: 100 } });
@@ -185,7 +185,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             relevantBatchSize: 20,
             fairness: 'balanced',
         });
-        await nearTie.redisClient.flushAll();
+        await nearTie.redisClient.flushDb();
 
         await nearTie.addUser({
             id: 'busy',
@@ -208,7 +208,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             relevantBatchSize: 20,
             fairness: 'balanced',
         });
-        await clearGap.redisClient.flushAll();
+        await clearGap.redisClient.flushDb();
 
         await clearGap.addUser({
             id: 'busy',
@@ -248,7 +248,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             fairnessMaxPerWindow: 2,
             fairnessWindowMs: 60_000,
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
 
         // strong outscores weak on every job, but may only receive 2 per window.
         await matcher.addUser({ id: 'strong', tags: ['plumbing'], routingWeights: { plumbing: 200 } });
@@ -276,7 +276,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
                 fairnessMaxPerWindow: 2,
                 fairnessWindowMs: 400,
             });
-            await matcher.redisClient.flushAll();
+            await matcher.redisClient.flushDb();
 
             await matcher.addUser({ id: 'solo', tags: ['plumbing'], routingWeights: { plumbing: 100 } });
 
@@ -309,7 +309,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             fairnessMaxPerWindow: 1,
             fairnessWindowMs: 60_000,
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
 
         await matcher.addUser({ id: 'user1', tags: ['support'], routingWeights: { support: 100 } });
 
@@ -339,7 +339,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             fairness: 'balanced',
             // No fairnessMaxPerWindow: the preset must supply the guardrail.
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
 
         await matcher.addUser({ id: 'hoarder', tags: ['plumbing'], routingWeights: { plumbing: 200 } });
         await matcher.addUser({ id: 'idle', tags: ['plumbing'], routingWeights: { plumbing: 100 } });
@@ -372,7 +372,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             fairness: 'balanced',
             fairnessMaxPerWindow: Infinity,
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
 
         await matcher.addUser({ id: 'hoarder', tags: ['plumbing'], routingWeights: { plumbing: 200 } });
         await matcher.addUser({ id: 'idle', tags: ['plumbing'], routingWeights: { plumbing: 100 } });
@@ -401,7 +401,7 @@ describe('Fair Tiebreaker load balancing (fairnessLoadPenalty / fairnessTieBand)
             enableFairTiebreaker: true,
             fairnessLoadPenalty: 10,
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
 
         await matcher.addUser({ id: 'a', tags: ['support'], routingWeights: { support: 100 } });
         await matcher.addUser({ id: 'b', tags: ['support'], routingWeights: { support: 90 } });

@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 
 describe('Matcher Wildcard with Default Matching Tests', async function () {
@@ -8,12 +8,12 @@ describe('Matcher Wildcard with Default Matching Tests', async function () {
     let redisClient: any;
 
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
     });
 
     beforeEach(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         matcher = new Matcher(redisClient, {
             maxUserBacklogSize: 10,
             relevantBatchSize: 10,

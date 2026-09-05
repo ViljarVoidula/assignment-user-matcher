@@ -137,8 +137,23 @@ export function createKeyBuilders(config: RedisKeyConfig) {
 
         // Learning (contextual bandit) keys
         learningModel: () => `${prefix}learning:model`,
-        learningDecision: (assignmentId: string) => `${prefix}learning:decision:${assignmentId}`,
-        learningEpisode: (assignmentId: string) => `${prefix}learning:episode:${assignmentId}`,
+        // Committed-attempt context, keyed by DECISION id (one per successful
+        // offer), not by assignment id: an assignment that is rejected and
+        // rematched produces a second, independent attempt, and feedback for
+        // the first must never land on the second.
+        learningDecision: (decisionId: string) => `${prefix}learning:decision:${decisionId}`,
+        learningEpisode: (decisionId: string) => `${prefix}learning:episode:${decisionId}`,
+        // assignment id -> decision id of the attempt currently in flight.
+        learningDecisionPointer: (assignmentId: string) => `${prefix}learning:decision:current:${assignmentId}`,
+        // assignment id -> decision id of the most recently archived attempt,
+        // so assignment-addressed late feedback can still resolve one context.
+        learningEpisodePointer: (assignmentId: string) => `${prefix}learning:episode:current:${assignmentId}`,
+        // Set of event keys already applied to a decision. SADD returns 0 for
+        // a replay, which is what makes outcome ingestion idempotent.
+        learningApplied: (decisionId: string) => `${prefix}learning:applied:${decisionId}`,
+        // Monotonic model generation. Bumped by resetModel() so decisions
+        // committed against the old model cannot repopulate the new one.
+        learningGeneration: () => `${prefix}learning:generation`,
         learningStats: () => `${prefix}learning:stats`,
         // Auto routing weights (per-user tag bandit) keys
         learningUsers: () => `${prefix}learning:users`,
@@ -146,6 +161,24 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         learningUserTagRewards: (userId: string) => `${prefix}learning:user:${userId}:tag:rewards`,
         learningUserTagRewardSq: (userId: string) => `${prefix}learning:user:${userId}:tag:rewards:sq`,
         learningUserTagTs: (userId: string) => `${prefix}learning:user:${userId}:tag:ts`,
+        // Sum of squared observation weights per tag; with decay configured
+        // this is what makes the Kish effective sample size computable, and
+        // the decayed weight sum alone is not a sample size.
+        learningUserTagWeightSq: (userId: string) => `${prefix}learning:user:${userId}:tag:w2`,
+        // Lifetime independent-attempt counts per tag, never decayed — the
+        // denominator veto sample floors are judged against.
+        learningUserTagAttempts: (userId: string) => `${prefix}learning:user:${userId}:tag:attempts`,
+        // Independent attempts observed for a worker, counted ONCE per
+        // attempt however many tags it carried — the denominator worker-level
+        // evidence floors are judged against.
+        learningUserAttempts: (userId: string) => `${prefix}learning:user:${userId}:attempts`,
+        // Per-target model hashes for multi-target reward modelling.
+        learningTargetModel: (target: string) => `${prefix}learning:model:${target}`,
+        // Batch-loadable per-worker performance aggregates (one hash per
+        // worker, one HGETALL per matching pass — never a per-candidate read).
+        learningUserPerformance: (userId: string) => `${prefix}learning:user:${userId}:perf`,
+        // Team-wide aggregates the per-worker estimates are shrunk toward.
+        learningTeamPerformance: () => `${prefix}learning:perf:team`,
         autoWeightsSyncLock: () => `${prefix}autoweights:sync:lock`,
 
         // Workflow reliability keys

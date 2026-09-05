@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 import type { WorkflowDefinition, WorkflowDefinitionInput } from '../src/types/matcher';
 
@@ -9,7 +9,7 @@ describe('Workflow Tests', function () {
     let redisClient: any;
 
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
 
         matcher = new Matcher(redisClient, {
@@ -18,12 +18,12 @@ describe('Workflow Tests', function () {
             enableWorkflows: true,
             matchExpirationMs: 60000,
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
     });
 
     after(async function () {
         await matcher.stopOrchestrator();
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
         await redisClient.quit();
     });
 

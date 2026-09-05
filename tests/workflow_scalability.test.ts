@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { WorkflowManager, WorkflowHost } from '../src/managers/WorkflowManager';
 import { ReliabilityManager } from '../src/managers/ReliabilityManager';
 import { TelemetryManager } from '../src/managers/TelemetryManager';
@@ -94,20 +94,20 @@ describe('Workflow Scalability & Reliability', function () {
     };
 
     before(async function () {
-        redisClient = createClient();
+        redisClient = createTestClient();
         await redisClient.connect();
         telemetry = new TelemetryManager(false);
     });
 
     beforeEach(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         reliability = makeReliability();
         workflowManager = makeManager();
         await workflowManager.init();
     });
 
     after(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         await redisClient.quit();
     });
 

@@ -22,7 +22,7 @@ A dimension to equalise across the team.
 
 #### Defined in
 
-[src/scheduling/types.ts:537](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L537)
+[src/scheduling/types.ts:537](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L537)
 
 ___
 
@@ -35,7 +35,7 @@ dimension. Leave unset to keep fairness purely soft.
 
 #### Defined in
 
-[src/scheduling/types.ts:548](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L548)
+[src/scheduling/types.ts:548](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L548)
 
 ___
 
@@ -47,7 +47,7 @@ Weight each person's fair share by contracted hours rather than headcount.
 
 #### Defined in
 
-[src/scheduling/types.ts:550](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L550)
+[src/scheduling/types.ts:550](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L550)
 
 ___
 
@@ -60,7 +60,7 @@ this are the load being equalised (e.g. spread the `'oncall'` shifts).
 
 #### Defined in
 
-[src/scheduling/types.ts:542](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L542)
+[src/scheduling/types.ts:542](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L542)
 
 ___
 
@@ -70,4 +70,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:543](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L543)
+[src/scheduling/types.ts:543](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L543)

@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { DecisionTraceManager } from '../src/managers/DecisionTraceManager';
 import { createKeyBuilders } from '../src/utils/keys';
 import type { MatchDecisionTrace } from '../src/types/matcher';
@@ -23,17 +23,17 @@ describe('DecisionTraceManager', function () {
     }
 
     before(async function () {
-        redisClient = createClient();
+        redisClient = createTestClient();
         await redisClient.connect();
     });
 
     beforeEach(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         manager = new DecisionTraceManager(redisClient, keys, { maxEntries: 100 });
     });
 
     after(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         await redisClient.quit();
     });
 

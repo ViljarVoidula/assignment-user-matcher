@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 
 describe('Matcher Coverage Tests', async function () {
@@ -8,13 +8,13 @@ describe('Matcher Coverage Tests', async function () {
     let redisClient: any;
 
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         // Ensure client is closed initially for the initRedis test
     });
 
     afterEach(async function () {
         if (redisClient.isOpen) {
-            await redisClient.flushAll();
+            await redisClient.flushDb();
             await redisClient.disconnect();
         }
     });

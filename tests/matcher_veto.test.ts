@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 
 describe('Matcher Vetoed Users Tests', function () {
@@ -9,7 +9,7 @@ describe('Matcher Vetoed Users Tests', function () {
     const prefix = 'veto_test:';
 
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
 
         matcher = new Matcher(redisClient, {
@@ -20,7 +20,7 @@ describe('Matcher Vetoed Users Tests', function () {
     });
 
     beforeEach(async function () {
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
     });
 
     after(async function () {
@@ -223,7 +223,7 @@ describe('Matcher Vetoed Users Workflow Tests', function () {
     let redisClient: any;
 
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
 
         matcher = new Matcher(redisClient, {
@@ -235,12 +235,12 @@ describe('Matcher Vetoed Users Workflow Tests', function () {
     });
 
     beforeEach(async function () {
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
     });
 
     after(async function () {
         await matcher.stopOrchestrator();
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
         await redisClient.quit();
     });
 

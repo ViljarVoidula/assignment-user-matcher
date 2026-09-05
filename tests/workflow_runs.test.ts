@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import sinon from 'sinon';
 import { WorkflowManager, WorkflowHost } from '../src/managers/WorkflowManager';
 import { ReliabilityManager } from '../src/managers/ReliabilityManager';
@@ -52,13 +52,13 @@ describe('Workflow Runs (platform-facing surface)', function () {
     }
 
     before(async function () {
-        redisClient = createClient();
+        redisClient = createTestClient();
         await redisClient.connect();
         telemetry = new TelemetryManager(false);
     });
 
     beforeEach(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         reliability = new ReliabilityManager(redisClient, keys, {
             workflowMaxRetries: 2,
             workflowIdempotencyTtlMs: 60000,
@@ -70,7 +70,7 @@ describe('Workflow Runs (platform-facing surface)', function () {
     });
 
     after(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         await redisClient.quit();
     });
 

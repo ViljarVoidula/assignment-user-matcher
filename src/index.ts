@@ -90,6 +90,16 @@ export type {
     LearningSample,
     LearningStats,
     LearningTagStat,
+    LearningRewardTarget,
+    LearningTargetsOptions,
+    LearningPrediction,
+    LearningRewardAccounting,
+    LearningUpdateMode,
+    LearningExplorationPolicy,
+    LearningDecisionContext,
+    LearningFeatureContext,
+    LearningWorkerPerformance,
+    AutoWeightExplanation,
     AutoRoutingWeightsOptions,
     AutoRoutingWeightsPolicy,
     PendingAssignmentInfo,
@@ -107,7 +117,10 @@ export { explainMatchScore, type MatchScoreExplanation } from './scoring/match-s
 // Learning feature helpers (for custom feature extractors)
 export { extractMatchFeatures, cosineSimilarity } from './learning/features';
 // Automatic routing-weight synthesis (UCB1 policy over learned tag stats)
-export { synthesizeRoutingWeights, DEFAULT_AUTO_WEIGHTS_OPTIONS } from './learning/auto-weights';
+export { synthesizeRoutingWeights, explainRoutingWeights, DEFAULT_AUTO_WEIGHTS_OPTIONS } from './learning/auto-weights';
+// Explicit selection policies (propensity-logged exploration)
+export { epsilonGreedySelect, greedySelect } from './learning/policy';
+export type { PolicyChoice, EpsilonGreedyOptions } from './learning/policy';
 
 // Shift scheduling (pure, Redis-free rostering engine)
 export {

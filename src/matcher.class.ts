@@ -56,6 +56,7 @@ import {
     type TraceUserContext,
 } from './tracing/decision-trace';
 import { extractMatchFeatures } from './learning/features';
+import { epsilonGreedySelect } from './learning/policy';
 import { DecisionTraceManager } from './managers/DecisionTraceManager';
 import { LearningManager } from './managers/LearningManager';
 import { ReliabilityManager } from './managers/ReliabilityManager';
@@ -89,6 +90,12 @@ import type {
     LearningSample,
     LearningStats,
     LearningTagStat,
+    LearningDecisionContext,
+    LearningDecisionRecord,
+    LearningEpisodeRecord,
+    LearningFeatureContext,
+    LearningRewardTarget,
+    AutoWeightExplanation,
     GeoMatchResult,
     GeoMatchingFunction,
     ReliabilityMetrics,
@@ -222,6 +229,16 @@ export type {
     LearningSample,
     LearningStats,
     LearningTagStat,
+    LearningRewardTarget,
+    LearningTargetsOptions,
+    LearningPrediction,
+    LearningRewardAccounting,
+    LearningUpdateMode,
+    LearningExplorationPolicy,
+    LearningDecisionContext,
+    LearningFeatureContext,
+    LearningWorkerPerformance,
+    AutoWeightExplanation,
     AutoRoutingWeightsOptions,
     AutoRoutingWeightsPolicy,
     WorkflowEngineMetrics,
@@ -252,6 +269,15 @@ const WORKFLOW_TRANSITION_LUA = loadLuaScript('workflow-transition.lua');
 // deployment with a large historical completed store drains it across ticks
 // instead of one deletion storm.
 const RETENTION_PURGE_BATCH = 5000;
+
+/**
+ * A candidate chosen for a claim attempt.
+ *
+ * `learning` travels from scoring to the claim gate so a decision can be
+ * committed for the winner alone — it is deliberately NOT persisted at
+ * scoring time, when the winner is not yet known.
+ */
+type SelectedCandidate = { id: string; tags: string; learning?: LearningDecisionContext };
 
 export default class AssignmentMatcher implements WorkflowHost {
     relevantBatchSize: number;
@@ -299,6 +325,9 @@ export default class AssignmentMatcher implements WorkflowHost {
     private learning: LearningManager;
     private learningFeatureExtractor: LearningFeatureExtractor;
     private learningSlaTightnessReferenceMs: number;
+    private enableLearningPerformanceFeatures: boolean;
+    private learningMaxBoost?: number;
+    private learningRng: () => number;
     private autoRoutingWeightsSyncIntervalMs?: number;
     private autoRoutingWeightsSyncInterval: NodeJS.Timeout | null = null;
     private enableGeoMatching: boolean;
@@ -400,7 +429,11 @@ export default class AssignmentMatcher implements WorkflowHost {
         // reference; custom extractors keep their exact signature.
         this.learningFeatureExtractor =
             options?.learningFeatureExtractor ??
-            ((user, assignment) => extractMatchFeatures(user, assignment, this.learningSlaTightnessReferenceMs));
+            ((user, assignment, context) =>
+                extractMatchFeatures(user, assignment, this.learningSlaTightnessReferenceMs, context));
+        this.enableLearningPerformanceFeatures = options?.enableLearningPerformanceFeatures ?? false;
+        this.learningMaxBoost = options?.learningMaxBoost;
+        this.learningRng = options?.learningRng ?? Math.random;
         this.learning = new LearningManager(this.redisClient, this.keys, {
             learningRate: options?.learningRate,
             explorationRate: options?.learningExplorationRate,
@@ -412,6 +445,19 @@ export default class AssignmentMatcher implements WorkflowHost {
             feedbackTtlMs: options?.learningFeedbackTtlMs,
             trackTagStats: this.enableAutoRoutingWeights,
             autoWeights: options?.autoRoutingWeights,
+            updateMode: options?.learningUpdateMode,
+            l2: options?.learningL2,
+            maxUpdateNorm: options?.learningMaxUpdateNorm,
+            maxWeightMagnitude: options?.learningMaxWeightMagnitude,
+            rewardAccounting: options?.learningRewardAccounting,
+            explorationPolicy: options?.learningExplorationPolicy,
+            rng: this.learningRng,
+            targets: options?.learningTargets,
+            maxFeedbackAgeMs: options?.learningMaxFeedbackAgeMs,
+            maxSignalMagnitude: options?.learningMaxSignalMagnitude,
+            maxRewardMagnitude: options?.learningMaxRewardMagnitude,
+            trackPerformance: this.enableLearningPerformanceFeatures,
+            performancePriorStrength: options?.learningPerformancePriorStrength,
         });
 
         // Decision traces (opt-in explainability/audit records per routing decision)
@@ -769,9 +815,46 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Enables custom reward shaping beyond the built-in lifecycle outcomes.
      * Returns false when no decision context exists for the assignment.
      */
-    async recordLearningReward(assignmentId: string, reward: number): Promise<boolean> {
+    async recordLearningReward(
+        assignmentId: string,
+        reward: number,
+        options?: {
+            /** Idempotency token: replaying the same id applies once */
+            eventId?: string;
+            /** Reject unless the in-flight attempt belongs to this worker */
+            expectedUserId?: string;
+            /**
+             * Close the learning episode (default true, matching the previous
+             * behaviour). Pass `false` to shape a reward mid-attempt and let
+             * later lifecycle outcomes still produce their own labels.
+             */
+            terminal?: boolean;
+        },
+    ): Promise<boolean> {
         await this.readyPromise;
-        return this.learning.recordReward(assignmentId, reward);
+        return this.learning.recordReward(assignmentId, reward, options);
+    }
+
+    /**
+     * The learning context of the attempt currently in flight for an
+     * assignment: features, prediction, selection propensity and policy.
+     * Null when there is none.
+     */
+    async getLearningDecision(assignmentId: string): Promise<LearningDecisionRecord | null> {
+        await this.readyPromise;
+        return this.learning.getDecision(assignmentId);
+    }
+
+    /** The learning context of one specific attempt, by decision id. */
+    async getLearningDecisionById(decisionId: string): Promise<LearningDecisionRecord | null> {
+        await this.readyPromise;
+        return this.learning.getDecisionById(decisionId);
+    }
+
+    /** The archived episode of the most recent closed attempt for an assignment. */
+    async getLearningEpisode(assignmentId: string): Promise<LearningEpisodeRecord | null> {
+        await this.readyPromise;
+        return this.learning.getEpisode(assignmentId);
     }
 
     /**
@@ -781,9 +864,25 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Signal values are weighted via the `learningSignalWeights` option (default 1).
      * Returns false when no learning context exists for the assignment.
      */
-    async recordLearningFeedback(assignmentId: string, signals: LearningSignals): Promise<boolean> {
+    async recordLearningFeedback(
+        assignmentId: string,
+        signals: LearningSignals,
+        options?: {
+            /**
+             * Which attempt the feedback belongs to. Required when the
+             * assignment has both a live attempt and an archived one — after
+             * a reassignment, assignment-addressed feedback is ambiguous and
+             * is rejected rather than guessed.
+             */
+            decisionId?: string;
+            /** Idempotency token: replaying the same id applies once */
+            eventId?: string;
+            /** Reject unless the attempt belongs to this worker */
+            expectedUserId?: string;
+        },
+    ): Promise<boolean> {
         await this.readyPromise;
-        return this.learning.recordFeedback(assignmentId, signals);
+        return this.learning.recordFeedback(assignmentId, signals, options);
     }
 
     /**
@@ -1554,6 +1653,27 @@ export default class AssignmentMatcher implements WorkflowHost {
         const userJson = await this.redisClient.hGet(this.usersKey, userId);
         const existingWeights = userJson ? (JSON.parse(userJson) as User).routingWeights : undefined;
         return this.learning.getLearnedRoutingWeights(userId, knownTags, existingWeights);
+    }
+
+    /**
+     * The same synthesis with its reasoning attached, per tag: posterior
+     * estimate and uncertainty, credible bounds, independent attempts,
+     * effective sample size after decay, last observation, decay settings and
+     * — for a lapsed veto — when it will be reassessed.
+     *
+     * A hard veto removes a worker's eligibility for a tag outright, so
+     * "the model decided" is not an adequate account of it; this is the API
+     * that makes such a change reviewable.
+     */
+    async explainLearnedRoutingWeights(
+        userId: string,
+        opts?: { includeUnexploredTags?: boolean },
+    ): Promise<AutoWeightExplanation[]> {
+        await this.readyPromise;
+        const knownTags = opts?.includeUnexploredTags ? await this.getKnownTagsForAutoWeights() : undefined;
+        const userJson = await this.redisClient.hGet(this.usersKey, userId);
+        const existingWeights = userJson ? (JSON.parse(userJson) as User).routingWeights : undefined;
+        return this.learning.explainLearnedRoutingWeights(userId, knownTags, existingWeights);
     }
 
     /**
@@ -2619,6 +2739,58 @@ export default class AssignmentMatcher implements WorkflowHost {
         return typeof own === 'number' && Number.isFinite(own) && own >= 0 ? own : this.maxUserBacklogSize;
     }
 
+    /**
+     * Record how long an accepted assignment took this worker, for the
+     * handling-time performance feature. Best effort: an assignment whose
+     * accept timestamp was never stored contributes nothing rather than a
+     * fabricated duration.
+     */
+    private async recordLearningHandlingTime(userId: string, assignment: any, completedAt: number): Promise<void> {
+        if (!this.enableLearningPerformanceFeatures) return;
+        const acceptedAt = Number(assignment?.[SLA_ACCEPTED_AT_FIELD] ?? assignment?._acceptedAt);
+        if (!Number.isFinite(acceptedAt) || acceptedAt <= 0 || completedAt < acceptedAt) return;
+        await this.learning.recordHandlingTime(userId, assignment?.tags, completedAt - acceptedAt);
+    }
+
+    /**
+     * Bound the learning layer's contribution to a candidate's effective
+     * priority.
+     *
+     * Predicted reward and business priority are in unrelated units, so an
+     * unbounded boost can silently outrank an operator's priority or an SLA
+     * band. `learningMaxBoost` is the explicit ceiling; without it the
+     * pre-1.16 unbounded behaviour is kept.
+     */
+    private clampLearningBoost(boost: number): number {
+        if (!Number.isFinite(boost)) return 0;
+        const limit = this.learningMaxBoost;
+        if (limit === undefined) return boost;
+        return Math.max(-limit, Math.min(limit, boost));
+    }
+
+    /**
+     * Ambient context for the feature extractor: batch-loaded performance
+     * aggregates for this worker plus the team priors they are shrunk
+     * toward, and one `now` shared by every candidate in the pass so
+     * deadline arithmetic is consistent across the whole scoring loop.
+     *
+     * Returns just `{ now }` when performance features are off, which is the
+     * default — existing extractors and learned weights are unaffected.
+     */
+    private async buildLearningFeatureContext(user: User): Promise<LearningFeatureContext> {
+        const now = Date.now();
+        if (!this.enableLearningPerformanceFeatures) return { now };
+
+        const [priors, backlog] = await Promise.all([
+            this.learning.loadTeamPriors(),
+            this.redisClient.sCard(this.keys.userAssignments(user.id)),
+        ]);
+        const performance = await this.learning.loadPerformance(user.id, priors);
+        performance.backlog = Number(backlog) || 0;
+        performance.backlogLimit = this.backlogLimitFor(user);
+        return { now, priors, performance };
+    }
+
     private async computeCandidatesForUser(
         user: User,
         capToBacklog = true,
@@ -2626,7 +2798,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         grantBudget?: number,
     ): Promise<{
         userAssignments: Array<{ id: string; priority: number; tags?: string }>;
-        selected: Array<{ id: string; tags: string }>;
+        selected: SelectedCandidate[];
         workflowTargetedCount: number;
     }> {
         const userAssignments: Array<{ id: string; priority: number; tags?: string }> = [];
@@ -2787,16 +2959,21 @@ export default class AssignmentMatcher implements WorkflowHost {
         // Prefer higher base priority first to satisfy tests and practical expectations
         details.sort((a, b) => b.basePriority - a.basePriority);
 
-        const selected: Array<{ id: string; tags: string }> = [];
+        const selected: SelectedCandidate[] = [];
         if (this.enableLearning) {
             // Learning path: evaluate all eligible candidates, then re-rank by
             // base priority + predicted reward (hard filters still apply first).
-            const modelWeights = await this.learning.getModel();
+            const snapshot = await this.learning.loadModels();
+            // Worker performance aggregates are read ONCE per user per pass,
+            // never per candidate: the whole point of the batch load is that
+            // richer features cost no extra Redis round trips inside the loop.
+            const featureContext = await this.buildLearningFeatureContext(user);
             const eligible: Array<{
                 detail: (typeof details)[0];
                 combinedPriority: number;
                 features: LearningFeatures;
                 predicted: number;
+                components?: Partial<Record<LearningRewardTarget, number>>;
                 effectivePriority: number;
             }> = [];
 
@@ -2856,18 +3033,32 @@ export default class AssignmentMatcher implements WorkflowHost {
                     id: d.id,
                     tags: d.tags ? d.tags.split(',').filter(Boolean) : [],
                 };
-                const features = this.learningFeatureExtractor(user, context);
-                const predicted = this.learning.predict(features, modelWeights);
-                // Shadow mode observes without influencing ranking.
-                // Epsilon-greedy exploration adds random jitter to gather data on under-served candidates.
+                const features = this.learningFeatureExtractor(user, context, featureContext);
+                const prediction = this.learning.predictWith(snapshot, features);
+                const predicted = prediction.utility;
+                // Shadow mode observes without influencing ranking. Under the
+                // legacy 'jitter' policy exploration is random score noise;
+                // under 'epsilon-greedy' the score stays clean and the
+                // selection step does the exploring, so the probability it
+                // chose with is recoverable.
                 const exploration =
-                    !this.learning.shadowMode && this.learning.shouldExplore()
-                        ? Math.random() * this.learning.boostFactor
+                    this.learning.explorationPolicy === 'jitter' &&
+                    !this.learning.shadowMode &&
+                    this.learning.shouldExplore()
+                        ? this.learningRng() * this.learning.boostFactor
                         : 0;
+                const boost = this.clampLearningBoost(this.learning.boostFactor * predicted);
                 const effectivePriority = this.learning.shadowMode
                     ? geoAdjustedPriority
-                    : geoAdjustedPriority + this.learning.boostFactor * predicted + exploration;
-                eligible.push({ detail: d, combinedPriority, features, predicted, effectivePriority });
+                    : geoAdjustedPriority + boost + exploration;
+                eligible.push({
+                    detail: d,
+                    combinedPriority,
+                    features,
+                    predicted,
+                    components: prediction.components,
+                    effectivePriority,
+                });
                 collector?.record(d.id, d.tags, {
                     userId: user.id,
                     eligible: true,
@@ -2883,17 +3074,48 @@ export default class AssignmentMatcher implements WorkflowHost {
 
             eligible.sort((a, b) => b.effectivePriority - a.effectivePriority);
 
-            for (const c of eligible) {
-                if (capToBacklog && userAssignments.length >= effectiveCap) break;
+            // Selection is a named policy, not an ad-hoc take-the-top-N: the
+            // probability each candidate was actually chosen with travels
+            // with the decision, and that propensity is what makes the logs
+            // usable for off-policy evaluation.
+            const budget = capToBacklog ? Math.max(0, effectiveCap - userAssignments.length) : eligible.length;
+            const choices =
+                this.learning.explorationPolicy === 'epsilon-greedy' && !this.learning.shadowMode
+                    ? epsilonGreedySelect(eligible, (c) => c.effectivePriority, budget, {
+                          epsilon: this.learning.explorationRate,
+                          rng: this.learningRng,
+                      })
+                    : (eligible
+                          .slice(0, budget)
+                          .map((item) => ({ item, propensity: undefined, candidateCount: eligible.length })) as Array<{
+                          item: (typeof eligible)[0];
+                          propensity?: number;
+                          candidateCount: number;
+                      }>);
+
+            // NOTE: no decision is recorded here. A candidate scored in this
+            // pass may still lose the assignment — to another worker under
+            // fair arbitration, or to another process at the claim gate — and
+            // a decision written for a worker who never received the work is
+            // training data attributed to the wrong person. Decisions are
+            // committed in claimSelected(), for winners only.
+            for (const choice of choices) {
+                const c = choice.item;
                 userAssignments.push({ id: c.detail.id, priority: c.effectivePriority });
-                selected.push({ id: c.detail.id, tags: c.detail.tags });
-                await this.learning.recordDecision(
-                    user.id,
-                    c.detail.id,
-                    c.features,
-                    c.predicted,
-                    c.detail.tags ? c.detail.tags.split(',').filter(Boolean) : undefined,
-                );
+                selected.push({
+                    id: c.detail.id,
+                    tags: c.detail.tags,
+                    learning: {
+                        features: c.features,
+                        predictedReward: c.predicted,
+                        components: c.components,
+                        tags: c.detail.tags ? c.detail.tags.split(',').filter(Boolean) : undefined,
+                        propensity: choice.propensity,
+                        policy: this.learning.explorationPolicy,
+                        candidateCount: choice.candidateCount,
+                        generation: snapshot.generation,
+                    },
+                });
             }
         } else {
             for (const d of details) {
@@ -2980,7 +3202,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * already claimed by a concurrent caller since the snapshot read is
      * dropped instead of being double-assigned.
      */
-    private async claimSelected(user: User, selected: Array<{ id: string; tags: string }>): Promise<Set<string>> {
+    private async claimSelected(user: User, selected: SelectedCandidate[]): Promise<Set<string>> {
         const claimedIds = new Set<string>();
         if (selected.length === 0) return claimedIds;
 
@@ -3048,6 +3270,38 @@ export default class AssignmentMatcher implements WorkflowHost {
                     rm.hSet(this.assignmentOwnerKey, s.id, user.id);
                 }
             }
+            // Commit the learning context for the attempts this worker
+            // actually won — and only those. The HDEL above is the atomic gate
+            // that decides ownership, so this is the first point at which "who
+            // got this assignment" is a settled fact. The writes go into the
+            // SAME transaction as the queued -> pending move: a separate write
+            // afterwards would leave a crash gap in which the worker owns the
+            // assignment but no learning context exists for it, and its
+            // outcome would then arrive orphaned.
+            if (this.enableLearning) {
+                const decisions = selected
+                    .filter((s) => claimedIds.has(s.id) && s.learning)
+                    .map((s) => ({
+                        decisionId: this.learning.newDecisionId(s.id),
+                        userId: user.id,
+                        assignmentId: s.id,
+                        features: s.learning!.features,
+                        predictedReward: s.learning!.predictedReward,
+                        components: s.learning!.components,
+                        tags: s.learning!.tags,
+                        propensity: s.learning!.propensity,
+                        policy: s.learning!.policy,
+                        candidateCount: s.learning!.candidateCount,
+                    }));
+                if (decisions.length > 0) {
+                    this.learning.queueDecisionWrites(
+                        rm,
+                        decisions,
+                        selected.find((s) => s.learning)?.learning?.generation ?? 0,
+                    );
+                }
+            }
+
             await rm.exec();
 
             for (let i = 0; i < selected.length; i++) {
@@ -3103,12 +3357,14 @@ export default class AssignmentMatcher implements WorkflowHost {
      * contested assignment, rather than whichever user's independent claim
      * happened to reach Redis first.
      *
-     * Known limitation: when combined with enableLearning, computeCandidatesForUser
-     * still records a bandit decision for every scored candidate at evaluation
-     * time, including ones that lose the global tiebreak here - the learning
-     * layer's per-user candidate ordering isn't itself part of the fairness
-     * comparison in this mode. Fine for the common case (fairness without
-     * learning), but a consumer combining both should be aware.
+     * Combined with enableLearning, the learned score IS the score that
+     * arbitration compares: `computeCandidatesForUser` returns the
+     * learning-adjusted effective priority, and it is that number that flows
+     * into `globalPairs`. Learning contexts ride along unpersisted and are
+     * committed inside claimSelected() for winners only, so a candidate that
+     * loses the global tiebreak leaves no decision behind — the earlier
+     * behaviour, which recorded one for every scored candidate, attributed
+     * outcomes to workers who never received the work.
      */
     private async matchAllUsersFair(): Promise<void> {
         let users: any[] = [];
@@ -3226,7 +3482,14 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         // Flatten every user's tag-scored candidates into one global list of
         // {user, assignment, score} pairs for cross-user arbitration.
-        const globalPairs: Array<{ user: any; userId: string; id: string; tags: string; priority: number }> = [];
+        const globalPairs: Array<{
+            user: any;
+            userId: string;
+            id: string;
+            tags: string;
+            priority: number;
+            learning?: LearningDecisionContext;
+        }> = [];
         for (const { user, candidates } of perUser) {
             const priorityById = new Map(candidates.userAssignments.map((ua) => [ua.id, ua.priority]));
             for (const s of candidates.selected) {
@@ -3236,6 +3499,7 @@ export default class AssignmentMatcher implements WorkflowHost {
                     id: s.id,
                     tags: s.tags,
                     priority: priorityById.get(s.id) ?? 0,
+                    learning: s.learning,
                 });
             }
         }
@@ -3295,10 +3559,10 @@ export default class AssignmentMatcher implements WorkflowHost {
                 tieBand: knobs.tieBand,
             });
 
-            const tentative = new Map<string, { user: any; pairs: Array<{ id: string; tags: string }> }>();
+            const tentative = new Map<string, { user: any; pairs: SelectedCandidate[] }>();
             for (const w of winners) {
                 const bucket = tentative.get(w.userId) ?? { user: w.user, pairs: [] };
-                bucket.pairs.push({ id: w.id, tags: w.tags });
+                bucket.pairs.push({ id: w.id, tags: w.tags, learning: w.learning });
                 tentative.set(w.userId, bucket);
             }
 
@@ -3649,15 +3913,21 @@ export default class AssignmentMatcher implements WorkflowHost {
         if (json) {
             const slaPolicy = slaFromJson(json);
             let acceptedJson = json;
-            if (slaPolicy) {
+            // The accept stamp is also what the learning layer's handling-time
+            // feature measures from, so it is written for SLA-bearing work and
+            // — only when that opt-in feature is on — for everything else too.
+            // With both off, an assignment's stored JSON stays byte-identical.
+            if (slaPolicy || this.enableLearningPerformanceFeatures) {
                 try {
                     const parsed = JSON.parse(json);
                     parsed[SLA_ACCEPTED_AT_FIELD] = now;
                     parsed[SLA_ACCEPTED_BY_FIELD] = userId;
                     acceptedJson = JSON.stringify(parsed);
-                    const deadline = completionDeadlineScore(now, slaPolicy);
-                    if (deadline !== null) {
-                        multi.zAdd(this.acceptedAssignmentsExpiryKey, { score: deadline, value: assignmentId });
+                    if (slaPolicy) {
+                        const deadline = completionDeadlineScore(now, slaPolicy);
+                        if (deadline !== null) {
+                            multi.zAdd(this.acceptedAssignmentsExpiryKey, { score: deadline, value: assignmentId });
+                        }
                     }
                 } catch {
                     // keep original JSON on parse failure
@@ -3678,7 +3948,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         }
 
         if (this.enableLearning) {
-            await this.learning.applyOutcome(assignmentId, 'accept');
+            await this.learning.applyOutcome(assignmentId, 'accept', { expectedUserId: userId });
         }
 
         this.emitAssignmentLifecycle({
@@ -3716,7 +3986,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         await multi.exec();
 
         if (this.enableLearning) {
-            await this.learning.applyOutcome(assignmentId, 'reject');
+            await this.learning.applyOutcome(assignmentId, 'reject', { expectedUserId: userId });
         }
 
         this.emitAssignmentLifecycle({
@@ -3860,7 +4130,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         }
 
         if (this.enableLearning) {
-            await this.learning.applyOutcome(assignmentId, 'complete');
+            await this.learning.applyOutcome(assignmentId, 'complete', { expectedUserId: userId });
+            await this.recordLearningHandlingTime(userId, assignment, now);
         }
 
         // Publish workflow event if workflows are enabled
@@ -3892,7 +4163,21 @@ export default class AssignmentMatcher implements WorkflowHost {
      * @param assignmentId - The assignment being failed
      * @param reason - Optional reason for failure
      */
-    async failAssignment(userId: string, assignmentId: string, reason?: string): Promise<boolean> {
+    async failAssignment(
+        userId: string,
+        assignmentId: string,
+        reason?: string,
+        options?: {
+            /**
+             * The failure was a system/platform fault, not the worker's. Under
+             * multi-target learning this suppresses the negative
+             * `successGivenAcceptance` label (see
+             * `learningTargets.systemFaultCountsAsFailure`); the scalar reward
+             * is unaffected.
+             */
+            systemFault?: boolean;
+        },
+    ): Promise<boolean> {
         await this.readyPromise;
 
         const json = await this.redisClient.hGet(this.acceptedAssignmentsKey, assignmentId);
@@ -3923,7 +4208,10 @@ export default class AssignmentMatcher implements WorkflowHost {
         await multi.exec();
 
         if (this.enableLearning) {
-            await this.learning.applyOutcome(assignmentId, 'fail');
+            await this.learning.applyOutcome(assignmentId, 'fail', {
+                expectedUserId: userId,
+                systemFault: options?.systemFault,
+            });
         }
 
         // Publish workflow event if workflows are enabled
@@ -4248,7 +4536,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             }
 
             if (this.enableLearning) {
-                await this.learning.applyOutcome(id, 'expire');
+                await this.learning.applyOutcome(id, 'expire', { expectedUserId: owner ?? undefined });
             }
 
             // Publish workflow expired event if workflows are enabled
@@ -4375,7 +4663,9 @@ export default class AssignmentMatcher implements WorkflowHost {
             await this.bumpSlaStats(assignment.tags, { completionBreaches: 1 });
 
             if (this.enableLearning) {
-                await this.learning.applyOutcome(id, action === 'fail' ? 'fail' : 'expire');
+                await this.learning.applyOutcome(id, action === 'fail' ? 'fail' : 'expire', {
+                    expectedUserId: workerId ?? undefined,
+                });
             }
 
             if (action === 'notify') {
@@ -4518,7 +4808,12 @@ export default class AssignmentMatcher implements WorkflowHost {
             await this.bumpSlaStats(assignment.tags, { ttlExpiries: 1 });
 
             if (this.enableLearning) {
-                await this.learning.applyOutcome(id, 'expire');
+                // A freshness TTL running out is the system aging work out,
+                // not the worker declining or failing it.
+                await this.learning.applyOutcome(id, 'expire', {
+                    expectedUserId: ownerId ?? undefined,
+                    systemFault: true,
+                });
             }
         }
 
@@ -4607,7 +4902,11 @@ export default class AssignmentMatcher implements WorkflowHost {
             await this.bumpSlaStats(assignment.tags, { scheduleMisses: 1 });
 
             if (this.enableLearning) {
-                await this.learning.applyOutcome(id, 'expire');
+                // The offer window closed; nobody declined anything.
+                await this.learning.applyOutcome(id, 'expire', {
+                    expectedUserId: ownerId ?? undefined,
+                    systemFault: true,
+                });
             }
         }
 
@@ -5212,7 +5511,9 @@ export default class AssignmentMatcher implements WorkflowHost {
             });
 
             if (this.enableLearning) {
-                await this.learning.applyOutcome(id, 'expire');
+                // Redistribution is an operator/idle-sweep action, so it is
+                // never counted as the worker failing the work.
+                await this.learning.applyOutcome(id, 'expire', { expectedUserId: userId, systemFault: true });
             }
 
             if (this.enableWorkflows) {

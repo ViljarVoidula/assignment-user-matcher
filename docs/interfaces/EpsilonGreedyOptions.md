@@ -1,0 +1,56 @@
+[assignment-user-matcher](../README.md) / [Exports](../modules.md) / EpsilonGreedyOptions
+
+# Interface: EpsilonGreedyOptions
+
+## Table of contents
+
+### Properties
+
+- [epsilon](EpsilonGreedyOptions.md#epsilon)
+- [rng](EpsilonGreedyOptions.md#rng)
+- [tieEpsilon](EpsilonGreedyOptions.md#tieepsilon)
+
+## Properties
+
+### epsilon
+
+• **epsilon**: `number`
+
+Probability of the exploratory branch, in [0, 1]
+
+#### Defined in
+
+[src/learning/policy.ts:31](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/learning/policy.ts#L31)
+
+___
+
+### rng
+
+• **rng**: () => `number`
+
+Random source returning values in [0, 1)
+
+#### Type declaration
+
+▸ (): `number`
+
+##### Returns
+
+`number`
+
+#### Defined in
+
+[src/learning/policy.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/learning/policy.ts#L33)
+
+___
+
+### tieEpsilon
+
+• `Optional` **tieEpsilon**: `number`
+
+Scores within this distance of the leader count as tied for greedy
+purposes, so a tie is shared rather than resolved by list order.
+
+#### Defined in
+
+[src/learning/policy.ts:38](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/learning/policy.ts#L38)

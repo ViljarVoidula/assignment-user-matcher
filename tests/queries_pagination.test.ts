@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import {
     getAssignmentById,
     getAssignmentCountsFromStores,
@@ -19,7 +19,7 @@ describe('pagination internals', function () {
     const keys = { queued: 'test-pg:queued', pending: 'test-pg:pending', accepted: 'test-pg:accepted' };
 
     before(async function () {
-        redisClient = createClient();
+        redisClient = createTestClient();
         await redisClient.connect();
     });
 

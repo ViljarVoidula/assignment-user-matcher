@@ -1,11 +1,10 @@
 import { expect } from 'chai';
 import AssignmentMatcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 
 describe('Assignment removal tests', () => {
     let matcher: AssignmentMatcher;
-    const redisUrl = 'redis://localhost:6379';
-    const client = createClient({ url: redisUrl });
+    const client = createTestClient();
 
     before(async () => {
         await client.connect();
@@ -15,12 +14,12 @@ describe('Assignment removal tests', () => {
     });
 
     after(async () => {
-        await client.flushAll();
+        await client.flushDb();
         await client.disconnect();
     });
 
     beforeEach(async () => {
-        await client.flushAll();
+        await client.flushDb();
     });
 
     it('should remove queued assignment completely', async () => {

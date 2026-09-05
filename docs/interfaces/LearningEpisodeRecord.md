@@ -8,14 +8,30 @@ Archived episode retained after a terminal outcome for late external feedback
 
 ### Properties
 
+- [appliedTagReward](LearningEpisodeRecord.md#appliedtagreward)
 - [assignmentId](LearningEpisodeRecord.md#assignmentid)
+- [decisionId](LearningEpisodeRecord.md#decisionid)
 - [features](LearningEpisodeRecord.md#features)
+- [generation](LearningEpisodeRecord.md#generation)
 - [outcome](LearningEpisodeRecord.md#outcome)
+- [tagStatsAt](LearningEpisodeRecord.md#tagstatsat)
 - [tags](LearningEpisodeRecord.md#tags)
 - [timestamp](LearningEpisodeRecord.md#timestamp)
 - [userId](LearningEpisodeRecord.md#userid)
 
 ## Properties
+
+### appliedTagReward
+
+• `Optional` **appliedTagReward**: `number`
+
+Reward already written into per-tag statistics (per-attempt accounting)
+
+#### Defined in
+
+[src/types/matcher.ts:1919](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1919)
+
+___
 
 ### assignmentId
 
@@ -23,7 +39,19 @@ Archived episode retained after a terminal outcome for late external feedback
 
 #### Defined in
 
-[src/types/matcher.ts:1701](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1701)
+[src/types/matcher.ts:1910](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1910)
+
+___
+
+### decisionId
+
+• **decisionId**: `string`
+
+Unique id of the attempt this episode closes
+
+#### Defined in
+
+[src/types/matcher.ts:1908](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1908)
 
 ___
 
@@ -33,7 +61,19 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1702](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1702)
+[src/types/matcher.ts:1911](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1911)
+
+___
+
+### generation
+
+• `Optional` **generation**: `number`
+
+Model generation this decision was committed against
+
+#### Defined in
+
+[src/types/matcher.ts:1917](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1917)
 
 ___
 
@@ -45,7 +85,19 @@ Terminal outcome that archived this episode
 
 #### Defined in
 
-[src/types/matcher.ts:1704](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1704)
+[src/types/matcher.ts:1913](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1913)
+
+___
+
+### tagStatsAt
+
+• `Optional` **tagStatsAt**: `number`
+
+When that per-tag contribution was written (needed to revise it under decay)
+
+#### Defined in
+
+[src/types/matcher.ts:1921](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1921)
 
 ___
 
@@ -57,7 +109,7 @@ Assignment tags captured at decision time (used for auto routing weights)
 
 #### Defined in
 
-[src/types/matcher.ts:1706](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1706)
+[src/types/matcher.ts:1915](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1915)
 
 ___
 
@@ -67,7 +119,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1707](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1707)
+[src/types/matcher.ts:1922](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1922)
 
 ___
 
@@ -77,4 +129,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1700](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1700)
+[src/types/matcher.ts:1909](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1909)

@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 import sinon from 'sinon';
 
@@ -8,14 +8,14 @@ describe('Matcher base tests', async function () {
     let matcher: Matcher;
     let redisClient: any;
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
 
         matcher = new Matcher(redisClient, {
             maxUserBacklogSize: 8,
             relevantBatchSize: 10,
         });
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
     });
     it('Adding users successfully', async function () {
         const userData = {
@@ -152,9 +152,9 @@ describe('Custom matcher tests', async function () {
     let matcher: Matcher;
     let redisClient: any;
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
     it('Setting custom priority function successfully', async function () {
         const prioritizationFunction = sinon.fake.resolves(10);
@@ -186,9 +186,9 @@ describe('Customer score function tests', async function () {
     let matcher: Matcher;
     let redisClient: any;
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
     it('Setting custom score function successfully', async function () {
         const matchingFunction = sinon.fake.resolves([10, 10]);
@@ -222,9 +222,9 @@ describe('Assignment distance tests', async function () {
     let matcher: Matcher;
     let redisClient: any;
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
     it('Should give user assignments based on priority', async function () {
         matcher = new Matcher(redisClient, {
@@ -264,9 +264,9 @@ describe('Priority management tests', async function () {
     let matcher: Matcher;
     let redisClient: any;
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
-        await redisClient.flushAll();
+        await redisClient.flushDb();
 
         matcher = new Matcher(redisClient, {
             maxUserBacklogSize: 8,
@@ -339,9 +339,9 @@ describe('Parallel matching tests', async function () {
     let matcher: Matcher;
     let redisClient: any;
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
-        await redisClient.flushAll();
+        await redisClient.flushDb();
 
         matcher = new Matcher(redisClient, {
             maxUserBacklogSize: 5,
@@ -431,7 +431,7 @@ describe('Parallel matching tests', async function () {
             relevantBatchSize: 10,
             redisPrefix: 'race_test:',
         });
-        await raceMatcher.redisClient.flushAll();
+        await raceMatcher.redisClient.flushDb();
 
         const userIds = Array.from({ length: 20 }, (_, i) => `race-user-${i}`);
         for (const id of userIds) {
@@ -456,9 +456,9 @@ describe('Weighted skill matching tests', async function () {
     let matcher: Matcher;
     let redisClient: any;
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         matcher = new Matcher(redisClient, {
             maxUserBacklogSize: 10,
             relevantBatchSize: 10,
@@ -482,7 +482,7 @@ describe('Weighted skill matching tests', async function () {
     });
 
     it('Prefers higher weights when priorities are equal (english:100 > dutch:30)', async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         matcher = new Matcher(redisClient, {
             maxUserBacklogSize: 10,
             relevantBatchSize: 10,

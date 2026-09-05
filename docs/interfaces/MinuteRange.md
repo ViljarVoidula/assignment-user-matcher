@@ -25,7 +25,7 @@ A half-open range of period minutes, `[start, end)`.
 
 #### Defined in
 
-[src/scheduling/time.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/time.ts#L27)
+[src/scheduling/time.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/time.ts#L27)
 
 ___
 
@@ -35,4 +35,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/time.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/time.ts#L26)
+[src/scheduling/time.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/time.ts#L26)

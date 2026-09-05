@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 
 describe('Fair Tiebreaker (enableFairTiebreaker)', function () {
@@ -9,7 +9,7 @@ describe('Fair Tiebreaker (enableFairTiebreaker)', function () {
     const prefix = 'fair_test:';
 
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
 
         matcher = new Matcher(redisClient, {
@@ -21,7 +21,7 @@ describe('Fair Tiebreaker (enableFairTiebreaker)', function () {
     });
 
     beforeEach(async function () {
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
     });
 
     after(async function () {
@@ -59,7 +59,7 @@ describe('Fair Tiebreaker (enableFairTiebreaker)', function () {
 
     it('is consistent across repeated fresh runs (not a coin-flip that happens to pass once)', async function () {
         for (let i = 0; i < 8; i++) {
-            await matcher.redisClient.flushAll();
+            await matcher.redisClient.flushDb();
             await matcher.addUser({ id: 'weak', tags: ['drains'], routingWeights: { drains: 15 } });
             await matcher.addUser({ id: 'strong', tags: ['drains'], routingWeights: { drains: 180 } });
             await matcher.addAssignment({ id: 'job-race', tags: ['drains'], priority: 100 });
@@ -98,7 +98,7 @@ describe('Fair Tiebreaker (enableFairTiebreaker)', function () {
 
     it('never double-assigns a contested assignment to two users', async function () {
         for (let i = 0; i < 5; i++) {
-            await matcher.redisClient.flushAll();
+            await matcher.redisClient.flushDb();
             await matcher.addUser({ id: 'a', tags: ['support'], routingWeights: { support: 90 } });
             await matcher.addUser({ id: 'b', tags: ['support'], routingWeights: { support: 89 } });
             await matcher.addUser({ id: 'c', tags: ['support'], routingWeights: { support: 88 } });
@@ -123,7 +123,7 @@ describe('Fair Tiebreaker (enableFairTiebreaker)', function () {
             relevantBatchSize: 20,
             enableFairTiebreaker: true,
         });
-        await capped.redisClient.flushAll();
+        await capped.redisClient.flushDb();
 
         await capped.addUser({ id: 'best', tags: ['support'], routingWeights: { support: 100 } });
         await capped.addUser({ id: 'ok', tags: ['support'], routingWeights: { support: 50 } });
@@ -149,7 +149,7 @@ describe('Fair Tiebreaker (enableFairTiebreaker)', function () {
             enableWorkflows: true,
             enableFairTiebreaker: true,
         });
-        await wf.redisClient.flushAll();
+        await wf.redisClient.flushDb();
 
         await wf.addUser({ id: 'user1', tags: ['support'] });
         await wf.addAssignment({

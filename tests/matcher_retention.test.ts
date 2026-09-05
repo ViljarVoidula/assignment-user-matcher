@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import sinon from 'sinon';
 import AssignmentMatcher from '../src/matcher.class';
 
@@ -9,18 +9,18 @@ describe('Store retention (completed assignments, workflow event stream)', funct
     const prefix = 'test:retention:';
 
     before(async function () {
-        redisClient = createClient({ url: 'redis://localhost:6379' });
+        redisClient = createTestClient();
         await redisClient.connect();
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
 
     after(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         await redisClient.quit();
     });
 
     beforeEach(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
 
     /** Drive one assignment through match → accept → complete. */

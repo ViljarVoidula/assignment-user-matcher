@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import sinon from 'sinon';
 import { ReliabilityManager } from '../src/managers/ReliabilityManager';
 import { createKeyBuilders } from '../src/utils/keys';
@@ -11,9 +11,9 @@ describe('ReliabilityManager', function () {
     const keys = createKeyBuilders({ prefix: 'test:' });
 
     before(async function () {
-        redisClient = createClient();
+        redisClient = createTestClient();
         await redisClient.connect();
-        await redisClient.flushAll();
+        await redisClient.flushDb();
 
         reliabilityManager = new ReliabilityManager(redisClient, keys, {
             workflowMaxRetries: 3,
@@ -26,7 +26,7 @@ describe('ReliabilityManager', function () {
     });
 
     after(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         await redisClient.quit();
     });
 

@@ -800,6 +800,58 @@ type Options = {
 
     // TTL for archived episodes awaiting late external feedback in ms.
     learningFeedbackTtlMs?: number; // Default: 604800000 (7 days)
+
+    // SGD update rule. 'normalized' bounds the step by the active feature
+    // vector's squared norm; 'raw' is the pre-1.16 rule and diverges once
+    // several features fire at once.
+    learningUpdateMode?: 'normalized' | 'raw'; // Default: 'normalized'
+
+    // L2 weight decay applied per update.
+    learningL2?: number; // Default: 0
+
+    // Clip on the L2 norm of a single update.
+    learningMaxUpdateNorm?: number; // Default: 1
+
+    // Absolute cap on any single learned weight.
+    learningMaxWeightMagnitude?: number; // Default: 100
+
+    // Cap on the learning layer's contribution to effective priority.
+    // Unset = unbounded (pre-1.16 behaviour).
+    learningMaxBoost?: number;
+
+    // What counts as one observation for per-tag evidence.
+    learningRewardAccounting?: 'per-event' | 'per-attempt'; // Default: 'per-event'
+
+    // Candidate selection policy. 'epsilon-greedy' logs a recoverable
+    // propensity on every committed decision; 'jitter' is the pre-1.16
+    // unlogged score noise.
+    learningExplorationPolicy?: 'greedy' | 'epsilon-greedy' | 'jitter'; // Default: 'jitter'
+
+    // Random source for exploration; inject for reproducible runs.
+    learningRng?: () => number; // Default: Math.random
+
+    // Opt-in multi-target reward modelling.
+    learningTargets?: {
+        targets?: Array<'acceptance' | 'successGivenAcceptance' | 'quality'>;
+        acceptanceWeight?: number;
+        successWeight?: number;
+        qualityWeight?: number;
+        learningRates?: Partial<Record<'acceptance' | 'successGivenAcceptance' | 'quality', number>>;
+        systemFaultCountsAsFailure?: boolean; // Default: false
+    };
+
+    // Emit observed worker-performance features (batch-loaded once per
+    // worker per matching pass, never per candidate).
+    enableLearningPerformanceFeatures?: boolean; // Default: false
+    learningPerformancePriorStrength?: number; // Default: 5
+
+    // Maximum age of an outcome/feedback event relative to its attempt.
+    // Later events are rejected and counted as staleEvents.
+    learningMaxFeedbackAgeMs?: number; // Default: learningFeedbackTtlMs
+
+    // Validation bounds applied before anything is written.
+    learningMaxSignalMagnitude?: number; // Default: 1e6
+    learningMaxRewardMagnitude?: number; // Default: 100
 };
 ```
 
@@ -1007,10 +1059,29 @@ How it works:
    eligible candidate (tag matches, normalized skill weights, tag overlap, and
    optional `embedding` cosine similarity if both user and assignment carry an
    `embedding: number[]` field).
-2. Candidates are ranked by `combinedPriority + boostFactor * predictedReward`.
-3. The decision context is stored, and lifecycle outcomes (`accept`,
-   `complete`, `reject`, `expire`, `fail`) feed rewards back into the model via
-   online SGD updates — fully automatic, no training pipeline needed.
+2. Candidates are ranked by `combinedPriority + boostFactor * predictedReward`
+   and selected by an explicit policy.
+3. **The decision context is committed only for the worker who actually wins
+   the claim**, under a unique attempt id. Lifecycle outcomes (`accept`,
+   `complete`, `reject`, `expire`, `fail`) feed rewards back into that attempt
+   via online SGD updates — fully automatic, no training pipeline needed.
+
+Four invariants are worth knowing, because they are what the layer's
+correctness rests on:
+
+- **One decision per committed attempt.** A candidate that was scored but lost
+  the assignment — to another worker under fair arbitration, or to another
+  process at the claim gate — leaves no decision behind. An assignment that is
+  rejected and rematched opens a *second, independent* attempt with its own id;
+  feedback for the first can never reach the second.
+- **Ingestion is idempotent.** Every outcome and every feedback call is gated
+  on the attempt's applied-event set, so a redelivered message applies once and
+  counts as evidence once. `getLearningStats()` reports `duplicateEvents`,
+  `staleEvents`, `orphanEvents`, `supersededEvents`, `ambiguousFeedback` and
+  `invalidFeedback` so rejected traffic is visible rather than silent.
+- **Missing means unknown.** Absent quality feedback trains nothing; it is
+  never a zero label. An empty or malformed signal map is rejected whole.
+- **Manual assignment never trains.** `assignToUser()` records no decision.
 
 ```typescript
 const matcher = new AssignmentMatcher(redisClient, {
@@ -1093,6 +1164,172 @@ tune `learningBoostFactor` / `learningExplorationRate` for your workload. For
 domain-specific setups (custom embeddings, business features), supply a
 `learningFeatureExtractor`.
 
+### Stable Model Updates
+
+The SGD rule is `learningUpdateMode`, and it defaults to `'normalized'`:
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+    enableLearning: true,
+    learningUpdateMode: 'normalized', // default since 1.16
+    learningL2: 0, // optional weight decay
+    learningMaxUpdateNorm: 1, // clip on a single update
+    learningMaxWeightMagnitude: 100, // absolute cap on any weight
+    learningMaxBoost: 60, // cap the learning layer's ranking influence
+});
+```
+
+The pre-1.16 rule (`'raw'`, `w += lr * error * x`) is unstable once several
+features fire at once: with `k` active unit features every step overshoots by a
+factor of `k`, so the error alternates sign and grows. Twenty-two unit features
+at the default learning rate is already enough — 40 identical reward-1 samples
+drive the prediction past -1000 instead of toward 1. Normalizing by the active
+vector's squared norm makes one step land on the observation regardless of how
+many features fired, and the norm clip and weight cap bound the rest.
+`'raw'` remains available for reproducing an existing model, and is not
+recommended for new deployments.
+
+`learningMaxBoost` matters for a different reason: predicted reward and
+business priority are in unrelated units, so an unbounded boost can silently
+outrank an operator's priority or an SLA band. It is unset by default (the
+pre-1.16 behaviour); set it, and the learned contribution can never leave
+`±learningMaxBoost`.
+
+Model reads are bounded too — an update reads only the weights it touches
+(`HMGET` over the active features), not the whole model hash, so cost is
+`O(active features)` regardless of how large the feature space grows. Batch
+imports via `trainLearningSamples()` process in bounded chunks and re-read per
+chunk, so a long import cannot keep accumulating against a snapshot the live
+model has already moved away from.
+
+### Modelling Acceptance and Success Separately
+
+A single scalar reward cannot distinguish a worker who takes everything and
+finishes nothing from one who is selective and reliable — both can average out
+the same. `learningTargets` models them apart:
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+    enableLearning: true,
+    learningTargets: {
+        targets: ['acceptance', 'successGivenAcceptance', 'quality'],
+        successWeight: 1,
+        qualityWeight: 0.5,
+        learningRates: { quality: 0.05 },
+        // A platform-side cancellation is not the worker's failure. Default
+        // false: it produces no success label at all.
+        systemFaultCountsAsFailure: false,
+    },
+});
+```
+
+Each target gets its own model hash and its own label timing:
+
+| Target | Denominator | Label | Missing data |
+| --- | --- | --- | --- |
+| `acceptance` | one per committed attempt | 1 on accept; 0 on reject or **pre-acceptance** response expiry | attempt still open |
+| `successGivenAcceptance` | one per *accepted* attempt | 1 on complete; 0 on fail or **post-acceptance** expiry | no label when flagged a system fault |
+| `quality` | one per quality observation | normalized `quality` signal, clamped to [0, 1] | **no update at all** |
+
+Component predictions come back as calibrated probabilities; the combined
+utility is `acceptanceWeight * P(accept) + P(accept) * (successWeight *
+P(success|accept) + qualityWeight * E[quality])` and is deliberately *not*
+presented as a probability. Corrections revise a label rather than adding a
+second one — see `learningRewardAccounting` below.
+
+When `learningTargets` is unset (the default) the layer keeps the legacy
+behaviour: one model, one scalar reward per lifecycle outcome.
+
+### Evidence Accounting
+
+`learningRewardAccounting` decides what one "observation" means for the per-tag
+statistics that drive automatic routing weights:
+
+- `'per-event'` (default, legacy): every lifecycle outcome and every feedback
+  call is one observation. An attempt that accepts, completes and then receives
+  a CSAT score counts three times.
+- `'per-attempt'`: one observation per committed attempt, written at the
+  terminal outcome with the attempt's accrued reward. Late feedback *revises*
+  that observation instead of adding another.
+
+`'per-attempt'` is what the veto sample floors actually assume — they are
+supposed to count independent attempts, and correlated events inflating the
+count is how a tag reaches a "20 sample" bar on five real assignments.
+
+### Explicit Exploration and Propensity Logging
+
+`learningExplorationPolicy` selects how candidates are picked:
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+    enableLearning: true,
+    learningExplorationPolicy: 'epsilon-greedy',
+    learningExplorationRate: 0.05,
+    learningRng: seededRng(1234), // inject for reproducible tests
+});
+
+const decision = await matcher.getLearningDecision('assignment-123');
+// { decisionId, userId, features, predictedReward, propensity, policy, candidateCount, ... }
+```
+
+Under `'epsilon-greedy'`, selecting `k` candidates is modelled as `k`
+sequential conditional choices over the admissible set that remains, and each
+committed decision records the probability it was actually chosen with. For a
+unique leader among `K` admissible candidates that probability is
+`1 - ε + ε/K`, and every other candidate's is `ε/K`. That number is what
+off-policy evaluation (IPS, doubly-robust) needs; the legacy `'jitter'` policy
+— independent random noise added to the score — perturbs the ranking without
+any recoverable probability, so the logs it produces cannot be evaluated
+offline at all. `'jitter'` remains the default for backward compatibility.
+
+One honest caveat: under `fairness: 'best-match'` and the other fair modes,
+allocation is a constrained *joint* decision across workers, and a per-worker
+epsilon-greedy probability is not the probability of the final allocation.
+Treat fair-mode logs as needing an allocation-aware estimator or a randomized
+online comparison, not as ordinary contextual-bandit logs.
+
+Exploration never widens eligibility: it chooses among candidates that already
+passed every hard rule, and it is disabled entirely in shadow mode.
+
+### Worker Performance Features
+
+By default the feature vector is assignment-side plus the worker's *declared*
+tags, which means two workers with identical declared tags produce identical
+features for a given assignment — the model has nothing to learn about *who*
+should get the work. `enableLearningPerformanceFeatures` adds observed
+behaviour:
+
+```typescript
+const matcher = new AssignmentMatcher(redisClient, {
+    enableLearning: true,
+    enableLearningPerformanceFeatures: true,
+    learningPerformancePriorStrength: 5, // shrinkage toward the team prior
+});
+```
+
+New features: `perf:accept`, `perf:success`, `perf:support`, `perf:speed`,
+`perf:speedKnown`, `load:backlog`, `difficulty`, `complexity`,
+`sla:remainingFraction`, `sla:urgency`, and the interactions
+`x:urgency*speed`, `x:difficulty*success`, `x:load*complexity`.
+
+Two properties are load-bearing:
+
+- Rates are **shrunk toward the team prior**, so a worker with no history reads
+  as average rather than as a failure. An unjustifiably pessimistic estimate is
+  how a new worker starves.
+- Aggregates are **batch-loaded once per worker per matching pass** — one
+  `HGETALL` — never per candidate. Enabling the feature does not add a Redis
+  round trip per candidate pair.
+
+`sla:urgency` uses time actually remaining at the decision timestamp, not the
+originally configured duration: an assignment with a one-hour deadline that has
+been queued 55 minutes is urgent, and the configured duration alone cannot say
+so.
+
+Enabling this option also stamps an accept timestamp on non-SLA assignments
+(handling time has to be measured from something). With it off, stored JSON is
+unchanged.
+
 ### Automatic Routing Weights (RL-Generated Tags/Weights)
 
 Beyond re-ranking, the learning layer can fully automate `routingWeights`
@@ -1112,12 +1349,68 @@ bandit policy.
 - `policy: 'thompson'`: samples from the per-tag posterior when mapping to a
   weight; the veto decision uses the deterministic mean, never the draw.
 
+**Uncertainty.** Before 1.16 the standard error came straight from the observed
+moments, so five identical observations produced variance 0 and a
+zero-width confidence interval — total certainty from five samples, on which
+the `'confidence'` policy would hard-veto. The posterior is now prior-backed:
+
+```typescript
+autoRoutingWeights: {
+    policy: 'confidence',
+    rewardModel: 'gaussian', // or 'bernoulli' for genuine success indicators
+    rewardRange: [-1, 1], // sets the default prior variance and the Bernoulli mapping
+    priorStrength: 2, // pseudo-observations of prior weight
+    // priorVariance defaults to ((max - min) / 4) ** 2
+}
+```
+
+`'bernoulli'` uses a Beta-Bernoulli posterior over rewards rescaled into
+[0, 1], with Thompson draws taken from the Beta itself. It is only sound when
+the reward genuinely is a success indicator — applying Bernoulli formulas to
+arbitrary continuous rewards is the error the explicit option exists to make
+visible rather than implicit.
+
+**Evidence is counted in independent attempts, not observations.** With
+`decayHalfLifeMs` set, the decayed weight sum is *not* a sample size: scaling
+every weight equally leaves it looking like fewer observations than were
+actually seen. `LearningTagStat` therefore carries `attempts` (never decayed)
+and `effectiveSampleSize` (the Kish quantity `sum(w)² / sum(w²)`), and sample
+floors are judged against those, in that order of preference. Likewise
+`minTotalSamples` is judged against distinct attempts, so one assignment
+carrying five tags is one attempt, not five.
+
+**Explainability.** `explainLearnedRoutingWeights(userId)` returns the same
+synthesis with its reasoning attached — posterior estimate and uncertainty,
+credible bounds, independent attempts, effective sample size, last
+observation, decay settings, and for a lapsed veto when it will be reassessed:
+
+```typescript
+const rows = await matcher.explainLearnedRoutingWeights('user-1');
+// [{ tag: 'english', weight: 0, decision: 'veto', estimate: -0.71,
+//    uncertainty: 0.12, lowerBound: -0.95, upperBound: -0.47,
+//    attempts: 34, lastObservedAt: 1757... }, ...]
+```
+
+`decision` is one of `'veto' | 'scored' | 'prior' | 'cooldown' |
+'insufficient-evidence' | 'unobserved'`. The pure form is exported as
+`explainRoutingWeights`.
+
 **Guardrails (all opt-in):**
 
-- `minSamplesForVeto`: a learned weight-0 may only override a _manual_
-  (non-learned) weight after this many observations, preventing a few bad
-  rolls from silently starving a user. Defaults to `minSamples` (5) for
-  backward compatibility; 20 is a reasonable production floor.
+- `minSamplesForVeto`: a learned weight-0 requires this many independent
+  attempts, preventing a few bad rolls from silently starving a user.
+  Defaults to `minSamples` (5); 20 is a reasonable production floor. **Since
+  1.16 this floor applies to learned and manually-weighted tags alike** — a
+  hard veto removes eligibility outright, and that consequence does not depend
+  on where the previous weight came from. Set it and the bar rises for every
+  tag; leave it unset and nothing changes.
+- `vetoCooldownMs`: how long after a tag's last observation a learned veto
+  lapses and the tag returns at `priorWeight` for reassessment. A veto with no
+  recovery path is permanent exclusion, and a worker who improved — or whose
+  bad run was circumstantial — can never be re-evaluated. Prefer setting this
+  over relying on decay alone.
+- `rewardModel` / `rewardRange` / `priorVariance` / `priorStrength`: the
+  posterior over a tag's mean reward. See "Uncertainty" below.
 - `maxDeltaPerSync`: clamps how far any single learned weight can move per
   sync, avoiding oscillation.
 - `minTotalSamples`: skip users whose total evidence is still too thin.
@@ -1351,6 +1644,49 @@ Output includes:
 3. A normalized quality score for quick comparisons
 4. Top learned model weights
 5. Delta summary vs baseline (throughput, completion rate, quality)
+
+One caveat about this runner: it derives each worker's initial `routingWeights`
+directly from their latent skill, so the operator's configuration is already
+optimal and learning has little room to add anything. That is a useful
+**strong-baseline** case — a policy must not regress there — but it is not
+evidence of uplift.
+
+### Scenario Benchmark (policy comparison)
+
+`benchmark:scenarios` is the runner that can actually fail a policy. It varies
+the conditions learning is supposed to help with, seeds every source of
+randomness including exploration and Thompson draws, gives every mode the
+identical workload and event-keyed outcome draws, and reports **paired**
+differences with confidence intervals rather than single-run numbers.
+
+```bash
+pnpm benchmark:scenarios -- --scenarios=cold-start,noisy-weights \
+    --modes=off,legacy,corrected,confidence --seeds=5 \
+    --users=40 --per-round=200 --rounds=8 --json=run.json
+```
+
+Scenarios: `accurate-weights` (strong baseline), `noisy-weights`,
+`cold-start`, `skill-drift`, `rare-specialist`, `multi-tag`,
+`delayed-feedback`, `contention`, `overload`.
+
+Modes: `off`, `shadow`, `legacy` (the pre-1.16 configuration), `corrected`
+(normalized updates, per-attempt evidence, epsilon-greedy, performance
+features, multi-target), `ucb1`, `confidence`, `thompson`.
+
+Reported per scenario: completed useful work per incoming task, mean quality,
+deadline misses, queue-age p50/p95/p99, allocation Gini, match latency
+p50/p95/p99 and throughput, reward observations per decision, acceptance Brier
+score and reliability bins, plus Redis commands, memory delta and model size.
+`--json` writes the raw per-run metrics along with runtime, hardware and seed
+provenance.
+
+Read the results with the gates in mind: require positive paired uplift on the
+noisy/cold-start scenarios, **and** no material regression on the
+strong-baseline, deadline or overload scenarios. Materiality is a product SLO
+question, not a universal percentage. Shadow mode validates data and decisions;
+it does not establish causal uplift — that needs offline policy evaluation or a
+controlled online rollout, and because workers share queues, an experiment unit
+has to account for interference rather than assuming task-level independence.
 
 ### Configuration Playbook (How To Choose)
 

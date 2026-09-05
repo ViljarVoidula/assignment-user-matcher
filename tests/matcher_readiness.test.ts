@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import type { AssignmentLintIssue } from '../src/types/matcher';
@@ -11,7 +11,7 @@ describe('Assignment readiness checks (checkAssignmentReadiness)', function () {
     const prefix = 'readiness_test:';
 
     before(async function () {
-        redisClient = createClient({});
+        redisClient = createTestClient();
         await redisClient.connect();
         matcher = new Matcher(redisClient, {
             redisPrefix: prefix,
@@ -26,7 +26,7 @@ describe('Assignment readiness checks (checkAssignmentReadiness)', function () {
     });
 
     beforeEach(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
 
     after(async function () {

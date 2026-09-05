@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import type { AssignmentLifecycleEvent } from '../src/types/matcher';
@@ -14,7 +14,7 @@ describe('SLA policies', function () {
     const prefix = 'sla_test:';
 
     before(async function () {
-        redisClient = createClient({});
+        redisClient = createTestClient();
         await redisClient.connect();
 
         matcher = new Matcher(redisClient, {
@@ -28,7 +28,7 @@ describe('SLA policies', function () {
     });
 
     beforeEach(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         events = [];
         // SLA clocks are Date.now()-scored zsets: fake Date lets tests
         // fast-forward past deadlines instead of sleeping in real time.

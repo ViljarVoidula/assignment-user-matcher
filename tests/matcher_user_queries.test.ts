@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import sinon from 'sinon';
 import AssignmentMatcher from '../src/matcher.class';
 import type { UserQueryResult } from '../src/types/matcher';
@@ -11,18 +11,18 @@ describe('User status & workload query APIs', function () {
     const acceptedIndexKey = (userId: string) => `${prefix}user:${userId}:accepted`;
 
     before(async function () {
-        redisClient = createClient({ url: 'redis://localhost:6379' });
+        redisClient = createTestClient();
         await redisClient.connect();
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
 
     after(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
         await redisClient.quit();
     });
 
     beforeEach(async function () {
-        await redisClient.flushAll();
+        await redisClient.flushDb();
     });
 
     function createMatcher(options: Record<string, unknown> = {}) {

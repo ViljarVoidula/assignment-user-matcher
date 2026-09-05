@@ -17,9 +17,15 @@ Options controlling automatic routing-weight synthesis (UCB1 policy)
 - [minSamplesForVeto](AutoRoutingWeightsOptions.md#minsamplesforveto)
 - [minTotalSamples](AutoRoutingWeightsOptions.md#mintotalsamples)
 - [policy](AutoRoutingWeightsOptions.md#policy)
+- [priorStrength](AutoRoutingWeightsOptions.md#priorstrength)
+- [priorVariance](AutoRoutingWeightsOptions.md#priorvariance)
 - [priorWeight](AutoRoutingWeightsOptions.md#priorweight)
+- [rewardModel](AutoRoutingWeightsOptions.md#rewardmodel)
+- [rewardRange](AutoRoutingWeightsOptions.md#rewardrange)
 - [rng](AutoRoutingWeightsOptions.md#rng)
 - [terminalOnlyTagStats](AutoRoutingWeightsOptions.md#terminalonlytagstats)
+- [totalAttempts](AutoRoutingWeightsOptions.md#totalattempts)
+- [vetoCooldownMs](AutoRoutingWeightsOptions.md#vetocooldownms)
 - [vetoThreshold](AutoRoutingWeightsOptions.md#vetothreshold)
 
 ## Properties
@@ -34,7 +40,7 @@ is omitted and policy is 'confidence' for backward compatibility.
 
 #### Defined in
 
-[src/types/matcher.ts:1765](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1765)
+[src/types/matcher.ts:1995](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1995)
 
 ___
 
@@ -48,7 +54,7 @@ no decay).
 
 #### Defined in
 
-[src/types/matcher.ts:1790](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1790)
+[src/types/matcher.ts:2020](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L2020)
 
 ___
 
@@ -60,7 +66,7 @@ UCB exploration coefficient; higher favors less-sampled tags (default: 0.5)
 
 #### Defined in
 
-[src/types/matcher.ts:1750](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1750)
+[src/types/matcher.ts:1980](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1980)
 
 ___
 
@@ -74,7 +80,7 @@ gate may still jump to 0 despite the clamp.
 
 #### Defined in
 
-[src/types/matcher.ts:1784](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1784)
+[src/types/matcher.ts:2014](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L2014)
 
 ___
 
@@ -86,7 +92,7 @@ Maximum synthesized weight on the conventional 0-100 scale (default: 100)
 
 #### Defined in
 
-[src/types/matcher.ts:1748](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1748)
+[src/types/matcher.ts:1978](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1978)
 
 ___
 
@@ -98,7 +104,7 @@ Minimum observations before a tag's stats are trusted (default: 5)
 
 #### Defined in
 
-[src/types/matcher.ts:1744](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1744)
+[src/types/matcher.ts:1974](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1974)
 
 ___
 
@@ -114,7 +120,7 @@ weights harder to trigger.
 
 #### Defined in
 
-[src/types/matcher.ts:1778](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1778)
+[src/types/matcher.ts:2008](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L2008)
 
 ___
 
@@ -127,7 +133,7 @@ any learned weights (default: 0 = off).
 
 #### Defined in
 
-[src/types/matcher.ts:1770](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1770)
+[src/types/matcher.ts:2000](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L2000)
 
 ___
 
@@ -142,7 +148,35 @@ Synthesis policy.
 
 #### Defined in
 
-[src/types/matcher.ts:1759](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1759)
+[src/types/matcher.ts:1989](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1989)
+
+___
+
+### priorStrength
+
+• `Optional` **priorStrength**: `number`
+
+Strength of the prior in pseudo-observations (default: 2). Higher
+values shrink under-sampled tags harder toward the prior.
+
+#### Defined in
+
+[src/types/matcher.ts:2061](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L2061)
+
+___
+
+### priorVariance
+
+• `Optional` **priorVariance**: `number`
+
+Prior variance for the `'gaussian'` reward model
+(default: `((max - min) / 4) ** 2`). Acts as a floor: five identical
+observations still leave a non-zero standard error, so uncertainty
+reflects evidence rather than coincidence.
+
+#### Defined in
+
+[src/types/matcher.ts:2056](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L2056)
 
 ___
 
@@ -154,7 +188,41 @@ Optimistic weight assigned to under-sampled or unobserved known tags (default: m
 
 #### Defined in
 
-[src/types/matcher.ts:1752](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1752)
+[src/types/matcher.ts:1982](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1982)
+
+___
+
+### rewardModel
+
+• `Optional` **rewardModel**: ``"gaussian"`` \| ``"bernoulli"``
+
+Posterior family used for uncertainty.
+
+- `'gaussian'` (default): normal posterior over the mean reward, with a
+  prior variance floor so repeated identical observations never become
+  infinitely certain.
+- `'bernoulli'`: Beta-Bernoulli posterior over rewards rescaled into
+  [0, 1] by `rewardRange`. Appropriate when the reward really is a
+  success indicator; do not use it on arbitrary continuous rewards.
+
+#### Defined in
+
+[src/types/matcher.ts:2042](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L2042)
+
+___
+
+### rewardRange
+
+• `Optional` **rewardRange**: [`number`, `number`]
+
+Reward scale `[min, max]` (default `[-1, 1]`). Sets the default prior
+variance and the mapping used by the `'bernoulli'` reward model.
+The `'ucb1'` exploration coefficient is only portable within a fixed
+scale — state it explicitly if your rewards are not in [-1, 1].
+
+#### Defined in
+
+[src/types/matcher.ts:2049](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L2049)
 
 ___
 
@@ -175,7 +243,7 @@ Must return values in [0, 1).
 
 #### Defined in
 
-[src/types/matcher.ts:1801](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1801)
+[src/types/matcher.ts:2031](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L2031)
 
 ___
 
@@ -189,7 +257,38 @@ skipped (default: false).
 
 #### Defined in
 
-[src/types/matcher.ts:1796](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1796)
+[src/types/matcher.ts:2026](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L2026)
+
+___
+
+### totalAttempts
+
+• `Optional` **totalAttempts**: `number`
+
+Judge `minTotalSamples` against this count of independent attempts
+instead of the sum of per-tag counts. One assignment carrying three
+tags is one attempt, not three, and summing tags lets correlated
+evidence clear a worker-level floor on its own.
+
+#### Defined in
+
+[src/types/matcher.ts:2076](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L2076)
+
+___
+
+### vetoCooldownMs
+
+• `Optional` **vetoCooldownMs**: `number`
+
+Time after a tag's last observation at which a learned veto lapses and
+the tag returns at `priorWeight` for reassessment (default: undefined =
+vetoes never lapse). Prefer setting this over permanent exclusion: a
+hard veto with no recovery path means a worker who improved, or whose
+bad run was circumstantial, can never be re-evaluated.
+
+#### Defined in
+
+[src/types/matcher.ts:2069](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L2069)
 
 ___
 
@@ -201,4 +300,4 @@ Mean-reward UCB score at or below which a tag is hard-vetoed with weight 0 (defa
 
 #### Defined in
 
-[src/types/matcher.ts:1746](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/types/matcher.ts#L1746)
+[src/types/matcher.ts:1976](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1976)

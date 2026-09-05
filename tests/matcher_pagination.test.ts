@@ -1,12 +1,11 @@
 import { expect } from 'chai';
 import AssignmentMatcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 
 describe('Assignment pagination and querying tests', () => {
     let matcher: AssignmentMatcher;
     let matcherNoDefault: AssignmentMatcher; // For tests that need isolated tag matching
-    const redisUrl = 'redis://localhost:6379';
-    const client = createClient({ url: redisUrl });
+    const client = createTestClient();
 
     before(async () => {
         await client.connect();
@@ -20,12 +19,12 @@ describe('Assignment pagination and querying tests', () => {
     });
 
     after(async () => {
-        await client.flushAll();
+        await client.flushDb();
         await client.disconnect();
     });
 
     beforeEach(async () => {
-        await client.flushAll();
+        await client.flushDb();
     });
 
     describe('getAllAssignments', () => {

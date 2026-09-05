@@ -1,5 +1,5 @@
 import Matcher from '../src/matcher.class';
-import { createClient } from 'redis';
+import { createTestClient } from './helpers/redis';
 import { expect } from 'chai';
 
 describe('Matcher Geolocation Tests', function () {
@@ -10,7 +10,7 @@ describe('Matcher Geolocation Tests', function () {
     const redisPrefix = 'geo_test:';
 
     before(async function () {
-        redisClient = await createClient({});
+        redisClient = await createTestClient();
         await redisClient.connect();
 
         matcher = new Matcher(redisClient, {
@@ -23,7 +23,7 @@ describe('Matcher Geolocation Tests', function () {
     });
 
     beforeEach(async function () {
-        await matcher.redisClient.flushAll();
+        await matcher.redisClient.flushDb();
     });
 
     after(async function () {
@@ -178,7 +178,7 @@ describe('Matcher Geolocation Tests', function () {
             }),
         });
 
-        await overrideMatcher.redisClient.flushAll();
+        await overrideMatcher.redisClient.flushDb();
 
         await overrideMatcher.addUser({
             id: 'user-custom',

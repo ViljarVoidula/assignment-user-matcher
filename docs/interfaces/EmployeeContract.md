@@ -26,7 +26,7 @@ Last day the contract runs; shifts after it are ineligible.
 
 #### Defined in
 
-[src/scheduling/types.ts:134](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L134)
+[src/scheduling/types.ts:134](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L134)
 
 ___
 
@@ -42,7 +42,7 @@ rejects the input rather than guess a working week. Ignored when
 
 #### Defined in
 
-[src/scheduling/types.ts:127](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L127)
+[src/scheduling/types.ts:127](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L127)
 
 ___
 
@@ -52,7 +52,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:112](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L112)
+[src/scheduling/types.ts:112](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L112)
 
 ___
 
@@ -64,7 +64,7 @@ Day-count contracts: maximum working days in the period (e.g. FR forfait jours).
 
 #### Defined in
 
-[src/scheduling/types.ts:129](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L129)
+[src/scheduling/types.ts:129](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L129)
 
 ___
 
@@ -74,7 +74,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:132](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L132)
+[src/scheduling/types.ts:132](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L132)
 
 ___
 
@@ -86,7 +86,7 @@ Hard bounds over the period, in minutes.
 
 #### Defined in
 
-[src/scheduling/types.ts:131](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L131)
+[src/scheduling/types.ts:131](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L131)
 
 ___
 
@@ -101,4 +101,4 @@ towards. Takes precedence over `fte`.
 
 #### Defined in
 
-[src/scheduling/types.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/a504415158022f52ed81c1ca96eab16d6963f15e/src/scheduling/types.ts#L119)
+[src/scheduling/types.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L119)
