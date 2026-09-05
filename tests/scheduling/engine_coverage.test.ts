@@ -372,17 +372,13 @@ describe('Scheduling engine coverage', function () {
             ]);
         });
 
-        it('merges absences into blocked intervals and tolerates unknown employees', function () {
+        it('merges absences into blocked intervals', function () {
             const ctx = buildModel(
                 inputWith({
-                    absences: [
-                        { employeeId: 'e1', from: '2026-01-06', to: '2026-01-06', kind: 'sick' },
-                        { employeeId: 'ghost', from: '2026-01-05', to: '2026-01-05' },
-                    ],
+                    absences: [{ employeeId: 'e1', from: '2026-01-06', to: '2026-01-06', kind: 'sick' }],
                 }),
             );
             expect(ctx.absences.get('e1')).to.deep.equal([{ start: DAY, end: 2 * DAY, kind: 'sick' }]);
-            expect(ctx.absences.get('ghost')).to.have.length(1);
             expect(ctx.employeeBlockedIntervals.get('e1')).to.deep.equal([{ start: DAY, end: 2 * DAY }]);
         });
 

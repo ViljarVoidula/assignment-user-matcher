@@ -22,6 +22,7 @@
  *     surcharge belongs to the person's total, not to any one shift.
  */
 
+import { rulesFor } from './constraints/support';
 import type { Employee, EmployeeCost, EngagementRule, SearchState, ShiftInstance } from './types';
 import { paidMinutesFor } from './constraints/engagement-floor';
 
@@ -115,7 +116,7 @@ export function rosterCost(state: SearchState): { totalCents: number; byEmployee
         let cents = 0;
         for (const instanceId of state.byEmployee.get(employee.id) ?? []) {
             const inst = ctx.instanceById.get(instanceId);
-            if (inst) cents += shiftCostCents(inst, employee.cost, ctx.rules.engagement);
+            if (inst) cents += shiftCostCents(inst, employee.cost, rulesFor(ctx, employee.id).engagement);
         }
         cents += overtimeSurchargeCents(state.minutesByEmployee.get(employee.id) ?? 0, employee.cost);
         if (cents > 0) byEmployee[employee.id] = cents;

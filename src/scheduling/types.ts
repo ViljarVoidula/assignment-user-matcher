@@ -729,6 +729,8 @@ export interface ScheduleInput {
     seed?: number;
     /** Wall-clock budget for the improvement loop. Default 10_000. */
     timeBudgetMs?: number;
+    /** Fixed search iteration limit. Without timeBudgetMs, runs deterministically to this limit. */
+    maxIterations?: number;
 
     /** The labour-law layer. Omit for a plain feasibility solve. */
     rules?: WorkingTimeRules;
@@ -861,6 +863,8 @@ export interface ScheduleResult {
 /** Identifying stamp for a solve. */
 export interface ScheduleProvenance {
     engineVersion: string;
+    /** Fixed iteration limit used for this run, if supplied. Persist the full input for replay. */
+    maxIterations?: number;
     seed: number;
     rulesHash: string;
     /** Duty classifications the caller supplied, recorded verbatim. */
@@ -1020,9 +1024,11 @@ export interface ModelContext {
     instanceById: Map<string, ShiftInstance>;
     /** Site registry built from `ScheduleInput.sites`. */
     siteIndex: SiteIndex;
-    /** Minutes in [0, periodDays*1440) the employee is blocked by time-off. */
+    /** Blocked intervals in elapsed period minutes, including overlapping overnight spillover. */
     employeeBlockedIntervals: Map<string, Array<{ start: number; end: number }>>;
     minRestMinutes: number;
+    /** Custom whole-roster constraints that must also contribute to search scoring. */
+    aggregateConstraints?: SchedulingConstraint[];
     /** Constraint registry snapshot, resolved with caller overrides. */
     constraints: SchedulingConstraint[];
 
@@ -1096,6 +1102,8 @@ export interface SearchState {
  */
 export interface SchedulingConstraint {
     id: string;
+    /** Caller-maintained implementation/configuration version, included in the rule hash. */
+    version?: string;
     /**
      * Lexicographic level. `'hard'` breaches are never accepted by construction;
      * `'medium'` and `'soft'` are traded off within their own level by `weight`.
@@ -1125,8 +1133,9 @@ export interface SchedulingConstraint {
     deltaRemove?(state: SearchState, pair: AssignmentPair): number;
     /**
      * Breaches visible only across the whole roster — staffing shortfalls,
-     * per-person window totals, team fairness spread. Pair-scoped `delta`
-     * cannot see these.
+     * per-person window totals, team fairness spread. Custom aggregate violations
+     * contribute to search scoring as well as final validation. Keep this hook
+     * pure and inexpensive, and avoid repeating breaches already scored by delta.
      */
     evaluate?(state: SearchState): ConstraintViolation[];
     /** Structured judgement for explanations and swap validation. */

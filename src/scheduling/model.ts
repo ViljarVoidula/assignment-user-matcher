@@ -41,6 +41,7 @@ import type {
 } from './types';
 import { ScheduleValidationError } from './types';
 import { createDefaultConstraints } from './constraints/constraint';
+import { scopeEmployeeConstraints } from './constraints/employee-scope';
 import { DEFAULT_MIN_REST_MINUTES } from './constraints/min-rest';
 import { assertValidOvertimeRule } from './constraints/overtime';
 import { DEFAULT_CONTRACT_HOURS_WEIGHT, contractedPeriodMinutes, resolveContractedWeeklyMinutes } from './contract-hours';
@@ -158,11 +159,11 @@ export function expandTemplate(
         }
 
         const unpaidBreak = template.unpaidBreakMinutes ?? 0;
-        if (unpaidBreak < 0 || unpaidBreak >= durationMinutes) {
+        if (!Number.isFinite(unpaidBreak) || unpaidBreak < 0 || unpaidBreak >= durationMinutes) {
             throw new ScheduleValidationError(`Shift template "${template.id}" has invalid unpaidBreakMinutes`);
         }
         const paidBreak = template.paidBreakMinutes ?? 0;
-        if (paidBreak < 0 || unpaidBreak + paidBreak >= durationMinutes) {
+        if (!Number.isFinite(paidBreak) || paidBreak < 0 || unpaidBreak + paidBreak >= durationMinutes) {
             throw new ScheduleValidationError(`Shift template "${template.id}" has invalid paidBreakMinutes`);
         }
         // A paid break counts as working time, so only the unpaid one is deducted.
@@ -354,8 +355,14 @@ function blockedIntervalsFor(
             continue;
         }
         const offset = clock.dayIndexOf(entry.date);
-        if (offset < 0 || offset >= periodDays) continue; // outside the period: irrelevant, not an error
-        out.push({ start: clock.dayStartMinutes(offset), end: clock.dayStartMinutes(offset + 1) });
+        const blocked = { start: clock.dayStartMinutes(offset), end: clock.dayStartMinutes(offset + 1) };
+        if (offset < 0 || offset >= periodDays) {
+            if (
+                ![...instanceById.values()].some((inst) => inst.startMinute < blocked.end && blocked.start < inst.endMinute)
+            )
+                continue;
+        }
+        out.push(blocked);
     }
 
     // External commitments are blackouts the roster may never override
@@ -369,14 +376,10 @@ function blockedIntervalsFor(
 
 /** Resolve an ISO date or date-time span to period minutes. */
 function spanToMinutes(from: string, to: string, clock: PeriodClock, field: string): { start: number; end: number } {
-    const parse = (value: string, endOfDayWhenBare: boolean) => {
-        const [datePart, timePart] = value.split('T');
-        assertIsoDate(datePart, field);
-        if (timePart) return clock.toPeriodMinutes(datePart, timePart.slice(0, 5), field);
-        const dayIndex = clock.dayIndexOf(datePart);
-        return endOfDayWhenBare ? clock.dayStartMinutes(dayIndex + 1) : clock.dayStartMinutes(dayIndex);
-    };
-    return { start: parse(from, false), end: parse(to, true) };
+    const start = clock.parseDateTime(from, `${field}.from`);
+    const end = clock.parseDateTime(to, `${field}.to`, true);
+    if (end <= start) throw new ScheduleValidationError(`${field}: to must follow from`);
+    return { start, end };
 }
 
 function validateEmployee(employee: Employee): void {
@@ -436,18 +439,28 @@ export function resolveConstraints(
     options: ConstraintOptions | undefined,
     rules?: WorkingTimeRules,
     objectives?: ObjectiveWeights,
+    employeeRules?: Map<string, WorkingTimeRules>,
 ): SchedulingConstraint[] {
-    const constraints = createDefaultConstraints({
+    const defaults = {
         minRestMinutes: options?.minRestMinutes ?? rules?.dailyRest?.minMinutes ?? DEFAULT_MIN_REST_MINUTES,
         oneShiftPerDay: options?.oneShiftPerDay ?? false,
         rules,
         objectives,
-    });
+    };
+    const constraints = employeeRules
+        ? scopeEmployeeConstraints(defaults, employeeRules)
+        : createDefaultConstraints(defaults);
     const overrides = options?.overrides ?? {};
     for (const c of constraints) {
         const o = overrides[c.id];
         if (!o) continue;
-        if (o.hardness !== undefined) c.hardness = o.hardness;
+        if (o.hardness !== undefined) {
+            c.hardness = o.hardness;
+            const verdict = c.verdict?.bind(c);
+            if (verdict) c.verdict = (state, pair) => ({ ...verdict(state, pair), severity: o.hardness! });
+            const evaluate = c.evaluate?.bind(c);
+            if (evaluate) c.evaluate = (state) => evaluate(state).map((v) => ({ ...v, severity: o.hardness! }));
+        }
         if (o.weight !== undefined) c.weight = o.weight;
     }
     return [...constraints, ...(options?.custom ?? [])];
@@ -491,6 +504,19 @@ function buildHistory(
 export function buildModel(input: ScheduleInput): ModelContext {
     assertIsoDate(input.period.startDate, 'period.startDate');
     assertIsoDate(input.period.endDate, 'period.endDate');
+    for (const [name, value] of [
+        ['timeBudgetMs', input.timeBudgetMs],
+        ['maxIterations', input.maxIterations],
+    ] as const) {
+        if (
+            value !== undefined &&
+            (!Number.isFinite(value) || value < 0 || (name === 'maxIterations' && !Number.isInteger(value)))
+        ) {
+            throw new ScheduleValidationError(
+                `${name} must be a finite non-negative ${name === 'maxIterations' ? 'integer' : 'number'}`,
+            );
+        }
+    }
     const periodDays = daysBetween(input.period.startDate, input.period.endDate) + 1;
     if (periodDays <= 0) throw new ScheduleValidationError('period.endDate must not precede period.startDate');
 
@@ -559,6 +585,8 @@ export function buildModel(input: ScheduleInput): ModelContext {
 
     const absences = new Map<string, Array<{ start: number; end: number; kind?: string }>>();
     for (const absence of input.absences ?? []) {
+        if (!employeeById.has(absence.employeeId))
+            throw new ScheduleValidationError(`Unknown absence employee "${absence.employeeId}"`);
         const span = spanToMinutes(absence.from, absence.to, clock, 'absences');
         absences.set(absence.employeeId, [...(absences.get(absence.employeeId) ?? []), { ...span, kind: absence.kind }]);
         // An absence blocks assignment as firmly as time off does.
@@ -572,19 +600,11 @@ export function buildModel(input: ScheduleInput): ModelContext {
     }
     const pinned = new Set((input.pinned ?? []).map((p) => `${p.employeeId}|${p.shiftInstanceId}`));
 
-    let publishedAtMinute: number | undefined;
-    if (input.published?.publishedAt) {
-        const [datePart, timePart] = input.published.publishedAt.split('T');
-        assertIsoDate(datePart, 'published.publishedAt');
-        publishedAtMinute = clock.toPeriodMinutes(datePart, (timePart ?? '00:00').slice(0, 5), 'published.publishedAt');
-    }
-
-    let asOfMinute: number | undefined;
-    if (input.asOf) {
-        const [datePart, timePart] = input.asOf.split('T');
-        assertIsoDate(datePart, 'asOf');
-        asOfMinute = clock.toPeriodMinutes(datePart, (timePart ?? '00:00').slice(0, 5), 'asOf');
-    }
+    const publishedAtMinute =
+        input.published?.publishedAt === undefined
+            ? undefined
+            : clock.parseDateTime(input.published.publishedAt, 'published.publishedAt');
+    const asOfMinute = input.asOf === undefined ? undefined : clock.parseDateTime(input.asOf, 'asOf');
 
     return {
         periodStartDate: input.period.startDate,
@@ -597,7 +617,8 @@ export function buildModel(input: ScheduleInput): ModelContext {
         siteIndex,
         employeeBlockedIntervals,
         minRestMinutes: input.constraints?.minRestMinutes ?? rules.dailyRest?.minMinutes ?? DEFAULT_MIN_REST_MINUTES,
-        constraints: resolveConstraints(input.constraints, rules, input.objectives),
+        aggregateConstraints: input.constraints?.custom?.filter((c) => c.evaluate) ?? [],
+        constraints: resolveConstraints(input.constraints, rules, input.objectives, rulesByEmployee),
         clock,
         rules,
         rulesByEmployee,

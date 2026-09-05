@@ -47,6 +47,7 @@ export function assign(state: InternalState, employeeId: string, instanceId: str
     // Unknown ids are a no-op, not a partial write: booking minutes for an
     // employee the model never saw would corrupt the fairness and cost sums.
     if (!inst || !state.ctx.employeeById.has(employeeId)) return;
+    if (state.isAssigned(employeeId, instanceId)) return;
     state.assignments.get(instanceId)?.add(employeeId);
     state.byEmployee.get(employeeId)?.add(instanceId);
     // `minutesByEmployee` tracks *working* time, which unpaid breaks and duty
@@ -69,6 +70,7 @@ export function assign(state: InternalState, employeeId: string, instanceId: str
 export function unassign(state: InternalState, employeeId: string, instanceId: string): void {
     const inst = state.ctx.instanceById.get(instanceId);
     if (!inst || !state.ctx.employeeById.has(employeeId)) return;
+    if (!state.isAssigned(employeeId, instanceId)) return;
     state.assignments.get(instanceId)?.delete(employeeId);
     state.byEmployee.get(employeeId)?.delete(instanceId);
     state.minutesByEmployee.set(employeeId, (state.minutesByEmployee.get(employeeId) ?? 0) - inst.workingMinutes);

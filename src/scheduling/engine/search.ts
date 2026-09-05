@@ -33,6 +33,7 @@ export interface SearchOptions {
     objective: 'standard' | 'balanced';
     minHoursWeight: number;
     timeBudgetMs: number;
+    maxIterations?: number;
     rand: () => number;
     now?: () => number;
     /** Late-acceptance history length. Larger accepts more drift. */
@@ -108,7 +109,7 @@ export function improveWithLns(
     const history: LexScore[] = new Array(historyLength).fill(workingScore);
     let iteration = 0;
 
-    while (now() < deadline) {
+    while (now() < deadline && iteration < (options.maxIterations ?? Infinity)) {
         const total = assignedPairs(working).length;
         if (total === 0) break;
 

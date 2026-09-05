@@ -18,6 +18,7 @@
  *     attempted.
  */
 
+import { rulesFor } from './constraints/support';
 import type {
     AssignmentPair,
     ConstraintViolation,
@@ -28,6 +29,9 @@ import type {
     SearchState,
     ContractHoursSummary,
 } from './types';
+import { staffingViolations } from './constraints/min-staffing';
+import { minHourViolations } from './constraints/hour-budget';
+import { MIN_HOURS_WEIGHT } from './engine/objective';
 import { buildModel } from './model';
 import { propagate } from './engine/propagation';
 import { assign, createState } from './engine/state';
@@ -55,6 +59,10 @@ const CONTRACT_HOUR_WEIGHT = 10;
 
 export interface ComplianceReport {
     compliant: boolean;
+    /** Whether all headcount and skill coverage requirements are met. */
+    coverageComplete: boolean;
+    /** A fully covered roster with no hard breaches. */
+    publishable: boolean;
     violations: ConstraintViolation[];
     /** Per-assignment verdicts for every rule that had something to say. */
     verdicts: Array<{ pair: AssignmentPair; verdicts: RuleVerdict[] }>;
@@ -100,6 +108,16 @@ export function checkCompliance(input: ScheduleInput, roster: ScheduledAssignmen
             });
             continue;
         }
+        if (state.isAssigned(entry.employeeId, entry.shiftInstanceId)) {
+            violations.push({
+                constraintId: 'input',
+                severity: 'hard',
+                employeeId: entry.employeeId,
+                shiftInstanceId: entry.shiftInstanceId,
+                message: 'roster contains a duplicate assignment',
+            });
+            continue;
+        }
         assign(state, entry.employeeId, entry.shiftInstanceId, entry.reasons ?? []);
     }
 
@@ -113,6 +131,12 @@ export function checkCompliance(input: ScheduleInput, roster: ScheduledAssignmen
     }
     violations.push(...collectPairViolations(state), ...collectAggregateViolations(state));
 
+    const staffing = staffingViolations(ctx, state, 'medium');
+    violations.push(
+        ...staffing,
+        ...minHourViolations(ctx, state, ctx.constraints.find((c) => c.id === 'hour-budget')?.weight ?? MIN_HOURS_WEIGHT),
+    );
+
     // The same ledger pass the solver runs at result assembly — one judgement
     // path, so `checkCompliance` can never disagree with `solveSchedule`
     // about what a roster owes.
@@ -125,6 +149,8 @@ export function checkCompliance(input: ScheduleInput, roster: ScheduledAssignmen
 
     return {
         compliant: violations.every((v) => v.severity !== 'hard'),
+        coverageComplete: staffing.length === 0,
+        publishable: staffing.length === 0 && violations.every((v) => v.severity !== 'hard'),
         violations,
         verdicts,
         ledger,
@@ -224,8 +250,13 @@ export function repairSchedule(
     disruption: Disruption,
     published: ScheduledAssignment[],
 ): RepairResult {
-    const openings = openingsFor(disruption, published);
-    const surviving = published.filter((entry) => !isDropped(entry, disruption));
+    const ctx = buildModel(input);
+    const dropped = (entry: ScheduledAssignment) => isDropped(entry, disruption, ctx);
+    const openings =
+        disruption.kind === 'cancelShift'
+            ? []
+            : [...new Set(published.filter(dropped).map((entry) => entry.shiftInstanceId))];
+    const surviving = published.filter((entry) => !dropped(entry));
 
     // Re-solve with the untouched roster pinned. Only the openings are free.
     const repaired = solveSchedule({
@@ -301,7 +332,7 @@ export function rankCandidates(
             inst,
             employee,
             state.minutesByEmployee.get(employee.id) ?? 0,
-            ctx.rules.engagement,
+            rulesFor(ctx, employee.id).engagement,
         );
         const fairnessDebt = meanExtra - (extraLoad.get(employee.id) ?? 0);
         const preference = preferenceScore(ctx.clock, employee.availability, inst);
@@ -433,23 +464,22 @@ function average(values: number[]): number {
     return values.length === 0 ? 0 : values.reduce((a, b) => a + b, 0) / values.length;
 }
 
-function openingsFor(disruption: Disruption, published: ScheduledAssignment[]): string[] {
-    switch (disruption.kind) {
-        case 'noShow':
-            return [disruption.shiftInstanceId];
-        case 'absence':
-            return published.filter((e) => e.employeeId === disruption.employeeId).map((e) => e.shiftInstanceId);
-        case 'cancelShift':
-            return [];
-    }
-}
-
-function isDropped(entry: ScheduledAssignment, disruption: Disruption): boolean {
+function isDropped(entry: ScheduledAssignment, disruption: Disruption, ctx: ReturnType<typeof buildModel>): boolean {
     switch (disruption.kind) {
         case 'noShow':
             return entry.employeeId === disruption.employeeId && entry.shiftInstanceId === disruption.shiftInstanceId;
-        case 'absence':
-            return entry.employeeId === disruption.employeeId;
+        case 'absence': {
+            if (entry.employeeId !== disruption.employeeId) return false;
+            const inst = ctx.instanceById.get(entry.shiftInstanceId);
+            if (!inst) return false;
+            const start = ctx.clock.parseDateTime(disruption.from, 'disruption.from');
+            const end = ctx.clock.parseDateTime(
+                disruption.to ?? ctx.clock.dateAt(ctx.periodDays - 1),
+                'disruption.to',
+                true,
+            );
+            return inst.startMinute < end && start < inst.endMinute;
+        }
         case 'cancelShift':
             return entry.shiftInstanceId === disruption.shiftInstanceId;
     }

@@ -25,7 +25,7 @@ export function propagate(ctx: ModelContext): PropagationResult {
     }
 
     for (const constraint of ctx.constraints) {
-        constraint.prune?.(ctx, eligibility);
+        if (constraint.hardness === 'hard') constraint.prune?.(ctx, eligibility);
     }
 
     const eligibleByInstance = new Map<string, string[]>();

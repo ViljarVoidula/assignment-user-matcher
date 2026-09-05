@@ -27,15 +27,30 @@ export function hashRules(
     objectives?: ObjectiveWeights,
     sites?: Site[],
     travelSpeedKmh?: number,
+    employeeRules?: Map<string, WorkingTimeRules>,
 ): string {
+    // Only the employees whose effective rules actually differ from the global
+    // set. `rulesByEmployee` carries an entry for *every* employee, so hashing
+    // it whole would make the digest move when a person is added or renamed —
+    // and `rulesHash` is a configuration fingerprint, not a roster one.
+    const globalDigest = stableStringify(rules ?? {});
+    const personalRules = [...(employeeRules ?? [])]
+        .filter(([, effective]) => stableStringify(effective) !== globalDigest)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     const payload = stableStringify({
         rules: rules ?? null,
+        ...(personalRules.length > 0 ? { employeeRules: personalRules } : {}),
         // Only the parts of `constraints` that change outcomes: custom rules are
         // functions and cannot be hashed, so their ids stand in for them.
         minRestMinutes: options?.minRestMinutes ?? null,
         oneShiftPerDay: options?.oneShiftPerDay ?? null,
         overrides: options?.overrides ?? null,
-        custom: (options?.custom ?? []).map((c) => ({ id: c.id, hardness: c.hardness, weight: c.weight ?? null })),
+        custom: (options?.custom ?? []).map((c) => ({
+            id: c.id,
+            hardness: c.hardness,
+            weight: c.weight ?? null,
+            ...(c.version === undefined ? {} : { version: c.version }),
+        })),
         objectives: objectives ?? null,
         // Omit these keys entirely when absent so existing inputs without site data
         // keep the same rulesHash they had before this feature existed.

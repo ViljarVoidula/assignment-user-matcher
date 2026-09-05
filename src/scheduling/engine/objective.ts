@@ -19,10 +19,10 @@
  * gradient to climb out of an infeasible region; a 0/1 flag leaves it on a
  * plateau with nothing to follow.
  *
- * Aggregate constraints (`evaluate`) are deliberately not run per move — they
- * are O(roster) and the search calls the objective in its innermost loop. The
- * cheap aggregates that steer the search (coverage, fairness) have dedicated
- * terms here; the full `evaluate` pass runs once when the result is assembled.
+ * Built-in aggregates use dedicated scoring terms below. Custom `evaluate`
+ * hooks also contribute to the score, so extension rules can steer search.
+ * Their authors should keep these hooks cheap: they run for each candidate
+ * roster. All aggregate hooks run again during final validation.
  */
 
 import type { FairnessRule, ModelContext, SearchState } from '../types';
@@ -140,6 +140,15 @@ export function scoreLex(
     fairnessRules?: FairnessRule[],
 ): LexScore {
     const totals = breachTotals(ctx, state);
+    for (const constraint of ctx.aggregateConstraints ?? []) {
+        for (const violation of constraint.evaluate?.(state) ?? []) {
+            const magnitude =
+                violation.actual !== undefined && violation.required !== undefined
+                    ? Math.max(1, Math.abs(violation.actual - violation.required))
+                    : 1;
+            totals[violation.severity] += magnitude * (constraint.weight ?? DEFAULT_SOFT_WEIGHT);
+        }
+    }
 
     for (const inst of ctx.instances) {
         totals.medium += slotShortage(ctx, state, inst.id) * UNFILLED_WEIGHT;

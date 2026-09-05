@@ -26,7 +26,7 @@ import type {
     SearchState,
 } from '../types';
 import { addDays } from '../time';
-import { fail, fromVerdict, instanceOf, pass } from './support';
+import { rulesFor, fail, fromVerdict, instanceOf, pass } from './support';
 
 export const SUNDAY_CITATION = 'National Sunday/holiday rest law';
 
@@ -126,18 +126,19 @@ function sundaysInPeriod(state: SearchState): string[] {
  * honest output is a dated debt the operator can act on.
  */
 export function compensatoryRestLedger(state: SearchState, rule: RestDayRule | undefined): LedgerEntry[] {
-    const within = rule?.compensatoryRestWithinDays;
-    if (!within) return [];
-
     const out: LedgerEntry[] = [];
     for (const [instanceId, employees] of state.assignments) {
         const inst = state.ctx.instanceById.get(instanceId);
         if (!inst || employees.size === 0) continue;
 
-        const deadlineDays = inst.isPublicHoliday ? within.holiday : inst.isSunday ? within.sunday : undefined;
-        if (deadlineDays === undefined) continue;
-
         for (const employeeId of employees) {
+            const within = (
+                Object.prototype.hasOwnProperty.call(state.ctx.employeeById.get(employeeId)?.rules ?? {}, 'restDays')
+                    ? rulesFor(state.ctx, employeeId).restDays
+                    : (rulesFor(state.ctx, employeeId).restDays ?? rule)
+            )?.compensatoryRestWithinDays;
+            const deadlineDays = inst.isPublicHoliday ? within?.holiday : inst.isSunday ? within?.sunday : undefined;
+            if (deadlineDays === undefined) continue;
             out.push({
                 kind: 'substituteRestDay',
                 employeeId,

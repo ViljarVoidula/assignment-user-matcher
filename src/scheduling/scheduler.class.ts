@@ -34,14 +34,14 @@ import { hashRules } from './provenance';
 
 const DEFAULT_TIME_BUDGET_MS = 10_000;
 const DEFAULT_SEED = 42;
-export const ENGINE_VERSION = '2';
+export const ENGINE_VERSION = '3';
 
 export class ShiftScheduler {
     /** Solve a scheduling problem synchronously. Throws `ScheduleValidationError` on malformed input. */
     solve(input: ScheduleInput): ScheduleResult {
         const startedAt = Date.now();
         const objective = input.objective ?? 'standard';
-        const timeBudgetMs = input.timeBudgetMs ?? DEFAULT_TIME_BUDGET_MS;
+        const timeBudgetMs = input.timeBudgetMs ?? (input.maxIterations === undefined ? DEFAULT_TIME_BUDGET_MS : Infinity);
         const seed = input.seed ?? DEFAULT_SEED;
         const rand = createPrng(seed);
 
@@ -71,6 +71,7 @@ export class ShiftScheduler {
                     objective,
                     minHoursWeight,
                     timeBudgetMs,
+                    maxIterations: input.maxIterations,
                     rand,
                     onImprovement: input.onProgress
                         ? (best) => input.onProgress!(this.assemble(best, propagation, startedAt, seed, input, 0))
@@ -151,8 +152,16 @@ export class ShiftScheduler {
             },
             provenance: {
                 engineVersion: ENGINE_VERSION,
+                ...(input.maxIterations === undefined ? {} : { maxIterations: input.maxIterations }),
                 seed,
-                rulesHash: hashRules(input.rules, input.constraints, input.objectives, input.sites, input.travelSpeedKmh),
+                rulesHash: hashRules(
+                    input.rules,
+                    input.constraints,
+                    input.objectives,
+                    input.sites,
+                    input.travelSpeedKmh,
+                    ctx.rulesByEmployee,
+                ),
                 dutyClassificationNotes: dutyNotes(ctx),
                 // Nothing in this module consumes a behavioural or predictive
                 // per-worker signal, so the claim is structural rather than a

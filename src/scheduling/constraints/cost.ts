@@ -14,6 +14,7 @@
  * minimises is the number the manager is shown.
  */
 
+import { rulesFor } from './support';
 import type { AssignmentPair, SchedulingConstraint, SearchState } from '../types';
 import { marginalCostCents, overtimeSurchargeCents, shiftCostCents } from '../cost';
 
@@ -56,10 +57,10 @@ function pairCostCents(state: SearchState, pair: AssignmentPair): number {
 
     const worked = state.minutesByEmployee.get(pair.employeeId) ?? 0;
     if (!state.isAssigned(pair.employeeId, pair.shiftInstanceId)) {
-        return marginalCostCents(inst, employee, worked, state.ctx.rules.engagement);
+        return marginalCostCents(inst, employee, worked, rulesFor(state.ctx, employee.id).engagement);
     }
 
-    const base = shiftCostCents(inst, employee.cost, state.ctx.rules.engagement);
+    const base = shiftCostCents(inst, employee.cost, rulesFor(state.ctx, employee.id).engagement);
     const surcharge = overtimeSurchargeCents(worked, employee.cost);
     const share = worked > 0 ? (surcharge * inst.workingMinutes) / worked : 0;
     return base + share;

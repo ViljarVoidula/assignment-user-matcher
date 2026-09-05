@@ -97,6 +97,26 @@ export class PeriodClock {
         return this.periodMinuteAt(this.dayIndexOf(date), parseTimeOfDay(timeOfDay, field));
     }
 
+    /** Resolve a local date-time or an ISO instant with an explicit UTC offset. */
+    parseDateTime(value: string, field = 'dateTime', endOfBareDate = false): number {
+        const match = /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?)(Z|[+-]\d{2}:\d{2})?)?$/.exec(value);
+        if (!match) throw new ScheduleValidationError(`Invalid ISO date-time for ${field}: "${value}"`);
+        const [, date, time, offset] = match;
+        assertIsoDate(date, field);
+        if (!time) return this.dayStartMinutes(this.dayIndexOf(date) + (endOfBareDate ? 1 : 0));
+        parseTimeOfDay(time.split('.')[0], field);
+        if (offset) {
+            if (offset !== 'Z') {
+                const [hours, minutes] = offset.slice(1).split(':').map(Number);
+                if (hours > 23 || minutes > 59) throw new ScheduleValidationError(`Invalid UTC offset for ${field}`);
+            }
+            const epoch = Date.parse(`${date}T${time}${offset}`);
+            if (!Number.isFinite(epoch)) throw new ScheduleValidationError(`Invalid ISO instant for ${field}`);
+            return this.fromEpochMs(epoch);
+        }
+        return this.toPeriodMinutes(date, time.split('.')[0], field);
+    }
+
     /**
      * True elapsed minutes from local midnight on the period start to local
      * midnight on `dayIndex` — 1440 per day except across a DST transition.
@@ -287,7 +307,11 @@ export function parseTimeOfDay(value: string, field: string): number {
 
 /** Throws `ScheduleValidationError` unless `value` is a real `YYYY-MM-DD` date. */
 export function assertIsoDate(value: string, field: string): void {
-    if (!ISO_DATE.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
+    if (
+        !ISO_DATE.test(value) ||
+        Number.isNaN(Date.parse(`${value}T00:00:00Z`)) ||
+        new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) !== value
+    ) {
         throw new ScheduleValidationError(`Invalid ISO date for ${field}: "${value}" (expected YYYY-MM-DD)`);
     }
 }

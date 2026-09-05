@@ -27,7 +27,7 @@ import type {
     SearchState,
     ShiftInstance,
 } from '../types';
-import { fail, fromVerdict, h, instanceOf, pass } from './support';
+import { rulesFor, fail, fromVerdict, h, instanceOf, pass } from './support';
 
 export const NOTICE_CITATION = 'Directive (EU) 2019/1152 Art 10';
 
@@ -137,24 +137,27 @@ function noticeShortfall(
  * that matters.
  */
 export function cancellationLedger(state: SearchState, rule: NoticeRule | undefined) {
-    if (!rule?.cancellationCompensationMinutes) return [];
     const out = [];
     for (const key of state.ctx.publishedPairs) {
         const [employeeId, instanceId] = key.split('|');
+        const applied = Object.prototype.hasOwnProperty.call(state.ctx.employeeById.get(employeeId)?.rules ?? {}, 'notice')
+            ? rulesFor(state.ctx, employeeId).notice
+            : (rulesFor(state.ctx, employeeId).notice ?? rule);
+        if (!applied?.cancellationCompensationMinutes) continue;
         if (state.assignments.get(instanceId)?.has(employeeId)) continue;
         const inst = state.ctx.instanceById.get(instanceId);
         if (
-            rule.cancellationDeadlineMinutes !== undefined &&
+            applied.cancellationDeadlineMinutes !== undefined &&
             state.ctx.asOfMinute !== undefined &&
             inst !== undefined &&
-            inst.startMinute - state.ctx.asOfMinute >= rule.cancellationDeadlineMinutes
+            inst.startMinute - state.ctx.asOfMinute >= applied.cancellationDeadlineMinutes
         ) {
             continue; // cancelled with the deadline still ahead — no liability
         }
         out.push({
             kind: 'lateCancellationPay' as const,
             employeeId,
-            minutes: Math.max(rule.cancellationCompensationMinutes, inst?.workingMinutes ?? 0),
+            minutes: Math.max(applied.cancellationCompensationMinutes, inst?.workingMinutes ?? 0),
             reason: `published assignment "${instanceId}" was cancelled`,
             citation: NOTICE_CITATION,
         });

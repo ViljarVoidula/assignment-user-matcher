@@ -2105,6 +2105,24 @@ diagnoseInfeasibility(input); // why it cannot be solved, before solving
 
 `expandShiftInstances(input)` returns the dated planning grid a host should render before anything is assigned — the same `<templateId>@<date>` ids every other call refers to. Use it so the grid ids never drift from the instances the solver will judge.
 
+### Validation and replay (engine version 3)
+
+`checkCompliance` reports staffing and skill shortfalls alongside assignment violations. Its `compliant` flag means no hard breaches; `coverageComplete` means every staffing requirement is met; `publishable` requires both. The host must still handle any medium-severity obligations and publication approvals required by its workflow. Duplicate assignments are input errors and do not inflate worked hours.
+
+Employee `rules` replace whole global rule families, including families absent globally. The same effective rules apply during solving, candidate checks, and compliance. Night classification uses the employee's effective night window. Rule hardness overrides also apply to returned verdicts; only hard constraints prune eligibility. Absence repair preserves published assignments outside the actual absence interval, including when a shift starts before that interval and overlaps it.
+
+Date-time fields (`asOf`, publication time, absences, external commitments) accept local date-times in the roster zone or ISO instants with `Z`/`±HH:MM`. Bare absence end dates include the entire local day. Invalid dates, reversed spans, unknown absence employees, and invalid search budgets throw `ScheduleValidationError`. Leave beyond the final planning date still blocks overnight work that reaches it.
+
+For repeatable optimization, use a fixed iteration count and omit `timeBudgetMs`:
+
+```ts
+const result = solveSchedule({ ...input, seed: 42, maxIterations: 500, timeBudgetMs: undefined });
+```
+
+With both limits set, search stops at whichever is reached first, so wall-clock termination can change the result. Persist the full input, engine version, and custom-rule implementations for replay. `rulesHash` includes effective employee rules and optional custom constraint `version` strings; it is a configuration fingerprint, not a complete input archive.
+
+Custom `evaluate(state)` violations now influence search selection as well as final validation. These hooks must be pure and fast, and should express obligations not already scored by `delta`. Candidate checks still use pair-level hooks; implement `delta`/`verdict` for restrictions that must also block an individual cover suggestion. Search remains heuristic and does not prove optimality or infeasibility.
+
 ### Compliance boundary
 
 Ranking uses declared qualifications, contractual availability, legal limits, cost, and fairness debt computed from **realised** assignment counts. It never consumes reliability scores, no-show prediction, acceptance history or learned per-worker behaviour, and the module is not wired to the matcher's learning layer. Under AI Act Annex III point 4(b), allocating on individual behaviour or traits is high-risk, and the Art 6(3) narrow-task filter has an absolute carve-back for profiling — so that boundary is what keeps this a constraint solver. `result.provenance` records `{ engineVersion, seed, rulesHash, profilingFree }` for audit.
