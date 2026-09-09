@@ -22,6 +22,8 @@
 - **Node comes from nvm.** Every shell step must start with `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"` or `pnpm`/`npx` will not be found.
 - **Vite in the console must be started as `node node_modules/vite/bin/vite.js`**, not `pnpm dev`.
 - **Never run two platform test suites at once** — they share one Redis logical DB and flush it.
+- **All four repositories are on a `feat/i18n-estonian` branch** created before execution
+  (`example`, `platform`, `sdks`). Commit there, never on `main`.
 - **Before `drizzle-kit generate`, run `git status` on the `drizzle/` directory.** It can renumber over an uncommitted migration that lacks a meta snapshot.
 
 ## Repository map
@@ -600,51 +602,62 @@ git commit -m "feat(control-plane): store a locale on users and worker identitie
 
 - [ ] **Step 1: Write the failing test**
 
-Create `apps/api/test/console-locale.test.ts`, following the setup helpers the existing
-console tests in that directory use (copy the harness import block from
-`apps/api/test/console.test.ts` verbatim — it builds the app and signs a session):
+Create `apps/api/test/console-locale.test.ts`. The harness is `createTestContext` +
+`ctx.app.inject` + `authHeader` from `./helpers.js` — the same shape as
+`apps/api/test/console.test.ts`. There is no `withConsoleSession` helper; do not invent one.
 
 ```ts
-import { describe, expect, it } from 'vitest';
-// Reuse the same harness the other console tests use.
-import { withConsoleSession } from './helpers/console-session';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { authHeader, createTestContext, type TestContext } from './helpers.js';
 
 describe('console locale', () => {
-    it('reports a null locale for a user who has never chosen', async () => {
-        await withConsoleSession(async ({ request }) => {
-            const me = await request('GET', '/v1/console/me');
-            expect(me.user.locale).toBeNull();
+    let ctx: TestContext;
+    let sessionToken: string;
+
+    beforeAll(async () => {
+        ctx = await createTestContext({ adminToken: 'admintok_locale_012345' });
+        const signup = await ctx.app.inject({
+            method: 'POST',
+            url: '/auth/signup',
+            payload: { email: `locale-${Date.now()}@corp.io`, password: 'hunter2hunter2' },
         });
+        sessionToken = signup.json().sessionToken;
+    });
+    afterAll(() => ctx.cleanup());
+
+    const get = (url: string) => ctx.app.inject({ method: 'GET', url, headers: authHeader(sessionToken) });
+    const patch = (url: string, payload: unknown) =>
+        ctx.app.inject({ method: 'PATCH', url, payload: payload as object, headers: authHeader(sessionToken) });
+
+    it('reports a null locale for a user who has never chosen', async () => {
+        const response = await get('/console/me');
+        expect(response.statusCode).toBe(200);
+        expect(response.json().user.locale).toBeNull();
     });
 
     it('persists a chosen locale and returns it on the next read', async () => {
-        await withConsoleSession(async ({ request }) => {
-            const patched = await request('PATCH', '/v1/console/me', { locale: 'et' });
-            expect(patched.user.locale).toBe('et');
-            const me = await request('GET', '/v1/console/me');
-            expect(me.user.locale).toBe('et');
-        });
+        const patched = await patch('/console/me', { locale: 'et' });
+        expect(patched.statusCode).toBe(200);
+        expect(patched.json().user.locale).toBe('et');
+        expect((await get('/console/me')).json().user.locale).toBe('et');
     });
 
     it('rejects a locale the product does not ship', async () => {
-        await withConsoleSession(async ({ request, expectError }) => {
-            await expectError(request('PATCH', '/v1/console/me', { locale: 'klingon' }), 400);
-        });
+        const response = await patch('/console/me', { locale: 'klingon' });
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error).toBe('invalid_locale');
     });
 
     it('clears the choice when sent null', async () => {
-        await withConsoleSession(async ({ request }) => {
-            await request('PATCH', '/v1/console/me', { locale: 'et' });
-            const cleared = await request('PATCH', '/v1/console/me', { locale: null });
-            expect(cleared.user.locale).toBeNull();
-        });
+        await patch('/console/me', { locale: 'et' });
+        const cleared = await patch('/console/me', { locale: null });
+        expect(cleared.json().user.locale).toBeNull();
     });
 });
 ```
 
-If `apps/api/test/helpers/console-session.ts` does not exist, write this test against the
-harness style actually used by the neighbouring console test file instead — do not invent
-a helper that is not there.
+Check the error-body field name against a neighbouring test that asserts a 400 before
+relying on `error`; match whatever that file asserts.
 
 - [ ] **Step 2: Run it and confirm it fails**
 
@@ -764,34 +777,51 @@ git commit -m "feat(api): read and write the console user's language preference"
 
 - [ ] **Step 1: Write the failing test**
 
-Create `apps/api/test/worker-locale.test.ts`, using the same worker-session harness the
-neighbouring worker-portal tests use:
+Create `apps/api/test/worker-locale.test.ts`. Build the worker session exactly the way
+`apps/api/test/worker-auth.test.ts` does — sign up, create a worker over `/v1/workers`,
+enable the portal with `ctx.controlPlane!.setPortalEnabled`, create a PIN identity, then
+log in for a `wt_` token. There is no `withWorkerSession` helper; do not invent one. Copy
+that file's `beforeAll` and adapt the ids.
 
 ```ts
-import { describe, expect, it } from 'vitest';
-import { withWorkerSession } from './helpers/worker-session';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { authHeader, createTestContext, type TestContext } from './helpers.js';
+
+const WORKER_ID = 'w-locale-1';
 
 describe('worker locale', () => {
-    it('is null until the worker chooses', async () => {
-        await withWorkerSession(async ({ request }) => {
-            const me = await request('GET', '/v1/portal/me');
-            expect(me.locale).toBeNull();
+    let ctx: TestContext;
+    let workerToken: string;
+
+    beforeAll(async () => {
+        // …the worker-auth.test.ts fixture, verbatim except for the ids, ending with a
+        // portal login that yields `workerToken`.
+    });
+    afterAll(() => ctx.cleanup());
+
+    const get = (url: string) =>
+        ctx.app.inject({ method: 'GET', url, headers: { authorization: `Bearer ${workerToken}` } });
+    const patch = (url: string, payload: unknown) =>
+        ctx.app.inject({
+            method: 'PATCH',
+            url,
+            payload: payload as object,
+            headers: { authorization: `Bearer ${workerToken}` },
         });
+
+    it('is null until the worker chooses', async () => {
+        expect((await get('/v1/portal/me')).json().locale).toBeNull();
     });
 
     it('persists the worker’s choice', async () => {
-        await withWorkerSession(async ({ request }) => {
-            const out = await request('PATCH', '/v1/portal/me', { locale: 'et' });
-            expect(out.locale).toBe('et');
-            const me = await request('GET', '/v1/portal/me');
-            expect(me.locale).toBe('et');
-        });
+        const out = await patch('/v1/portal/me', { locale: 'et' });
+        expect(out.statusCode).toBe(200);
+        expect(out.json().locale).toBe('et');
+        expect((await get('/v1/portal/me')).json().locale).toBe('et');
     });
 
     it('rejects an unsupported locale', async () => {
-        await withWorkerSession(async ({ request, expectError }) => {
-            await expectError(request('PATCH', '/v1/portal/me', { locale: 'zz' }), 400);
-        });
+        expect((await patch('/v1/portal/me', { locale: 'zz' })).statusCode).toBe(400);
     });
 });
 ```
@@ -1086,7 +1116,7 @@ Create `packages/shared/test/push-locale.test.ts`:
 
 ```ts
 import { describe, expect, it } from 'vitest';
-import { pickLocale, pushCopy } from '../src/locale';
+import { WORKER_PUSH_EVENTS, pickLocale, pushCopy } from '../src/locale';
 
 describe('push copy', () => {
     it('renders Estonian for a worker who chose it', () => {
@@ -1105,9 +1135,14 @@ describe('push copy', () => {
     });
 
     it('covers every event in both languages', () => {
-        const en = Object.keys((pushCopy as unknown as { events: Record<string, unknown> }).events ?? {});
-        // Guard rewritten below once the catalog shape exists; see step 3.
-        expect(en.length).toBeGreaterThanOrEqual(0);
+        for (const event of WORKER_PUSH_EVENTS) {
+            const et = pushCopy('et', event);
+            const en = pushCopy('en', event);
+            expect(et, `missing Estonian push copy for ${event}`).not.toBeNull();
+            // Falling back to English silently is the bug this catches: the map
+            // has the key, but nobody translated it.
+            expect(et!.title, `untranslated push title for ${event}`).not.toBe(en!.title);
+        }
     });
 });
 
@@ -1200,19 +1235,6 @@ export function supervisorPushCopyFor(locale: ServerLocale, event: string): { ti
 export const WORKER_PUSH_EVENTS = Object.keys(enWorker);
 export const SUPERVISOR_PUSH_EVENTS = Object.keys(enSupervisor);
 ```
-
-Now replace the placeholder fourth test in step 1 with a real coverage assertion:
-
-```ts
-    it('covers every event in both languages', () => {
-        for (const event of WORKER_PUSH_EVENTS) {
-            expect(pushCopy('et', event), `missing Estonian push copy for ${event}`).not.toBeNull();
-            expect(pushCopy('et', event)!.title).not.toBe(pushCopy('en', event)!.title);
-        }
-    });
-```
-
-importing `WORKER_PUSH_EVENTS` alongside the others.
 
 - [ ] **Step 4: Wire the locale through the dispatchers**
 
