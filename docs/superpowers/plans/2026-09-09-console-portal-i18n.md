@@ -2189,6 +2189,34 @@ heavily; convert every `toLocaleString`/`toLocaleDateString` there to `formatMon
 
 ---
 
+
+### Carried defects that later groups MUST close
+
+Found by review during execution; each is English a manager actually sees.
+
+| Owning group | File | What is wrong |
+|---|---|---|
+| 22 | `pages/decisions/ReasonChip.tsx` | `describeReason()` assembles an English sentence from fragments; shows on the Decisions page |
+| 23 | `pages/workflows/RunsPage.tsx:164` | renders raw `{run.status}`; must use `workflowRunStatusLabel` |
+| 24 | `pages/settings/ConnectorsPage.tsx:751-773` | `RunStatus()` hardcodes English; must use `connectorRunStatusLabel` |
+
+Two label lookups were built in Task 17 and left unwired. A lookup that nothing calls is
+worse than no lookup: it reads as done.
+
+### Practices that worked and should continue
+
+- **Falsify every new guard.** Twice a test looked right and proved nothing until someone
+  deliberately broke the implementation and confirmed exactly the intended tests failed.
+  Do that for each coverage gate rather than trusting a green run.
+- **Restructure, never concatenate.** The working pattern for a logic module that produces
+  prose: return a descriptor naming the case and carrying its values, and let the component
+  render one whole translated message per case. Used for the portal timesheet notes and the
+  task policy summary.
+- **English must stay byte-identical** wherever this is a refactor rather than a rewrite.
+  Verified by golden snapshot for the invitation email and line-by-line for push copy.
+
+---
+
 ## Task 25: Migrate the remaining formatting calls
 
 **Root:** `assignment-engine/example/web`
