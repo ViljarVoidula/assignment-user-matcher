@@ -19,7 +19,7 @@ stay English (SEO) and are out of scope.
 | Worker invite email | `platform/apps/api/src/worker-onboarding.ts` (`sendWorkerInviteEmail`) | 1 file | ~5 | Server-side |
 
 Nothing is localized today: no library, `<html lang="en">` in both shells, no locale on
-users, workers or workspaces, 69 `toLocale*()` calls with no locale argument in the
+users, worker identities or workspaces, 69 `toLocale*()` calls with no locale argument in the
 console, dayjs with hardcoded formats, and ~98 console sites that surface raw server
 `err.message` text.
 
@@ -39,26 +39,42 @@ babel options; the portal uses the same in `vite.common.ts`.
 
 ## Locale resolution
 
-Console (per user, phase 1 browser-only):
-1. `localStorage['locale']`
-2. `navigator.language` starting with `et` → `et`
-3. `en`
+Locale is a stored user preference on both surfaces, not a browser-only setting, and
+Estonian auto-selects for an Estonian browser until the person chooses otherwise.
 
-Phase 2 (optional, separate change): persist on the console user via `PATCH /me` so the
-choice follows them across devices.
+**Console user** — new nullable `locale` column on the control-plane `users` table
+(migration `0046_user_and_worker_locale`, together with the worker column below; latest
+on main is `0045_worker_trusted_devices`, and `drizzle-kit generate` can renumber over an
+uncommitted migration, so check `git status` on `drizzle/` before generating).
+`GET /me` returns it on `user`; a new `PATCH /me { locale }` writes it. Resolution:
 
-Worker portal (per worker, with a workspace default):
-1. `workerIdentity.locale` (new nullable column, migration `0046_worker_locale`), set
-   from the portal's own language switch and editable from the console worker page.
+1. `user.locale` when set (an explicit choice, made on any device).
+2. `localStorage['locale']` — covers the signed-out screens (login, signup, password
+   reset) and the moment before `/me` resolves, so the app does not flash English.
+3. `navigator.language` starting with `et` → `et`. This is the auto-select: a first-time
+   Estonian visitor gets Estonian without doing anything.
+4. `en`.
+
+Choosing a language writes both `user.locale` and `localStorage`, so the next cold start
+paints the right language before the network answers. A signed-out person's choice is
+adopted onto their account at first sign-in only when the account has no `locale` yet —
+an existing explicit account choice always wins over a device.
+
+**Worker portal** — new nullable `locale` column on `worker_identities`, same migration.
+Resolution:
+
+1. `workerIdentity.locale` when set, returned by `GET /portal/me` and written by a new
+   `PATCH /portal/me { locale }`. Also editable from the console worker page.
 2. `PortalConfig.defaultLocale` (new optional field, injected with the rest of
-   `__PORTAL_CONFIG__`), chosen in the console Portal page at publish time.
+   `__PORTAL_CONFIG__`), chosen in the console Portal page at publish time. This is the
+   workspace default for a workforce that is Estonian by default.
 3. `navigator.language` → `et`, else `en`.
 
 The worker locale is server-visible on purpose: `notification-fanout` and the invite email
 run without a request locale, so the only way push titles and invite mail come out in
-Estonian is to read the locale off the worker record (fallback: workspace
-`defaultLocale`, then `en`). A worker's choice in the portal is written back through a
-new `PATCH /portal/me { locale }`; older published bundles that never send it are fine.
+Estonian is to read the locale off the worker record (fallback: the workspace's
+`defaultLocale`, then `en`). Older published bundles never send `PATCH /portal/me`; they
+simply keep the default, which is why the column is nullable and the route is additive.
 
 Each provider sets `document.documentElement.lang`, activates the Lingui catalog and
 calls `dayjs.locale()` (console only; the portal does not use dayjs).
@@ -100,8 +116,9 @@ from `Intl` for free, but the roster WeekGrid's own weekday order and any hand-b
 
 ## Language switch UI
 
-- Console: a "Language" section on Settings (per user, per browser), plus a small
-  toggle on Login/Signup so a new Estonian user sees it before signing in.
+- Console: a "Language" section on Settings, saved to the user account, plus a small
+  toggle on Login/Signup (localStorage, adopted onto the account at first sign-in) so a
+  new Estonian user sees it before signing in.
 - Console Portal page: "Default language" for the published portal.
 - Console worker page: "Language" on the worker record (what push and email use).
 - Portal: a language row on the Me screen.
@@ -111,7 +128,9 @@ from `Intl` for free, but the roster WeekGrid's own weekday order and any hand-b
 Each step is one PR: wrap strings, `lingui extract`, translate, review.
 
 1. Foundation: Lingui in both builds, providers, formatting layer, catalogs, the
-   coverage test, glossary agreed.
+   coverage test, glossary agreed. Includes migration `0046_user_and_worker_locale`,
+   `PATCH /me`, `PATCH /portal/me` and `PortalConfig.defaultLocale` — the whole locale
+   plumbing lands before any string is wrapped, so later PRs are copy only.
 2. Portal (all screens) + push/email copy + worker locale column. Smallest surface,
    highest value for Estonian-speaking workers.
 3. Console shell, navigation, Settings, auth pages.
@@ -140,7 +159,11 @@ roster, workspace, site, cover, time off, contract hours, break, queue, escalati
   slip in untranslated. The console has no ESLint today; adding one scoped to this rule is
   part of step 1.
 - Portal `test/ui.test.ts` gains a case rendering Login in `et`.
-- Server: a unit test that `pushTitleAndBody` respects the worker locale and falls back.
+- Server: a unit test that `pushTitleAndBody` respects the worker locale and falls back
+  through workspace default to `en`.
+- A unit test for the console resolution order, including that an existing `user.locale`
+  beats a device value and that an Estonian `navigator.language` auto-selects only when
+  neither is set.
 
 ## Out of scope
 
