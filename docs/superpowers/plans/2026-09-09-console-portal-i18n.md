@@ -22,6 +22,11 @@
 - **Node comes from nvm.** Every shell step must start with `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"` or `pnpm`/`npx` will not be found.
 - **Vite in the console must be started as `node node_modules/vite/bin/vite.js`**, not `pnpm dev`.
 - **Never run two platform test suites at once** — they share one Redis logical DB and flush it.
+  Check with `ps aux | grep -i vitest` before starting a run.
+- **Platform package names are `@fivexer/platform-control-plane`, `@fivexer/platform-shared`
+  and `@fivexer/platform-api`**, and none has a `test` script. Run suites from the platform
+  root with `npx vitest run <path>`; the only relevant package script is
+  `pnpm --filter @fivexer/platform-control-plane db:generate`.
 - **All four repositories are on a `feat/i18n-estonian` branch** created before execution
   (`example`, `platform`, `sdks`). Commit there, never on `main`.
 - **Before `drizzle-kit generate`, run `git status` on the `drizzle/` directory.** It can renumber over an uncommitted migration that lacks a meta snapshot.
@@ -558,7 +563,7 @@ rewrite this file:
 
 ```bash
 cd /home/viljar/Projects/fivexer/platform
-pnpm --filter @fivexer/control-plane drizzle-kit generate
+pnpm --filter @fivexer/platform-control-plane db:generate
 ```
 Expected: it reports no schema changes to apply (the hand-written migration already
 covers them) and updates `packages/control-plane/drizzle/meta/`. If it instead writes a
@@ -569,7 +574,7 @@ covers them) and updates `packages/control-plane/drizzle/meta/`. If it instead w
 
 ```bash
 cd /home/viljar/Projects/fivexer/platform
-pnpm --filter @fivexer/control-plane test 2>&1 | tail -20
+npx vitest run packages/control-plane/test 2>&1 | tail -20
 ```
 Expected: the control-plane suite passes. It runs migrations against its test database,
 so a broken migration fails here.
@@ -664,7 +669,7 @@ relying on `error`; match whatever that file asserts.
 ```bash
 export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"
 cd /home/viljar/Projects/fivexer/platform
-pnpm --filter @fivexer/api exec vitest run test/console-locale.test.ts
+npx vitest run apps/api/ test/console-locale.test.ts
 ```
 Expected: FAIL — `PATCH /v1/console/me` returns 404.
 
@@ -744,7 +749,7 @@ In `packages/sdk/src/account-client.ts`, inside the `console` block after `me`:
 - [ ] **Step 6: Run the test and confirm it passes**
 
 ```bash
-pnpm --filter @fivexer/api exec vitest run test/console-locale.test.ts
+npx vitest run apps/api/ test/console-locale.test.ts
 ```
 Expected: PASS, 4 tests.
 
@@ -829,7 +834,7 @@ describe('worker locale', () => {
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-pnpm --filter @fivexer/api exec vitest run test/worker-locale.test.ts
+npx vitest run apps/api/ test/worker-locale.test.ts
 ```
 Expected: FAIL — `me.locale` is `undefined`, then 404 on the PATCH.
 
@@ -900,7 +905,7 @@ In `packages/sdk/src/types.ts` add `locale: string | null;` to `WorkerMe`. In
 - [ ] **Step 4: Run the test and confirm it passes**
 
 ```bash
-pnpm --filter @fivexer/api exec vitest run test/worker-locale.test.ts
+npx vitest run apps/api/ test/worker-locale.test.ts
 ```
 Expected: PASS, 3 tests.
 
@@ -1047,7 +1052,7 @@ new one if a comparable helper already exists.
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-pnpm --filter @fivexer/api exec vitest run test/portal-publish.test.ts
+npx vitest run apps/api/ test/portal-publish.test.ts
 ```
 Expected: FAIL — `config.defaultLocale` is `undefined` in the first case.
 
@@ -1076,7 +1081,7 @@ In `packages/portal-templates/vite.common.ts`, add to the studio preview config 
 - [ ] **Step 4: Run the test and confirm it passes**
 
 ```bash
-pnpm --filter @fivexer/api exec vitest run test/portal-publish.test.ts
+npx vitest run apps/api/ test/portal-publish.test.ts
 ```
 Expected: PASS.
 
@@ -1160,7 +1165,7 @@ describe('pickLocale', () => {
 
 ```bash
 cd /home/viljar/Projects/fivexer/platform
-pnpm --filter @fivexer/platform-shared exec vitest run test/push-locale.test.ts
+npx vitest run packages/shared/ test/push-locale.test.ts
 ```
 Expected: FAIL — cannot resolve `../src/locale`.
 
@@ -1274,8 +1279,8 @@ supply the implementation:
 - [ ] **Step 5: Run the tests and confirm they pass**
 
 ```bash
-pnpm --filter @fivexer/platform-shared exec vitest run test/push-locale.test.ts
-pnpm --filter @fivexer/platform-shared exec vitest run 2>&1 | tail -10
+npx vitest run packages/shared/ test/push-locale.test.ts
+npx vitest run packages/shared/ 2>&1 | tail -10
 ```
 Expected: the new file passes and the rest of the shared suite is unchanged.
 
@@ -1338,7 +1343,7 @@ Reuse the `brand` fixture the file already builds.
 - [ ] **Step 2: Run it and confirm it fails**
 
 ```bash
-pnpm --filter @fivexer/control-plane exec vitest run test/email.test.ts
+npx vitest run packages/control-plane/ test/email.test.ts
 ```
 Expected: FAIL — the Estonian subject still contains the English text.
 
@@ -1367,7 +1372,7 @@ In `apps/api/src/worker-onboarding.ts`, pass the identity's locale through:
 - [ ] **Step 4: Run the tests and confirm they pass**
 
 ```bash
-pnpm --filter @fivexer/control-plane exec vitest run test/email.test.ts
+npx vitest run packages/control-plane/ test/email.test.ts
 ```
 Expected: PASS, including every pre-existing test in the file.
 
