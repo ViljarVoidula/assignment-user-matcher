@@ -37,6 +37,7 @@ import type {
     SchedulingConstraint,
     ShiftInstance,
     ShiftTemplate,
+    Site,
     TagRequirement,
     WorkingTimeRules,
 } from './types';
@@ -73,7 +74,15 @@ export function expandShiftInstances(input: ScheduleInput): ShiftInstance[] {
     const publicHolidays = new Set(input.calendar?.publicHolidays ?? []);
     for (const date of publicHolidays) assertIsoDate(date, 'calendar.publicHolidays');
 
-    const context = { nightRule: input.rules?.nightWork, publicHolidays };
+    // The same site reading the solve does. Without it this path answered a
+    // different `isPublicHoliday` from `buildModel` for the very same input —
+    // the second reading path the module's own rules forbid — and skipped the
+    // site validation that refuses a mixed-zone roster.
+    const siteIndex = buildSiteIndex(input.sites, input.travelSpeedKmh, input.period.timeZone);
+    void siteIndex;
+    const holidaysBySite = siteHolidayCalendars(input.sites);
+
+    const context = { nightRule: input.rules?.nightWork, publicHolidays, holidaysBySite };
     const instances: ShiftInstance[] = [];
     const seen = new Set<string>();
     for (const template of input.shifts) {
@@ -87,6 +96,23 @@ export function expandShiftInstances(input: ScheduleInput): ShiftInstance[] {
 }
 
 /** Expand one template into its dated instances inside the period. */
+/**
+ * Per-site holiday calendars, keyed by site.
+ *
+ * A site that declares its own list replaces the roster's for its shifts; one
+ * that declares none inherits it, and a present-but-empty list means the site
+ * observes none. One builder because `expandShiftInstances` and `buildModel`
+ * both need it and answering differently is the failure the module's own rules
+ * name.
+ */
+function siteHolidayCalendars(sites: Site[] | undefined): Map<string, Set<string>> {
+    const out = new Map<string, Set<string>>();
+    for (const site of sites ?? []) {
+        if (site.publicHolidays !== undefined) out.set(site.id, new Set(site.publicHolidays));
+    }
+    return out;
+}
+
 /**
  * Which holiday calendar applies to a shift: the hosting site's own list where
  * it declares one, otherwise the roster's. Holidays follow the place the work
@@ -130,6 +156,24 @@ export function expandTemplate(
     }
 
     const overrides = validateDemandOverrides(template);
+
+    /*
+     * Shape checks run once per template, here, rather than per date inside
+     * `resolveDemand`.
+     *
+     * A template whose dates all fall outside the period produces no
+     * occurrences at all, so validation that happened per date never ran for it
+     * — bad configuration survived one solve and threw on the next, when the
+     * period moved over it.
+     */
+    normalizeTagRequirements(template.tagRequirements, template.id);
+    normalizeTagRatios(template.tagRatios, template.id);
+    normalizeTagMaximums(template.tagMaximums, template.id);
+    for (const override of overrides) {
+        normalizeTagRequirements(override.tagRequirements, template.id);
+        normalizeTagRatios(override.tagRatios, template.id);
+        normalizeTagMaximums(override.tagMaximums, template.id);
+    }
 
     const startTod = parseTimeOfDay(template.startTime, `shift "${template.id}".startTime`);
     const endTodRaw = parseTimeOfDay(template.endTime, `shift "${template.id}".endTime`);
@@ -290,27 +334,42 @@ function validateDemandOverrides(template: ShiftTemplate): ShiftDemandOverride[]
  * overlap it at all — somebody whose contract ended in February is owed nothing
  * in March rather than a full month they were not employed for.
  *
- * The two date fields are validated here rather than in `validateEmployee`
- * because this is the one place that has to read them, and a second reading
- * would be a second chance to disagree about what "in force" means.
+ * Arithmetic only: `validateContractDates` runs for every employee, including
+ * the ones this is never called for.
  */
-function daysInForce(employee: Employee, periodStart: string, periodDays: number): number {
+/**
+ * The contract fields that change a roster whether or not a contracted week
+ * resolves.
+ *
+ * Separate from `daysInForce` because that runs only for employees whose
+ * weekly minutes resolve — and `contractLimits` string-compares these dates for
+ * *everybody*. An unpadded `2026-3-2` sorts after `2026-03-02`, so it pruned
+ * every instance and produced an empty roster with no error; a negative
+ * opening balance silently lifted a rolling cap. Both were validated for a
+ * full-timer and waved through for anybody else.
+ */
+function validateContractDates(employee: Employee): void {
     const contract = employee.contract;
-    const periodEnd = addDays(periodStart, periodDays - 1);
-    if (contract?.startDate) assertIsoDate(contract.startDate, `employee "${employee.id}".contract.startDate`);
-    if (contract?.endDate) assertIsoDate(contract.endDate, `employee "${employee.id}".contract.endDate`);
-    if (contract?.startDate && contract.endDate && contract.startDate > contract.endDate) {
+    if (!contract) return;
+    if (contract.startDate) assertIsoDate(contract.startDate, `employee "${employee.id}".contract.startDate`);
+    if (contract.endDate) assertIsoDate(contract.endDate, `employee "${employee.id}".contract.endDate`);
+    if (contract.startDate && contract.endDate && contract.startDate > contract.endDate) {
         throw new ScheduleValidationError(
             `Employee "${employee.id}" has a contract starting ${contract.startDate}, after it ends ${contract.endDate}`,
         );
     }
-    if (contract?.openingBalanceMinutes !== undefined) {
+    if (contract.openingBalanceMinutes !== undefined) {
         if (!Number.isFinite(contract.openingBalanceMinutes) || contract.openingBalanceMinutes < 0) {
             throw new ScheduleValidationError(
                 `Employee "${employee.id}".contract.openingBalanceMinutes must be a non-negative number of minutes`,
             );
         }
     }
+}
+
+function daysInForce(employee: Employee, periodStart: string, periodDays: number): number {
+    const contract = employee.contract;
+    const periodEnd = addDays(periodStart, periodDays - 1);
 
     const from = contract?.startDate && contract.startDate > periodStart ? contract.startDate : periodStart;
     const to = contract?.endDate && contract.endDate < periodEnd ? contract.endDate : periodEnd;
@@ -338,12 +397,37 @@ function normalizeTagRequirements(
                 `Shift template "${templateId}".tagRequirements["${tag}"] needs a non-negative whole minimum`,
             );
         }
-        if (requirement.level !== undefined && (!Number.isFinite(requirement.level) || requirement.level < 0)) {
-            throw new ScheduleValidationError(
-                `Shift template "${templateId}".tagRequirements["${tag}"].level must be a non-negative number`,
-            );
+        if (requirement.level !== undefined) {
+            if (!Number.isFinite(requirement.level) || requirement.level <= 0) {
+                // Zero is refused rather than accepted, because it reads as "no
+                // floor" and means the opposite: `holds` skips the plain-tag
+                // branch the moment a level is present, so `{ min: 1, level: 0 }`
+                // silently excludes everybody whose tag carries no grade. Omit
+                // the level to count anybody holding the tag.
+                throw new ScheduleValidationError(
+                    `Shift template "${templateId}".tagRequirements["${tag}"].level must be a positive number; ` +
+                        `omit it to count anybody holding the tag`,
+                );
+            }
         }
         out[tag] = requirement.level === undefined ? { min: requirement.min } : { min: requirement.min, level: requirement.level };
+    }
+    return out;
+}
+
+/** Ceilings, checked like the minimums beside them. A negative maximum can never be met. */
+function normalizeTagMaximums(
+    stated: Record<string, number> | undefined,
+    templateId: string,
+): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [tag, max] of Object.entries(stated ?? {})) {
+        if (!Number.isInteger(max) || max < 0) {
+            throw new ScheduleValidationError(
+                `Shift template "${templateId}".tagMaximums["${tag}"] needs a non-negative whole maximum`,
+            );
+        }
+        out[tag] = max;
     }
     return out;
 }
@@ -381,7 +465,7 @@ function resolveDemand(
         maxEmployees: max,
         tagRequirements: normalizeTagRequirements(template.tagRequirements, template.id),
         tagRatios: normalizeTagRatios(template.tagRatios, template.id),
-        tagMaximums: template.tagMaximums ?? {},
+        tagMaximums: normalizeTagMaximums(template.tagMaximums, template.id),
         requiredTags: template.requiredTags ?? [],
     };
     const weekday = isoWeekday(date);
@@ -404,7 +488,9 @@ function resolveDemand(
             demand.tagRequirements = normalizeTagRequirements(override.tagRequirements, template.id);
         }
         if (override.tagRatios !== undefined) demand.tagRatios = normalizeTagRatios(override.tagRatios, template.id);
-        if (override.tagMaximums !== undefined) demand.tagMaximums = override.tagMaximums;
+        if (override.tagMaximums !== undefined) {
+            demand.tagMaximums = normalizeTagMaximums(override.tagMaximums, template.id);
+        }
         if (override.requiredTags !== undefined) demand.requiredTags = override.requiredTags;
         if (override.runs !== undefined) runs = override.runs;
         if (override.label !== undefined) demand.label = override.label;
@@ -497,6 +583,7 @@ function spanToMinutes(from: string, to: string, clock: PeriodClock, field: stri
 
 function validateEmployee(employee: Employee): void {
     if (!employee.id) throw new ScheduleValidationError('Employee is missing `id`');
+    validateContractDates(employee);
     for (const [field, value] of [
         ['maxHoursForPeriod', employee.maxHoursForPeriod],
         ['minHoursForPeriod', employee.minHoursForPeriod],
@@ -639,13 +726,7 @@ export function buildModel(input: ScheduleInput): ModelContext {
     const publicHolidays = new Set(input.calendar?.publicHolidays ?? []);
     for (const date of publicHolidays) assertIsoDate(date, 'calendar.publicHolidays');
 
-    // A site that declares its own calendar replaces the roster's for its
-    // shifts; one that declares none inherits it. Built here rather than read
-    // per instance so the distinction resolves once.
-    const holidaysBySite = new Map<string, Set<string>>();
-    for (const site of input.sites ?? []) {
-        if (site.publicHolidays !== undefined) holidaysBySite.set(site.id, new Set(site.publicHolidays));
-    }
+    const holidaysBySite = siteHolidayCalendars(input.sites);
 
     const instances: ShiftInstance[] = [];
     const instanceById = new Map<string, ShiftInstance>();
@@ -703,7 +784,7 @@ export function buildModel(input: ScheduleInput): ModelContext {
         if (employeeTags.get(employeeId)?.has(tag)) return true;
         const employee = employeeById.get(employeeId);
         if (!employee?.qualifications?.length) return false;
-        const key = `${employeeId} ${tag} ${date}`;
+        const key = `${employeeId}\0${tag}\0${date}`;
         const cached = tagOnCache.get(key);
         if (cached !== undefined) return cached;
         const result = holds(employee, tag, date);

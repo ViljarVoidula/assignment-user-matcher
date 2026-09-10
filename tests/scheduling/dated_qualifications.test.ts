@@ -151,6 +151,32 @@ describe('dated qualifications in tag counts', () => {
         expect(checkTag).to.equal(solveTag);
     });
 
+    /**
+     * The memo must answer for the triple it was asked about.
+     *
+     * The cache key joins employee, tag and date, and neither an id nor a tag
+     * forbids a separator character — so a key built by plain concatenation is
+     * ambiguous, and one lookup poisons the other. These two cases collide
+     * under any separator that can appear in the data, and they are asked in
+     * the order that would poison the answer.
+     */
+    it('does not confuse two employee-and-tag pairs that share a joined key', () => {
+        const spaced: Employee = {
+            id: 'a b',
+            tags: [],
+            timeOff: [],
+            qualifications: [{ tag: 'c', validUntil: '2020-01-01' }],
+        };
+        const plain: Employee = { id: 'a', tags: [], timeOff: [], qualifications: [{ tag: 'b c' }] };
+        const ctx = buildModel(input({ employees: [spaced, plain], shifts: [shift('ward', ['2026-03-05'])] }));
+
+        // Lapsed in 2020, so not held now — asked first, so it is the answer
+        // that would be reused for the second.
+        expect(ctx.holdsTagOn('a b', 'c', '2026-03-05')).to.equal(false);
+        // A different person and a different tag, held with no expiry.
+        expect(ctx.holdsTagOn('a', 'b c', '2026-03-05')).to.equal(true);
+    });
+
     it('does not let greedy fill count a lapsed nurse as covering the requirement', () => {
         const result = solveSchedule(
             input({

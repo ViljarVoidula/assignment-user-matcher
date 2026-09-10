@@ -63,9 +63,22 @@ export function rollingHours(limits: WorkingTimeLimits): SchedulingConstraint {
                     }
                 }
 
+                // Which average the opening balance belongs to. Computed once
+                // per verdict rather than per average, and ties are harmless:
+                // two averages over the same window are the same window.
+                const longestWindowDays = Math.max(0, ...(limits.rollingAverages ?? []).map((a) => a.windowDays));
                 for (const average of limits.rollingAverages ?? []) {
                     const span = average.windowDays * MINUTES_PER_DAY;
-                    const breach = worstAverageBreach(state, t, pair.employeeId, average.maxMinutes, span, range, limits);
+                    const breach = worstAverageBreach(
+                        state,
+                        t,
+                        pair.employeeId,
+                        average.maxMinutes,
+                        span,
+                        range,
+                        limits,
+                        average.windowDays === longestWindowDays,
+                    );
                     if (breach !== null) {
                         const label = average.label ?? `${h(average.maxMinutes)}/${average.windowDays}d`;
                         return fail(
@@ -142,6 +155,7 @@ function worstAverageBreach(
     span: number,
     range: MinuteRange,
     limits: WorkingTimeLimits,
+    appliesTo: boolean,
 ): { worked: number; allowance: number } | null {
     const bounds = windowFor(range, span);
     const kinds = limits.neutraliseAbsenceKinds;
@@ -159,11 +173,17 @@ function worstAverageBreach(
      * numbers stay legible: "would work 114h against a 100h budget" is what a
      * person needs to read, not "would work 16h against 2h".
      *
-     * It applies to every rolling average, which is the honest reading of a
-     * carried figure — a person 1,640h into their annual budget is that far
-     * into it however the windows are sliced.
+     * It belongs to the **longest** window and to no other. Hours worked last
+     * autumn are inside a 365-day window and are plainly not inside the last
+     * seven days, so adding the figure to every average made 1,500 hours into
+     * an annual budget breach a 48-hour *week* — and the one configuration the
+     * field exists for, an annual reference period beside the ordinary weekly
+     * average, produced an empty roster with no error at all.
+     *
+     * The longest window is the reference period the balance was measured over,
+     * which is the only window it can honestly be added to.
      */
-    const carried = state.ctx.employeeById.get(employeeId)?.contract?.openingBalanceMinutes ?? 0;
+    const carried = appliesTo ? (state.ctx.employeeById.get(employeeId)?.contract?.openingBalanceMinutes ?? 0) : 0;
 
     if (neutral.length === 0) {
         const worked = timeline.maxWorkingMinutesInAnyWindow(span, bounds) + carried;

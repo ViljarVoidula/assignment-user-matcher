@@ -117,6 +117,45 @@ describe('skill mix', () => {
             ).to.throw(ScheduleValidationError);
         });
 
+        it('refuses a level of zero, which reads as "no floor" and means the opposite', () => {
+            // `holds` skips the plain-tag branch the moment a level is present,
+            // so `{ min: 1, level: 0 }` silently excluded everybody whose tag
+            // carries no grade — the opposite of what a zero floor suggests.
+            expect(() =>
+                buildModel(input({ shifts: [shift('ward', { tagRequirements: { nurse: { min: 1, level: 0 } } })] })),
+            ).to.throw(ScheduleValidationError, /omit it/);
+        });
+
+        it('validates a template whose dates fall outside the period', () => {
+            // No occurrences means the per-date path never ran, so bad
+            // configuration survived one solve and threw on the next when the
+            // period moved over it.
+            expect(() =>
+                buildModel(
+                    input({
+                        shifts: [
+                            {
+                                id: 'later',
+                                name: 'LATER',
+                                startTime: '09:00',
+                                endTime: '17:00',
+                                dates: ['2027-01-01'],
+                                tagRequirements: { nurse: { min: -3 } },
+                            },
+                        ],
+                    }),
+                ),
+            ).to.throw(ScheduleValidationError);
+        });
+
+        it('validates a maximum, like the minimum beside it', () => {
+            // The one member of the trio passed through unchecked: a negative
+            // ceiling made every assignment breach with nothing naming why.
+            expect(() =>
+                buildModel(input({ shifts: [shift('ward', { tagMaximums: { nurse: -1 } })] })),
+            ).to.throw(ScheduleValidationError, /tagMaximums/);
+        });
+
         it('ignores an expired qualification, like every other tag count', () => {
             const lapsed: Employee = {
                 id: 'lapsed',

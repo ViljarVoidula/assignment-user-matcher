@@ -43,3 +43,7 @@ CLAUDE.md
 .kilo
 coverage
 fivexer-app-examples
+.claude/
+.github/agents
+.github/hooks/impeccable.json
+

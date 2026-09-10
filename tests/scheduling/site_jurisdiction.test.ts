@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { buildModel } from '../../src/scheduling/model';
-import { solveSchedule, ScheduleValidationError } from '../../src/scheduling';
+import { solveSchedule, expandShiftInstances, ScheduleValidationError } from '../../src/scheduling';
 import type { ScheduleInput, ShiftTemplate } from '../../src/scheduling';
 
 /**
@@ -138,6 +138,35 @@ describe('site jurisdiction', () => {
                 }),
             );
             expect(ctx.instances.filter((i) => i.isPublicHoliday)).to.deep.equal([]);
+        });
+
+        it('reads the same calendar from expandShiftInstances as from a solve', () => {
+            /*
+             * `expandShiftInstances` is public and its own header calls its
+             * occurrences "the ones every later call refers to". It built its
+             * context without the per-site calendars, so a preview grid priced
+             * a holiday the solve did not — the second reading path this
+             * module's rules exist to forbid.
+             */
+            const problem = input({
+                calendar: { publicHolidays: ['2026-06-03'] },
+                sites: [{ id: 'always-open', publicHolidays: [] }],
+                shifts: [shift('shop', ['2026-06-03'], { siteId: 'always-open' })],
+            });
+
+            const previewed = expandShiftInstances(problem);
+            const solved = buildModel(problem).instances;
+
+            expect(previewed[0]!.isPublicHoliday).to.equal(false);
+            expect(previewed[0]!.isPublicHoliday).to.equal(solved[0]!.isPublicHoliday);
+        });
+
+        it('refuses a mixed-zone roster from expandShiftInstances too', () => {
+            // The preview path skipped site validation entirely, so a roster
+            // the solve would refuse rendered a grid first.
+            expect(() =>
+                expandShiftInstances(input({ sites: [{ id: 'se', timeZone: 'Europe/Stockholm' }] })),
+            ).to.throw(ScheduleValidationError);
         });
 
         it('refuses a malformed date in a site calendar', () => {
