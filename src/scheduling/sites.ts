@@ -10,7 +10,38 @@
 
 import type { Site, SiteIndex } from './types';
 import { ScheduleValidationError } from './types';
+import { assertIsoDate } from './time';
 import { haversineDistanceKm, hasValidCoordinates } from '../utils/geo';
+
+/**
+ * A site's zone must match the roster's, because there is only one clock.
+ *
+ * Instances are placed in absolute period minutes, so rest gaps and overlaps
+ * survive a zone difference — but the night band, break windows, weekday and
+ * holiday attribution are all resolved once, at expansion, against the period's
+ * `PeriodClock`. A Stockholm site inside a Tallinn roster would have its 22:00
+ * night boundary computed an hour out, and nothing downstream could tell.
+ *
+ * Refusing is the honest answer: an hour of silent drift in a compliance
+ * verdict is worse than an error that says to split the roster.
+ */
+function assertSiteZone(siteId: string, siteZone: string, periodTimeZone?: string): void {
+    try {
+        new Intl.DateTimeFormat('en-US', { timeZone: siteZone });
+    } catch {
+        throw new ScheduleValidationError(`Site "${siteId}" has an unknown time zone: "${siteZone}"`);
+    }
+
+    const rosterZone = periodTimeZone ?? 'UTC';
+    if (siteZone !== rosterZone) {
+        throw new ScheduleValidationError(
+            `Site "${siteId}" is in "${siteZone}" but the roster's period is in "${rosterZone}". ` +
+                `One roster resolves wall-clock times against one zone, so a roster spanning zones would ` +
+                `place this site's night band, breaks and day boundaries an hour out without reporting it. ` +
+                `Solve one roster per zone.`,
+        );
+    }
+}
 
 /**
  * Build a validated site index from caller input.
@@ -20,7 +51,7 @@ import { haversineDistanceKm, hasValidCoordinates } from '../utils/geo';
  * referenced by templates or employees but not declared here are tolerated;
  * they simply have no coordinates or matrix entries.
  */
-export function buildSiteIndex(sites: Site[] | undefined, travelSpeedKmh?: number): SiteIndex {
+export function buildSiteIndex(sites: Site[] | undefined, travelSpeedKmh?: number, periodTimeZone?: string): SiteIndex {
     if (travelSpeedKmh !== undefined && (!Number.isFinite(travelSpeedKmh) || travelSpeedKmh <= 0)) {
         throw new ScheduleValidationError(`travelSpeedKmh must be a positive finite number: ${travelSpeedKmh}`);
     }
@@ -29,6 +60,12 @@ export function buildSiteIndex(sites: Site[] | undefined, travelSpeedKmh?: numbe
     for (const site of sites ?? []) {
         if (!site.id) throw new ScheduleValidationError('Site is missing `id`');
         if (byId.has(site.id)) throw new ScheduleValidationError(`Duplicate site id "${site.id}"`);
+
+        for (const date of site.publicHolidays ?? []) {
+            assertIsoDate(date, `Site "${site.id}".publicHolidays`);
+        }
+
+        if (site.timeZone !== undefined) assertSiteZone(site.id, site.timeZone, periodTimeZone);
 
         if (site.lat !== undefined || site.lng !== undefined) {
             if (!hasValidCoordinates(site.lat, site.lng)) {

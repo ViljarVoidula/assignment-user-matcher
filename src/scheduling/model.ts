@@ -44,6 +44,7 @@ import { createDefaultConstraints } from './constraints/constraint';
 import { scopeEmployeeConstraints } from './constraints/employee-scope';
 import { DEFAULT_MIN_REST_MINUTES } from './constraints/min-rest';
 import { assertValidOvertimeRule } from './constraints/overtime';
+import { holds } from './constraints/qualification';
 import { DEFAULT_CONTRACT_HOURS_WEIGHT, contractedPeriodMinutes, resolveContractedWeeklyMinutes } from './contract-hours';
 import type { TimelineEntry } from './engine/timeline';
 import { buildSiteIndex } from './sites';
@@ -85,11 +86,33 @@ export function expandShiftInstances(input: ScheduleInput): ShiftInstance[] {
 }
 
 /** Expand one template into its dated instances inside the period. */
+/**
+ * Which holiday calendar applies to a shift: the hosting site's own list where
+ * it declares one, otherwise the roster's. Holidays follow the place the work
+ * happens, so a shift with no site can only mean the roster calendar.
+ */
+function holidaysFor(
+    siteId: string | undefined,
+    context: { publicHolidays: Set<string>; holidaysBySite?: Map<string, Set<string>> },
+): Set<string> {
+    if (siteId === undefined) return context.publicHolidays;
+    return context.holidaysBySite?.get(siteId) ?? context.publicHolidays;
+}
+
 export function expandTemplate(
     template: ShiftTemplate,
     clock: PeriodClock,
     periodDays: number,
-    context: { nightRule?: WorkingTimeRules['nightWork']; publicHolidays: Set<string> },
+    context: {
+        nightRule?: WorkingTimeRules['nightWork'];
+        publicHolidays: Set<string>;
+        /**
+         * Per-site holiday calendars, replacing the roster calendar for shifts
+         * at that site. Present but empty means the site observes none — the
+         * distinction an `undefined` entry cannot carry.
+         */
+        holidaysBySite?: Map<string, Set<string>>;
+    },
 ): ShiftInstance[] {
     if (!template.id) throw new ScheduleValidationError('Shift template is missing `id`');
     if (template.dates && template.daysOfWeek) {
@@ -196,7 +219,7 @@ export function expandTemplate(
             isNightShift: nightMinutes >= nightThreshold,
             weekday: isoWeekday(date),
             isSunday: isoWeekday(date) === 7,
-            isPublicHoliday: context.publicHolidays.has(date),
+            isPublicHoliday: holidaysFor(template.siteId, context).has(date),
         };
         if (demand.label !== undefined) instance.demandLabel = demand.label;
         instances.push(instance);
@@ -522,14 +545,26 @@ export function buildModel(input: ScheduleInput): ModelContext {
 
     const clock = new PeriodClock(input.period.startDate, periodDays, input.period.timeZone ?? 'UTC');
     const rules = input.rules ?? {};
-    const siteIndex = buildSiteIndex(input.sites, input.travelSpeedKmh);
+    const siteIndex = buildSiteIndex(input.sites, input.travelSpeedKmh, input.period.timeZone);
     const publicHolidays = new Set(input.calendar?.publicHolidays ?? []);
     for (const date of publicHolidays) assertIsoDate(date, 'calendar.publicHolidays');
+
+    // A site that declares its own calendar replaces the roster's for its
+    // shifts; one that declares none inherits it. Built here rather than read
+    // per instance so the distinction resolves once.
+    const holidaysBySite = new Map<string, Set<string>>();
+    for (const site of input.sites ?? []) {
+        if (site.publicHolidays !== undefined) holidaysBySite.set(site.id, new Set(site.publicHolidays));
+    }
 
     const instances: ShiftInstance[] = [];
     const instanceById = new Map<string, ShiftInstance>();
     for (const template of input.shifts) {
-        for (const inst of expandTemplate(template, clock, periodDays, { nightRule: rules.nightWork, publicHolidays })) {
+        for (const inst of expandTemplate(template, clock, periodDays, {
+            nightRule: rules.nightWork,
+            publicHolidays,
+            holidaysBySite,
+        })) {
             if (instanceById.has(inst.id)) throw new ScheduleValidationError(`Duplicate shift instance id "${inst.id}"`);
             instanceById.set(inst.id, inst);
             instances.push(inst);
@@ -558,6 +593,24 @@ export function buildModel(input: ScheduleInput): ModelContext {
         personIdOf.set(employee.id, personId);
         employeesOfPerson.set(personId, [...(employeesOfPerson.get(personId) ?? []), employee.id]);
     }
+
+    // Tag possession is a question about the shift's date, so per-tag minimums
+    // and maximums must resolve it the same way `requiredTags` does. Plain tags
+    // short-circuit; only a dated qualification needs the scan. The cache keeps
+    // the search loop's repeated lookups off that scan — the model is immutable
+    // once built, so a memo can never go stale.
+    const tagOnCache = new Map<string, boolean>();
+    const holdsTagOn = (employeeId: string, tag: string, date: string): boolean => {
+        if (employeeTags.get(employeeId)?.has(tag)) return true;
+        const employee = employeeById.get(employeeId);
+        if (!employee?.qualifications?.length) return false;
+        const key = `${employeeId} ${tag} ${date}`;
+        const cached = tagOnCache.get(key);
+        if (cached !== undefined) return cached;
+        const result = holds(employee, tag, date);
+        tagOnCache.set(key, result);
+        return result;
+    };
 
     // The contracted week resolves exactly once, against the rules that apply
     // to the person (a per-person override may carry its own full-time week),
@@ -612,6 +665,7 @@ export function buildModel(input: ScheduleInput): ModelContext {
         employees: input.employees,
         employeeById,
         employeeTags,
+        holdsTagOn,
         instances,
         instanceById,
         siteIndex,

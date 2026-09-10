@@ -52,8 +52,8 @@ function rankCandidate(
         const assigned = state.assignments.get(instanceId);
         for (const [tag, needed] of Object.entries(inst.tagRequirements)) {
             let have = 0;
-            if (assigned) for (const e of assigned) if (ctx.employeeTags.get(e)?.has(tag)) have++;
-            if (have < needed && ctx.employeeTags.get(employeeId)?.has(tag)) {
+            if (assigned) for (const e of assigned) if (ctx.holdsTagOn(e, tag, inst.date)) have++;
+            if (have < needed && ctx.holdsTagOn(employeeId, tag, inst.date)) {
                 rank -= 1_000;
                 reasons.push(`fills tag requirement "${tag}"`);
             }

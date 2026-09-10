@@ -70,7 +70,7 @@ export function tagShortage(ctx: ModelContext, state: SearchState, instanceId: s
     for (const [tag, needed] of Object.entries(inst.tagRequirements)) {
         let have = 0;
         if (assigned) {
-            for (const employeeId of assigned) if (ctx.employeeTags.get(employeeId)?.has(tag)) have++;
+            for (const employeeId of assigned) if (ctx.holdsTagOn(employeeId, tag, inst.date)) have++;
         }
         short += Math.max(0, needed - have);
     }

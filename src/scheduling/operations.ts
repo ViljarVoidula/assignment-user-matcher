@@ -618,8 +618,12 @@ export function diagnoseInfeasibility(input: ScheduleInput): InfeasibilityReport
         });
     }
 
-    for (const [tag, needed] of tagDemand(ctx).entries()) {
-        const supply = ctx.employees.filter((e) => ctx.employeeTags.get(e.id)?.has(tag)).length;
+    for (const [tag, { needed, dates }] of tagDemand(ctx).entries()) {
+        // Holding the tag on *some* day the tag is wanted is what makes a person
+        // supply for it. Counting plain tags alone would call a lapsed
+        // certificate supply; counting only the first date would call a nurse
+        // who joins mid-period nobody.
+        const supply = ctx.employees.filter((e) => dates.some((date) => ctx.holdsTagOn(e.id, tag, date))).length;
         if (supply === 0 && needed > 0) {
             findings.push({
                 kind: 'tagCapacity',
@@ -633,13 +637,18 @@ export function diagnoseInfeasibility(input: ScheduleInput): InfeasibilityReport
     return { feasible: findings.length === 0, findings };
 }
 
-function tagDemand(ctx: ReturnType<typeof buildModel>): Map<string, number> {
-    const demand = new Map<string, number>();
+/** Per tag: how many assignments want it, and on which dates they want it. */
+function tagDemand(ctx: ReturnType<typeof buildModel>): Map<string, { needed: number; dates: string[] }> {
+    const demand = new Map<string, { needed: number; dates: string[] }>();
+    const add = (tag: string, count: number, date: string) => {
+        const entry = demand.get(tag) ?? { needed: 0, dates: [] };
+        entry.needed += count;
+        if (!entry.dates.includes(date)) entry.dates.push(date);
+        demand.set(tag, entry);
+    };
     for (const inst of ctx.instances) {
-        for (const [tag, count] of Object.entries(inst.tagRequirements)) {
-            demand.set(tag, (demand.get(tag) ?? 0) + count);
-        }
-        for (const tag of inst.requiredTags) demand.set(tag, (demand.get(tag) ?? 0) + inst.minEmployees);
+        for (const [tag, count] of Object.entries(inst.tagRequirements)) add(tag, count, inst.date);
+        for (const tag of inst.requiredTags) add(tag, inst.minEmployees, inst.date);
     }
     return demand;
 }

@@ -40,7 +40,7 @@ export function staffingViolations(ctx: ModelContext, state: SearchState, severi
             let have = 0;
             if (assigned) {
                 for (const employeeId of assigned) {
-                    if (ctx.employeeTags.get(employeeId)?.has(tag)) have++;
+                    if (ctx.holdsTagOn(employeeId, tag, inst.date)) have++;
                 }
             }
             if (have < needed) {

@@ -184,6 +184,32 @@ export interface Site {
     lng?: number;
     /** Travel time from this site to another site, in minutes. Takes precedence over haversine estimates. */
     travelMinutesTo?: Record<string, number>;
+    /**
+     * Public holidays observed at this site, as ISO dates.
+     *
+     * A site's own calendar replaces `ScheduleInput.calendar.publicHolidays`
+     * for its shifts — which is what makes one roster legible across a border,
+     * where Midsummer is a holiday on one side of it and an ordinary Friday on
+     * the other. An empty array means "no holidays here", not "inherit"; omit
+     * the field to inherit the roster calendar.
+     *
+     * Holidays are a fact about *where the shift happens*, so they follow the
+     * site and never the worker. What follows the worker is their employment
+     * law, expressed as `Employee.rules`.
+     */
+    publicHolidays?: string[];
+    /**
+     * IANA zone this site's wall clock is read in.
+     *
+     * Declared for validation, not yet for arithmetic: instances resolve once
+     * against the roster's single `PeriodClock`, so a roster whose sites span
+     * two zones would place one of them an hour out — visible in the night
+     * band, break windows and day boundaries, invisible in the verdict.
+     * `buildSiteIndex` therefore *refuses* a site whose zone differs from the
+     * period's, rather than answering the wrong question quietly. Split such a
+     * roster by zone until the clock is per site.
+     */
+    timeZone?: string;
 }
 
 /** Indexed view of `ScheduleInput.sites` used by constraints and ranking. */
@@ -1019,7 +1045,20 @@ export interface ModelContext {
     periodDays: number;
     employees: Employee[];
     employeeById: Map<string, Employee>;
+    /**
+     * Plain `Employee.tags` only — valid for the whole period by definition.
+     *
+     * Never count a tag requirement off this map: anything with an expiry lives
+     * in `Employee.qualifications` and is a question about the shift's date.
+     * Use `holdsTagOn` for that, so per-tag minimums and maximums read a lapsed
+     * certificate the same way `requiredTags` does.
+     */
     employeeTags: Map<string, Set<string>>;
+    /**
+     * Whether the employee holds `tag` on `date`, by plain tag or by a
+     * qualification whose validity covers that day.
+     */
+    holdsTagOn(employeeId: string, tag: string, date: string): boolean;
     instances: ShiftInstance[];
     instanceById: Map<string, ShiftInstance>;
     /** Site registry built from `ScheduleInput.sites`. */

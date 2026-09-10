@@ -40,7 +40,7 @@ export function groupComposition(): SchedulingConstraint {
             }
 
             for (const [tag, max] of Object.entries(inst.tagMaximums)) {
-                if (!state.ctx.employeeTags.get(pair.employeeId)?.has(tag)) continue;
+                if (!state.ctx.holdsTagOn(pair.employeeId, tag, inst.date)) continue;
                 const current = countTag(state, inst, tag, pair.employeeId);
                 if (current + 1 > max) {
                     return fail(
@@ -99,7 +99,7 @@ function countTag(state: SearchState, inst: ShiftInstance, tag: string, exclude?
     let count = 0;
     for (const employeeId of state.assignments.get(inst.id) ?? []) {
         if (employeeId === exclude) continue;
-        if (state.ctx.employeeTags.get(employeeId)?.has(tag)) count++;
+        if (state.ctx.holdsTagOn(employeeId, tag, inst.date)) count++;
     }
     return count;
 }
