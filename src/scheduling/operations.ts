@@ -392,7 +392,33 @@ export function rankCandidates(
         });
     }
 
-    return candidates.sort((a, b) => a.rank - b.rank || (a.employeeId < b.employeeId ? -1 : 1));
+    /*
+     * Rank, then seniority, then id.
+     *
+     * `Employee.seniority` was declared from the start and read nowhere, so the
+     * field asserted a capability the engine did not have. Collective
+     * agreements very commonly order offers by it, and the honest place for
+     * that is a **tiebreak**: it decides between candidates who are otherwise
+     * indistinguishable, and never outranks cost, travel or contract debt. An
+     * agreement that says "offer by seniority" means exactly that — not that a
+     * senior person should be called out across the city ahead of somebody on
+     * site.
+     *
+     * It stays inside the profiling-free boundary. Seniority is a declared
+     * contractual fact of the same class as a qualification or a contracted
+     * week — not reliability, not acceptance history, not anything learned —
+     * which is what `provenance.profilingFree` asserts and what keeps this
+     * module outside AI Act Annex III point 4(b).
+     *
+     * The id remains the final tiebreak so the order is total and reproducible
+     * for the many teams that record no seniority at all.
+     */
+    return candidates.sort(
+        (a, b) =>
+            a.rank - b.rank ||
+            (ctx.employeeById.get(b.employeeId)?.seniority ?? 0) - (ctx.employeeById.get(a.employeeId)?.seniority ?? 0) ||
+            (a.employeeId < b.employeeId ? -1 : 1),
+    );
 }
 
 function rationaleFor(
@@ -647,7 +673,12 @@ function tagDemand(ctx: ReturnType<typeof buildModel>): Map<string, { needed: nu
         demand.set(tag, entry);
     };
     for (const inst of ctx.instances) {
-        for (const [tag, count] of Object.entries(inst.tagRequirements)) add(tag, count, inst.date);
+        for (const [tag, requirement] of Object.entries(inst.tagRequirements)) add(tag, requirement.min, inst.date);
+        // A proportion of the minimum team, rounded up — the fewest people this
+        // occurrence could possibly need holding the tag.
+        for (const [tag, ratio] of Object.entries(inst.tagRatios)) {
+            add(tag, Math.ceil(ratio * inst.minEmployees), inst.date);
+        }
         for (const tag of inst.requiredTags) add(tag, inst.minEmployees, inst.date);
     }
     return demand;

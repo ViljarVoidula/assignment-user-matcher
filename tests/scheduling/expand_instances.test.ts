@@ -49,7 +49,11 @@ describe('expandShiftInstances', () => {
         const day = expandShiftInstances(input()).find((i) => i.id === 'day@2026-09-01');
 
         expect(day).to.include({ minEmployees: 3, durationMinutes: 8 * H, workingMinutes: 7.5 * H });
-        expect(day?.tagRequirements).to.deep.equal({ support: 2 });
+        // Normalized to the object form at expansion, so no rule downstream
+        // sees a union of "a count" and "a count with a grade floor" — the
+        // plain `{ support: 2 }` the template states is the same requirement.
+        expect(day?.tagRequirements).to.deep.equal({ support: { min: 2 } });
+        expect(day?.tagRatios).to.deep.equal({});
     });
 
     it('resolves wall-clock through the period clock, so an overnight shift spans midnight', () => {

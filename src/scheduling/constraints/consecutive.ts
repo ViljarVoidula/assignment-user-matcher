@@ -29,8 +29,75 @@ export function consecutiveConstraints(rule: ConsecutiveRule): SchedulingConstra
     if (rule.maxNightShifts !== undefined || rule.restAfterNightBlockMinutes !== undefined) {
         out.push(consecutiveNights(rule));
     }
+    if (rule.maxConsecutiveWeekends !== undefined) out.push(consecutiveWeekends(rule.maxConsecutiveWeekends));
     if (rule.forbiddenSuccessions?.length) out.push(shiftSuccession(rule.forbiddenSuccessions));
     return out;
+}
+
+/**
+ * Weekends in a row.
+ *
+ * "Every second weekend off" — the term most often negotiated and the one a
+ * count cannot hold. Weekends are keyed by the Saturday that opens them, so a
+ * Saturday and the Sunday after it are one weekend; keying by week number would
+ * split a weekend across a year boundary and keying by day would make every
+ * ordinary weekend a run of two.
+ */
+export function consecutiveWeekends(maxWeekends: number): SchedulingConstraint {
+    return fromVerdict({
+        id: 'consecutive-weekends',
+        hardness: 'hard',
+        weight: 1,
+        citation: CONSECUTIVE_CITATION,
+        verdict(state, pair): RuleVerdict {
+            const inst = instanceOf(state, pair);
+            if (!inst) return pass('consecutive-weekends', 'unknown shift');
+
+            const timeline = timelineFor(state, pair.employeeId);
+            const probe = { ...rangeOf(inst), id: entryIdOf(pair), workingMinutes: inst.workingMinutes };
+            const clock = state.ctx.clock;
+
+            return timeline.withEntry(probe, (t) => {
+                const run = t.longestConsecutiveWeekends((minute) => weekendKey(clock, minute));
+                if (run > maxWeekends) {
+                    return fail(
+                        'consecutive-weekends',
+                        'hard',
+                        `employee "${pair.employeeId}" would work ${run} weekends in a row, over the ${maxWeekends} allowed`,
+                        { actual: run, required: maxWeekends, unit: 'count', citation: CONSECUTIVE_CITATION },
+                    );
+                }
+                return pass('consecutive-weekends', `${run} weekends in a row, within the ${maxWeekends} allowed`, {
+                    actual: run,
+                    required: maxWeekends,
+                    unit: 'count',
+                    citation: CONSECUTIVE_CITATION,
+                });
+            });
+        },
+    });
+}
+
+/**
+ * Which weekend a minute belongs to, as a consecutive ordinal, or `null` for a
+ * weekday.
+ *
+ * Resolved to the Saturday that opens the weekend first — a Sunday belongs to
+ * the weekend whose Saturday was the day before, so an ordinary weekend is one
+ * weekend rather than two — and then divided into weeks, so that successive
+ * weekends differ by exactly one and the run check is a plain `+ 1`.
+ *
+ * The division is safe at any period alignment and before the period starts:
+ * Saturdays are always seven days apart, so integer division by seven yields
+ * consecutive ordinals wherever the period begins, and `Math.floor` carries
+ * that through the negative indices history occupies.
+ */
+function weekendKey(clock: SearchState['ctx']['clock'], minute: number): number | null {
+    const weekday = clock.weekdayOfMinute(minute);
+    const dayIndex = clock.dayIndexOfMinute(minute);
+    if (weekday === 6) return Math.floor(dayIndex / 7);
+    if (weekday === 7) return Math.floor((dayIndex - 1) / 7);
+    return null;
 }
 
 export function consecutiveDays(maxDays: number): SchedulingConstraint {

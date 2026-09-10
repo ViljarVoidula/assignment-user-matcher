@@ -130,8 +130,33 @@ export interface EmployeeContract {
     /** Hard bounds over the period, in minutes. */
     minPeriodMinutes?: number;
     maxPeriodMinutes?: number;
-    /** Last day the contract runs; shifts after it are ineligible. */
+    /**
+     * First day the contract runs; shifts before it are ineligible.
+     *
+     * Also shrinks what the person is *owed*. Without it somebody joining on
+     * day fifteen of a four-week period was planned a full period's contract —
+     * 160 hours against a fortnight they were employed for — and the
+     * contract-hours objective spent the solve closing a shortfall that was an
+     * artefact of the arithmetic, loading them past everybody who had been
+     * there all month.
+     */
+    startDate?: string;
+    /** Last day the contract runs; shifts after it are ineligible. Pro-rates the total the same way. */
     endDate?: string;
+    /**
+     * Minutes already worked inside the longest rolling window, carried in.
+     *
+     * A twelve-month reference period otherwise needs twelve months of
+     * shift-level history replayed on every solve, because the only way to put
+     * minutes into a window was one assignment at a time. This is the scalar
+     * that says "already 1,640 hours into the annual budget" without the
+     * replay.
+     *
+     * It is added to every rolling average, so it answers the question those
+     * rules ask and nothing else: it is not hours for pay, not fairness, and
+     * not a contract total.
+     */
+    openingBalanceMinutes?: number;
 }
 
 /** A statutory protection that changes which rules apply to a person. */
@@ -450,6 +475,21 @@ export interface ConsecutiveRule {
     /** Rest owed once the night run ends: NL 2760 (46h), FI 1440 (24h). */
     restAfterNightBlockMinutes?: number;
     /**
+     * Weekends in a row somebody may be rostered on. `1` is "every second
+     * weekend off".
+     *
+     * A **sequence** rule rather than a fairness dimension, and deliberately
+     * so. `FairnessRule` with `dimension: 'weekends'` equalises counts — three
+     * weekends each — which three consecutive weekends followed by three off
+     * satisfies exactly as well as alternating ones. The count is equal; the
+     * arrangement is what was negotiated.
+     *
+     * A Saturday and the Sunday after it are one weekend. Counting them as two
+     * would make an ordinary weekend breach "every second", which is the
+     * opposite of what the term asks for.
+     */
+    maxConsecutiveWeekends?: number;
+    /**
      * Disallowed shift-type transitions, matched on `ShiftTemplate.shiftTypeTag`.
      * The classic is Night → Early ("quick return").
      */
@@ -617,8 +657,10 @@ export interface ShiftDemandOverride {
      * replacing them — "two more than usual" without restating the usual.
      */
     extraEmployees?: number;
-    /** Replaces the template's per-tag minimums. */
-    tagRequirements?: Record<string, number>;
+    /** Replaces the template's per-tag minimums. Same shapes as the template's own. */
+    tagRequirements?: Record<string, number | TagRequirement>;
+    /** Replaces the template's per-tag proportions. */
+    tagRatios?: Record<string, number>;
     /** Replaces the template's per-tag maximums. */
     tagMaximums?: Record<string, number>;
     /** Replaces the tags every assignee must hold. */
@@ -637,6 +679,19 @@ export interface ShiftDemandOverride {
     runs?: boolean;
 }
 
+/**
+ * A per-tag minimum with a grade floor.
+ *
+ * The long form of `tagRequirements`. `{ min: 2, level: 3 }` means two people
+ * holding the tag at grade 3 or better; omitting `level` is exactly the plain
+ * number form and is accepted so the two shapes can be mixed in one map.
+ */
+export interface TagRequirement {
+    min: number;
+    /** Minimum `Qualification.level`. Absent counts anybody holding the tag. */
+    level?: number;
+}
+
 /** A recurring or dated shift definition. Times are local time-of-day `HH:MM` or `HH:MM:SS`. */
 export interface ShiftTemplate {
     id: string;
@@ -651,8 +706,37 @@ export interface ShiftTemplate {
     daysOfWeek?: number[];
     /** Minimum employees that must be assigned to each occurrence. Defaults to 1. */
     minEmployees?: number;
-    /** Per-tag minimums: at least `count` assigned employees must carry the tag. */
-    tagRequirements?: Record<string, number>;
+    /**
+     * Per-tag minimums: at least this many assigned employees must carry the tag.
+     *
+     * A plain number counts heads holding the tag at all. The object form adds
+     * a **grade floor** — `{ min: 1, level: 3 }` is "at least one senior on
+     * every shift", the question operational buyers ask first and the one a
+     * headcount cannot answer. `Qualification.level` has always been stored and
+     * `holds(..., minLevel)` has always accepted a floor; this is what finally
+     * passes one.
+     *
+     * A graded requirement is satisfied only by a dated qualification at or
+     * above the level. A plain `Employee.tags` entry carries no grade, so it
+     * cannot answer a question about seniority — reading it as "any level"
+     * would let an unstated fact settle one.
+     */
+    tagRequirements?: Record<string, number | TagRequirement>;
+    /**
+     * Per-tag **proportions** of the assigned team, as a fraction of 0 to 1.
+     *
+     * The other shape a headcount cannot express, and the one the composition
+     * rule's own header has always named as its motivation: German ward
+     * staffing is a proportion by ward and shift, and "no fewer than 60%
+     * registered nurses" is not two nurses or three — it depends on how many
+     * people are on.
+     *
+     * A **floor, rounded up**: 60% of four people is 2.4, and nobody staffs
+     * 2.4, so it means three. An empty shift is silent rather than 0% — a
+     * proportion of nobody is undefined, and reporting it as a breach would
+     * bury the real finding, which is that the shift is unstaffed.
+     */
+    tagRatios?: Record<string, number>;
 
     /** Cap on assignees. Useful for supervision limits and to stop over-staffing. */
     maxEmployees?: number;
@@ -1000,7 +1084,9 @@ export interface ShiftInstance {
     /** Elapsed duration in minutes, always positive. */
     durationMinutes: number;
     minEmployees: number;
-    tagRequirements: Record<string, number>;
+    tagRequirements: Record<string, TagRequirement>;
+    /** Per-tag proportions of the assigned team, 0 to 1. Empty when none apply. */
+    tagRatios: Record<string, number>;
     /**
      * The label of the last labelled `ShiftDemandOverride` that shaped this
      * occurrence, so a grid can say *why* Tuesday needs three when the template
@@ -1059,6 +1145,16 @@ export interface ModelContext {
      * qualification whose validity covers that day.
      */
     holdsTagOn(employeeId: string, tag: string, date: string): boolean;
+    /**
+     * The same question with a grade floor: a dated qualification at or above
+     * `minLevel`.
+     *
+     * A plain `Employee.tags` entry never satisfies this. A tag carries no
+     * grade, and reading it as "any level" would let an unstated fact answer a
+     * question about seniority — which is exactly what a graded requirement
+     * exists to ask.
+     */
+    holdsTagAt(employeeId: string, tag: string, date: string, minLevel: number): boolean;
     instances: ShiftInstance[];
     instanceById: Map<string, ShiftInstance>;
     /** Site registry built from `ScheduleInput.sites`. */

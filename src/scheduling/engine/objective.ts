@@ -67,12 +67,29 @@ export function tagShortage(ctx: ModelContext, state: SearchState, instanceId: s
     if (!inst) return 0;
     const assigned = state.assignments.get(instanceId);
     let short = 0;
-    for (const [tag, needed] of Object.entries(inst.tagRequirements)) {
+    for (const [tag, requirement] of Object.entries(inst.tagRequirements)) {
         let have = 0;
         if (assigned) {
-            for (const employeeId of assigned) if (ctx.holdsTagOn(employeeId, tag, inst.date)) have++;
+            for (const employeeId of assigned) {
+                const holds =
+                    requirement.level === undefined
+                        ? ctx.holdsTagOn(employeeId, tag, inst.date)
+                        : ctx.holdsTagAt(employeeId, tag, inst.date, requirement.level);
+                if (holds) have++;
+            }
         }
-        short += Math.max(0, needed - have);
+        short += Math.max(0, requirement.min - have);
+    }
+    // A ratio's shortfall is measured against the team that is actually on, so
+    // it moves as the shift fills — which is what lets the search close it by
+    // adding the right person rather than by adding anybody.
+    const size = assigned?.size ?? 0;
+    if (size > 0) {
+        for (const [tag, ratio] of Object.entries(inst.tagRatios)) {
+            let have = 0;
+            for (const employeeId of assigned!) if (ctx.holdsTagOn(employeeId, tag, inst.date)) have++;
+            short += Math.max(0, Math.ceil(ratio * size) - have);
+        }
     }
     return short;
 }

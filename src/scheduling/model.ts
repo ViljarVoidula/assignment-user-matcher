@@ -37,6 +37,7 @@ import type {
     SchedulingConstraint,
     ShiftInstance,
     ShiftTemplate,
+    TagRequirement,
     WorkingTimeRules,
 } from './types';
 import { ScheduleValidationError } from './types';
@@ -210,6 +211,7 @@ export function expandTemplate(
             minEmployees: demand.minEmployees,
             maxEmployees: demand.maxEmployees,
             tagRequirements: demand.tagRequirements,
+            tagRatios: demand.tagRatios,
             tagMaximums: demand.tagMaximums,
             requiredTags: demand.requiredTags,
             shiftTypeTag: template.shiftTypeTag,
@@ -231,7 +233,9 @@ export function expandTemplate(
 interface ResolvedDemand {
     minEmployees: number;
     maxEmployees: number | undefined;
-    tagRequirements: Record<string, number>;
+    /** Already normalized: both stated shapes resolve to the object form here. */
+    tagRequirements: Record<string, TagRequirement>;
+    tagRatios: Record<string, number>;
     tagMaximums: Record<string, number>;
     requiredTags: string[];
     label?: string;
@@ -279,6 +283,88 @@ function validateDemandOverrides(template: ShiftTemplate): ShiftDemandOverride[]
  * peak" plainly means three. Only a maximum the override itself states is held
  * against the resolved minimum — that combination is a shape nobody can staff.
  */
+/**
+ * Days of the period this contract is in force.
+ *
+ * Both bounds inclusive, clipped to the period, and zero when they do not
+ * overlap it at all — somebody whose contract ended in February is owed nothing
+ * in March rather than a full month they were not employed for.
+ *
+ * The two date fields are validated here rather than in `validateEmployee`
+ * because this is the one place that has to read them, and a second reading
+ * would be a second chance to disagree about what "in force" means.
+ */
+function daysInForce(employee: Employee, periodStart: string, periodDays: number): number {
+    const contract = employee.contract;
+    const periodEnd = addDays(periodStart, periodDays - 1);
+    if (contract?.startDate) assertIsoDate(contract.startDate, `employee "${employee.id}".contract.startDate`);
+    if (contract?.endDate) assertIsoDate(contract.endDate, `employee "${employee.id}".contract.endDate`);
+    if (contract?.startDate && contract.endDate && contract.startDate > contract.endDate) {
+        throw new ScheduleValidationError(
+            `Employee "${employee.id}" has a contract starting ${contract.startDate}, after it ends ${contract.endDate}`,
+        );
+    }
+    if (contract?.openingBalanceMinutes !== undefined) {
+        if (!Number.isFinite(contract.openingBalanceMinutes) || contract.openingBalanceMinutes < 0) {
+            throw new ScheduleValidationError(
+                `Employee "${employee.id}".contract.openingBalanceMinutes must be a non-negative number of minutes`,
+            );
+        }
+    }
+
+    const from = contract?.startDate && contract.startDate > periodStart ? contract.startDate : periodStart;
+    const to = contract?.endDate && contract.endDate < periodEnd ? contract.endDate : periodEnd;
+    if (from > to) return 0;
+    return daysBetween(from, to) + 1;
+}
+
+/**
+ * Both shapes of `tagRequirements`, resolved to one.
+ *
+ * A plain number is a count with no grade floor; the object form carries one.
+ * Normalising here means no rule downstream sees a union — the alternative,
+ * every counting site widening a `typeof` check, is how one of them ends up
+ * reading `{ min: 2 }` as `NaN` and quietly requiring nobody.
+ */
+function normalizeTagRequirements(
+    stated: Record<string, number | TagRequirement> | undefined,
+    templateId: string,
+): Record<string, TagRequirement> {
+    const out: Record<string, TagRequirement> = {};
+    for (const [tag, value] of Object.entries(stated ?? {})) {
+        const requirement = typeof value === 'number' ? { min: value } : value;
+        if (!Number.isInteger(requirement?.min) || requirement.min < 0) {
+            throw new ScheduleValidationError(
+                `Shift template "${templateId}".tagRequirements["${tag}"] needs a non-negative whole minimum`,
+            );
+        }
+        if (requirement.level !== undefined && (!Number.isFinite(requirement.level) || requirement.level < 0)) {
+            throw new ScheduleValidationError(
+                `Shift template "${templateId}".tagRequirements["${tag}"].level must be a non-negative number`,
+            );
+        }
+        out[tag] = requirement.level === undefined ? { min: requirement.min } : { min: requirement.min, level: requirement.level };
+    }
+    return out;
+}
+
+/** Proportions, checked as fractions. A ratio outside 0..1 is not a proportion of anything. */
+function normalizeTagRatios(
+    stated: Record<string, number> | undefined,
+    templateId: string,
+): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [tag, ratio] of Object.entries(stated ?? {})) {
+        if (typeof ratio !== 'number' || !Number.isFinite(ratio) || ratio < 0 || ratio > 1) {
+            throw new ScheduleValidationError(
+                `Shift template "${templateId}".tagRatios["${tag}"] must be a fraction between 0 and 1`,
+            );
+        }
+        out[tag] = ratio;
+    }
+    return out;
+}
+
 function resolveDemand(
     template: ShiftTemplate,
     overrides: ShiftDemandOverride[],
@@ -293,7 +379,8 @@ function resolveDemand(
     const demand: ResolvedDemand = {
         minEmployees: min,
         maxEmployees: max,
-        tagRequirements: template.tagRequirements ?? {},
+        tagRequirements: normalizeTagRequirements(template.tagRequirements, template.id),
+        tagRatios: normalizeTagRatios(template.tagRatios, template.id),
         tagMaximums: template.tagMaximums ?? {},
         requiredTags: template.requiredTags ?? [],
     };
@@ -313,7 +400,10 @@ function resolveDemand(
             maxStated = true;
         }
         if (override.extraEmployees !== undefined) extra += override.extraEmployees;
-        if (override.tagRequirements !== undefined) demand.tagRequirements = override.tagRequirements;
+        if (override.tagRequirements !== undefined) {
+            demand.tagRequirements = normalizeTagRequirements(override.tagRequirements, template.id);
+        }
+        if (override.tagRatios !== undefined) demand.tagRatios = normalizeTagRatios(override.tagRatios, template.id);
         if (override.tagMaximums !== undefined) demand.tagMaximums = override.tagMaximums;
         if (override.requiredTags !== undefined) demand.requiredTags = override.requiredTags;
         if (override.runs !== undefined) runs = override.runs;
@@ -600,6 +690,15 @@ export function buildModel(input: ScheduleInput): ModelContext {
     // the search loop's repeated lookups off that scan — the model is immutable
     // once built, so a memo can never go stale.
     const tagOnCache = new Map<string, boolean>();
+    /**
+     * The graded question. Deliberately not cached: a level floor makes the key
+     * space four-dimensional, and graded requirements are rare enough that the
+     * scan costs less than the memo would.
+     */
+    const holdsTagAt = (employeeId: string, tag: string, date: string, minLevel: number): boolean => {
+        const employee = employeeById.get(employeeId);
+        return employee ? holds(employee, tag, date, minLevel) : false;
+    };
     const holdsTagOn = (employeeId: string, tag: string, date: string): boolean => {
         if (employeeTags.get(employeeId)?.has(tag)) return true;
         const employee = employeeById.get(employeeId);
@@ -621,7 +720,14 @@ export function buildModel(input: ScheduleInput): ModelContext {
         const weekly = resolveContractedWeeklyMinutes(employee, rulesByEmployee.get(employee.id) ?? rules);
         if (weekly === undefined) continue;
         contractedWeeklyMinutes.set(employee.id, weekly);
-        contractedPeriod.set(employee.id, contractedPeriodMinutes(weekly, periodDays));
+        // Days the contract is actually in force inside the period, not the
+        // period's own length: somebody who joins on day fifteen is owed a
+        // fortnight, and planning them a full month is what made the
+        // contract-hours objective load a new starter past everybody else.
+        contractedPeriod.set(
+            employee.id,
+            contractedPeriodMinutes(weekly, daysInForce(employee, input.period.startDate, periodDays)),
+        );
     }
     const contractHoursWeight = input.objectives?.contractHoursWeight ?? DEFAULT_CONTRACT_HOURS_WEIGHT;
     if (!Number.isFinite(contractHoursWeight) || contractHoursWeight < 0) {
@@ -666,6 +772,7 @@ export function buildModel(input: ScheduleInput): ModelContext {
         employeeById,
         employeeTags,
         holdsTagOn,
+        holdsTagAt,
         instances,
         instanceById,
         siteIndex,

@@ -149,8 +149,24 @@ function worstAverageBreach(
         ? (state.ctx.absences.get(employeeId) ?? []).filter((a) => a.kind !== undefined && kinds.includes(a.kind))
         : [];
 
+    /*
+     * Hours already inside the window when the period opened.
+     *
+     * A twelve-month reference period otherwise needs twelve months of
+     * shift-level history replayed on every solve, because the only way to put
+     * minutes into a window was one assignment at a time. The balance is added
+     * to the *worked* side rather than taken off the cap so the reported
+     * numbers stay legible: "would work 114h against a 100h budget" is what a
+     * person needs to read, not "would work 16h against 2h".
+     *
+     * It applies to every rolling average, which is the honest reading of a
+     * carried figure — a person 1,640h into their annual budget is that far
+     * into it however the windows are sliced.
+     */
+    const carried = state.ctx.employeeById.get(employeeId)?.contract?.openingBalanceMinutes ?? 0;
+
     if (neutral.length === 0) {
-        const worked = timeline.maxWorkingMinutesInAnyWindow(span, bounds);
+        const worked = timeline.maxWorkingMinutesInAnyWindow(span, bounds) + carried;
         return worked > maxMinutes ? { worked, allowance: maxMinutes } : null;
     }
 
@@ -167,7 +183,7 @@ function worstAverageBreach(
     let worst: { worked: number; allowance: number; excess: number } | null = null;
     for (const start of starts) {
         const window = { start, end: start + span };
-        const worked = timeline.workingMinutesIn(window);
+        const worked = timeline.workingMinutesIn(window) + carried;
         const neutralMinutes = neutral.reduce(
             (sum, a) => sum + Math.max(0, Math.min(a.end, window.end) - Math.max(a.start, window.start)),
             0,

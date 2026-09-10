@@ -318,6 +318,39 @@ export class PersonTimeline {
     }
 
     /**
+     * The longest run of consecutive weekends any entry falls in.
+     *
+     * "Every second weekend off" is the most commonly negotiated scheduling
+     * term in Europe and the one shape a *count* cannot express: three weekends
+     * each is satisfied exactly as well by three in a row as by alternating
+     * ones, and the arrangement is the thing people agreed to.
+     *
+     * Weekends are keyed by the week they belong to, so a Saturday and the
+     * Sunday after it are one weekend rather than two — otherwise working an
+     * ordinary weekend would breach "every second", which is the opposite of
+     * what it asks. A Sunday belongs to the week whose Saturday preceded it.
+     */
+    longestConsecutiveWeekends(weekendKeyOf: (minute: number) => number | null): number {
+        this.ensureClean();
+        const weekends = new Set<number>();
+        for (const entry of this.entries) {
+            const key = weekendKeyOf(entry.start);
+            if (key !== null) weekends.add(key);
+        }
+
+        const sorted = [...weekends].sort((a, b) => a - b);
+        let longest = 0;
+        let current = 0;
+        let previous: number | undefined;
+        for (const weekend of sorted) {
+            current = previous !== undefined && weekend === previous + 1 ? current + 1 : 1;
+            if (current > longest) longest = current;
+            previous = weekend;
+        }
+        return longest;
+    }
+
+    /**
      * First index that may overlap a window starting at `windowStart`.
      *
      * Entries are sorted by start but may be *nested* — a long stand-by span can

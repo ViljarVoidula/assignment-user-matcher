@@ -29,11 +29,15 @@ export function contractLimits(): SchedulingConstraint {
         weight: 1,
         prune(ctx, eligibility) {
             for (const [employeeId, instances] of eligibility) {
-                const endDate = ctx.employeeById.get(employeeId)?.contract?.endDate;
-                if (!endDate) continue;
+                const contract = ctx.employeeById.get(employeeId)?.contract;
+                if (!contract?.startDate && !contract?.endDate) continue;
                 for (const instanceId of [...instances]) {
                     const inst = ctx.instanceById.get(instanceId);
-                    if (inst && inst.date > endDate) instances.delete(instanceId);
+                    if (!inst) continue;
+                    // Both ends, one rule: a shift before somebody joins is as
+                    // unworkable as one after they leave.
+                    if (contract.endDate && inst.date > contract.endDate) instances.delete(instanceId);
+                    else if (contract.startDate && inst.date < contract.startDate) instances.delete(instanceId);
                 }
             }
         },
@@ -47,6 +51,13 @@ export function contractLimits(): SchedulingConstraint {
                     'contract',
                     'hard',
                     `employee "${pair.employeeId}"'s contract ends ${contract.endDate}, before "${inst.id}"`,
+                );
+            }
+            if (contract.startDate && inst.date < contract.startDate) {
+                return fail(
+                    'contract',
+                    'hard',
+                    `employee "${pair.employeeId}"'s contract starts ${contract.startDate}, after "${inst.id}"`,
                 );
             }
 

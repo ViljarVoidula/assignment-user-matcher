@@ -50,12 +50,29 @@ function rankCandidate(
     const inst = ctx.instanceById.get(instanceId);
     if (inst) {
         const assigned = state.assignments.get(instanceId);
-        for (const [tag, needed] of Object.entries(inst.tagRequirements)) {
+        for (const [tag, requirement] of Object.entries(inst.tagRequirements)) {
+            const counts = (id: string) =>
+                requirement.level === undefined
+                    ? ctx.holdsTagOn(id, tag, inst.date)
+                    : ctx.holdsTagAt(id, tag, inst.date, requirement.level);
             let have = 0;
-            if (assigned) for (const e of assigned) if (ctx.holdsTagOn(e, tag, inst.date)) have++;
-            if (have < needed && ctx.holdsTagOn(employeeId, tag, inst.date)) {
+            if (assigned) for (const e of assigned) if (counts(e)) have++;
+            if (have < requirement.min && counts(employeeId)) {
                 rank -= 1_000;
                 reasons.push(`fills tag requirement "${tag}"`);
+            }
+        }
+        // Somebody who moves a proportion toward its floor. Judged against the
+        // team as it stands, so the preference strengthens as the shift fills
+        // rather than being decided when it was empty.
+        const onShift = assigned?.size ?? 0;
+        for (const [tag, ratio] of Object.entries(inst.tagRatios)) {
+            if (!ctx.holdsTagOn(employeeId, tag, inst.date)) continue;
+            let have = 0;
+            if (assigned) for (const e of assigned) if (ctx.holdsTagOn(e, tag, inst.date)) have++;
+            if (have < Math.ceil(ratio * (onShift + 1))) {
+                rank -= 800;
+                reasons.push(`helps the "${tag}" ratio`);
             }
         }
     }
