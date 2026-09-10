@@ -194,6 +194,7 @@ export {
     type Severity,
     type ShiftInstance,
     type ShiftTemplate,
+    type TagRequirement,
     type ShiftDemandOverride,
     type Site,
     type SiteIndex,
