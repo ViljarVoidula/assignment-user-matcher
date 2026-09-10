@@ -80,6 +80,7 @@ export type {
     Severity,
     ShiftInstance,
     ShiftTemplate,
+    TagRequirement,
     ShiftDemandOverride,
     Site,
     SiteIndex,
