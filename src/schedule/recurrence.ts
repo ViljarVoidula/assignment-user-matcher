@@ -10,13 +10,24 @@
  * cadence decides *when* a slot is noticed, never *where* it sits. The sweep
  * materializes one interval ahead (`horizon = now + everyMs`), so the next
  * occurrence exists as a scheduled assignment before its window opens.
+ *
+ * `times` spreads several occurrences evenly across one period ("twice a
+ * week"). It is resolved here, once, into the gap between two consecutive
+ * occurrences — `NormalizedRecurrencePolicy.everyMs` *is* that gap, and
+ * nothing downstream reads the caller's period. A second reading of the
+ * cadence is how a sweep and a validator stop agreeing.
  */
 
 import type { Assignment, RecurrencePolicy, RecurringAssignment, SchedulePolicy } from '../types/matcher';
 
 /** A policy with every optional field resolved. */
 export interface NormalizedRecurrencePolicy {
+    /** Gap between two consecutive occurrences: the caller's period ÷ `times`. */
     everyMs: number;
+    /** The caller's period, kept for reporting the policy back — never for slot arithmetic. */
+    periodMs: number;
+    /** Occurrences per period. 1 unless the caller asked for more. */
+    times: number;
     startAt?: number;
     windowMs?: number;
     onMiss: 'park' | 'drop';
@@ -59,8 +70,15 @@ function positiveInt(value: unknown): number | undefined {
 export function normalizeRecurrencePolicy(policy: RecurrencePolicy | undefined | null): NormalizedRecurrencePolicy | null {
     if (!policy || typeof policy !== 'object') return null;
 
-    const everyMs = positiveInt(policy.everyMs);
-    if (everyMs === undefined || everyMs < MIN_EVERY_MS) return null;
+    const periodMs = positiveInt(policy.everyMs);
+    if (periodMs === undefined) return null;
+    const times = policy.times === undefined ? 1 : positiveInt(policy.times);
+    if (times === undefined) return null;
+    // The gap is what every slot, window and horizon is measured in, so a
+    // period that divides into sub-second work is refused on the gap, not on
+    // the period the caller happened to name it with.
+    const everyMs = times === 1 ? periodMs : Math.round(periodMs / times);
+    if (everyMs < MIN_EVERY_MS) return null;
 
     const startAt = positiveInt(policy.startAt);
     const windowMs = positiveInt(policy.windowMs);
@@ -71,6 +89,8 @@ export function normalizeRecurrencePolicy(policy: RecurrencePolicy | undefined |
 
     return {
         everyMs,
+        periodMs,
+        times,
         startAt,
         windowMs,
         onMiss: policy.onMiss === 'drop' ? 'drop' : 'park',

@@ -21,7 +21,7 @@ Per-target component predictions (probabilities for binary targets)
 
 #### Defined in
 
-[src/types/matcher.ts:1832](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1832)
+[src/types/matcher.ts:1846](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1846)
 
 ___
 
@@ -33,4 +33,4 @@ The value used for ranking
 
 #### Defined in
 
-[src/types/matcher.ts:1830](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L1830)
+[src/types/matcher.ts:1844](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1844)

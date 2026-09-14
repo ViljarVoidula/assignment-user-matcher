@@ -43,7 +43,7 @@
         "benchmark:weights": "ts-node benchmark-weights.ts",
         "benchmark:scenarios": "ts-node benchmark-learning-scenarios.ts",
         "benchmark:scheduling": "ts-node benchmark-scheduling.ts",
-        "build:docs": "npx typedoc --plugin typedoc-plugin-markdown",
+        "build:docs": "typedoc --plugin typedoc-plugin-markdown",
         "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/.eslintcache",
         "lint:ci": "eslint . --quiet --cache --cache-location node_modules/.cache/eslint/.eslintcache",
         "lint:fix": "eslint . --fix",

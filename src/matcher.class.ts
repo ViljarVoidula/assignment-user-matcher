@@ -4973,15 +4973,16 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Occurrences fire with sweep granularity: `startMaintenance()` /
      * `runMaintenanceOnce()` / `processRecurringAssignments()`.
      *
-     * @throws when `recurrence` is unusable (`everyMs` missing or < 1000,
-     *         or `until` before `startAt`)
+     * @throws when `recurrence` is unusable (`everyMs` missing, the gap between
+     *         occurrences — `everyMs / times` — under 1000, or `until` before
+     *         `startAt`)
      */
     async addRecurringAssignment(template: RecurringAssignment): Promise<RecurringAssignment> {
         await this.readyPromise;
         const policy = normalizeRecurrencePolicy(template.recurrence);
         if (!policy) {
             throw new Error(
-                `addRecurringAssignment: recurrence needs everyMs >= ${MIN_EVERY_MS} and a satisfiable until/startAt`,
+                `addRecurringAssignment: recurrence needs everyMs / times >= ${MIN_EVERY_MS} and a satisfiable until/startAt`,
             );
         }
 

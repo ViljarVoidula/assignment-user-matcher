@@ -27,7 +27,7 @@ a window instead (DE 28 days, AT 10).
 
 #### Defined in
 
-[src/scheduling/types.ts:260](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L260)
+[src/scheduling/types.ts:311](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L311)
 
 ___
 
@@ -39,7 +39,7 @@ e.g. 660 (EU floor), 720 (ES, RO), 540 (FI period work).
 
 #### Defined in
 
-[src/scheduling/types.ts:248](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L248)
+[src/scheduling/types.ts:299](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L299)
 
 ___
 
@@ -52,7 +52,7 @@ A clock band the rest must contain. Sweden requires the 11h to include
 
 #### Defined in
 
-[src/scheduling/types.ts:265](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L265)
+[src/scheduling/types.ts:316](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L316)
 
 ___
 
@@ -64,7 +64,7 @@ Window the rest must fit in. Defaults to 1440 — "in every rolling 24h".
 
 #### Defined in
 
-[src/scheduling/types.ts:250](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L250)
+[src/scheduling/types.ts:301](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L301)
 
 ___
 
@@ -76,7 +76,7 @@ Floor a permitted derogation may reduce rest to (NL/DK/CZ 480, FR 540).
 
 #### Defined in
 
-[src/scheduling/types.ts:252](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L252)
+[src/scheduling/types.ts:303](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L303)
 
 ___
 
@@ -95,4 +95,4 @@ How often the reduction may be used, e.g. NL's "once per 7×24h".
 
 #### Defined in
 
-[src/scheduling/types.ts:254](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L254)
+[src/scheduling/types.ts:305](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L305)

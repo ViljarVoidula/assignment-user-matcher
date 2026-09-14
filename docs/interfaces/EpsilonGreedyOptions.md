@@ -20,7 +20,7 @@ Probability of the exploratory branch, in [0, 1]
 
 #### Defined in
 
-[src/learning/policy.ts:31](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/learning/policy.ts#L31)
+[src/learning/policy.ts:31](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/learning/policy.ts#L31)
 
 ___
 
@@ -40,7 +40,7 @@ Random source returning values in [0, 1)
 
 #### Defined in
 
-[src/learning/policy.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/learning/policy.ts#L33)
+[src/learning/policy.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/learning/policy.ts#L33)
 
 ___
 
@@ -53,4 +53,4 @@ purposes, so a tie is shared rather than resolved by list order.
 
 #### Defined in
 
-[src/learning/policy.ts:38](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/learning/policy.ts#L38)
+[src/learning/policy.ts:38](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/learning/policy.ts#L38)

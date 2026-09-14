@@ -305,6 +305,20 @@ export interface RecurrencePolicy {
     /** Milliseconds between one occurrence's window opening and the next. Minimum 1000. */
     everyMs: number;
     /**
+     * How many occurrences one `everyMs` period contains, spread evenly across
+     * it: occurrence *k* opens at `startAt + k × everyMs / times`. This is what
+     * "twice a week" means — `{ everyMs: 7 × 86400_000, times: 2 }` — without
+     * the caller hand-dividing the period into an interval that no longer reads
+     * back as the cadence they asked for.
+     *
+     * The derived gap is what every other field is measured against: it must
+     * still be at least 1000 ms, and `windowMs` is an occurrence's own offer
+     * window, not the period's. `maxOccurrences` and `until` stay totals across
+     * every occurrence, whichever period it falls in.
+     * @default 1
+     */
+    times?: number;
+    /**
      * Epoch ms the first occurrence's window opens.
      * @default now — the first sweep materializes an occurrence immediately
      */

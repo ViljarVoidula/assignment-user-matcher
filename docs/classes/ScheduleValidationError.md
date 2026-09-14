@@ -50,7 +50,7 @@ Error.constructor
 
 #### Defined in
 
-[src/scheduling/types.ts:948](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L948)
+[src/scheduling/types.ts:1062](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1062)
 
 ## Properties
 

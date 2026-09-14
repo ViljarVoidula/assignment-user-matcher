@@ -9,6 +9,7 @@ The normalized, fully-indexed problem the engine and constraints operate on.
 ### Properties
 
 - [absences](ModelContext.md#absences)
+- [aggregateConstraints](ModelContext.md#aggregateconstraints)
 - [asOfMinute](ModelContext.md#asofminute)
 - [clock](ModelContext.md#clock)
 - [constraints](ModelContext.md#constraints)
@@ -36,6 +37,11 @@ The normalized, fully-indexed problem the engine and constraints operate on.
 - [rulesByEmployee](ModelContext.md#rulesbyemployee)
 - [siteIndex](ModelContext.md#siteindex)
 
+### Methods
+
+- [holdsTagAt](ModelContext.md#holdstagat)
+- [holdsTagOn](ModelContext.md#holdstagon)
+
 ## Properties
 
 ### absences
@@ -46,7 +52,19 @@ Absence spans per employee, with the kind that drives averaging neutrality.
 
 #### Defined in
 
-[src/scheduling/types.ts:1055](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1055)
+[src/scheduling/types.ts:1196](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1196)
+
+___
+
+### aggregateConstraints
+
+• `Optional` **aggregateConstraints**: [`SchedulingConstraint`](SchedulingConstraint.md)[]
+
+Custom whole-roster constraints that must also contribute to search scoring.
+
+#### Defined in
+
+[src/scheduling/types.ts:1166](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1166)
 
 ___
 
@@ -58,7 +76,7 @@ Period minutes of `ScheduleInput.asOf`, when supplied.
 
 #### Defined in
 
-[src/scheduling/types.ts:1061](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1061)
+[src/scheduling/types.ts:1202](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1202)
 
 ___
 
@@ -70,7 +88,7 @@ DST-correct wall-clock resolver for the roster's zone.
 
 #### Defined in
 
-[src/scheduling/types.ts:1030](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1030)
+[src/scheduling/types.ts:1171](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1171)
 
 ___
 
@@ -82,7 +100,7 @@ Constraint registry snapshot, resolved with caller overrides.
 
 #### Defined in
 
-[src/scheduling/types.ts:1027](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1027)
+[src/scheduling/types.ts:1168](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1168)
 
 ___
 
@@ -94,7 +112,7 @@ Resolved `objectives.contractHoursWeight`.
 
 #### Defined in
 
-[src/scheduling/types.ts:1044](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1044)
+[src/scheduling/types.ts:1185](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1185)
 
 ___
 
@@ -106,7 +124,7 @@ The contracted week pro-rated to the period, for the same employees.
 
 #### Defined in
 
-[src/scheduling/types.ts:1042](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1042)
+[src/scheduling/types.ts:1183](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1183)
 
 ___
 
@@ -121,7 +139,7 @@ rule that reads a contracted week reads it here, so `fte` and
 
 #### Defined in
 
-[src/scheduling/types.ts:1040](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1040)
+[src/scheduling/types.ts:1181](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1181)
 
 ___
 
@@ -129,11 +147,11 @@ ___
 
 • **employeeBlockedIntervals**: `Map`\<`string`, \{ `end`: `number` ; `start`: `number`  }[]\>
 
-Minutes in [0, periodDays*1440) the employee is blocked by time-off.
+Blocked intervals in elapsed period minutes, including overlapping overnight spillover.
 
 #### Defined in
 
-[src/scheduling/types.ts:1024](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1024)
+[src/scheduling/types.ts:1163](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1163)
 
 ___
 
@@ -143,7 +161,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1017](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1017)
+[src/scheduling/types.ts:1133](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1133)
 
 ___
 
@@ -151,9 +169,16 @@ ___
 
 • **employeeTags**: `Map`\<`string`, `Set`\<`string`\>\>
 
+Plain `Employee.tags` only — valid for the whole period by definition.
+
+Never count a tag requirement off this map: anything with an expiry lives
+in `Employee.qualifications` and is a question about the shift's date.
+Use `holdsTagOn` for that, so per-tag minimums and maximums read a lapsed
+certificate the same way `requiredTags` does.
+
 #### Defined in
 
-[src/scheduling/types.ts:1018](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1018)
+[src/scheduling/types.ts:1142](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1142)
 
 ___
 
@@ -163,7 +188,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1016](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1016)
+[src/scheduling/types.ts:1132](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1132)
 
 ___
 
@@ -175,7 +200,7 @@ Person id → the employee records that share it.
 
 #### Defined in
 
-[src/scheduling/types.ts:1050](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1050)
+[src/scheduling/types.ts:1191](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1191)
 
 ___
 
@@ -187,7 +212,7 @@ Resolved `objectives.fillToContract`.
 
 #### Defined in
 
-[src/scheduling/types.ts:1046](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1046)
+[src/scheduling/types.ts:1187](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1187)
 
 ___
 
@@ -199,7 +224,7 @@ Pre-period assignments, keyed by person, at negative period minutes.
 
 #### Defined in
 
-[src/scheduling/types.ts:1052](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1052)
+[src/scheduling/types.ts:1193](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1193)
 
 ___
 
@@ -209,7 +234,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1020](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1020)
+[src/scheduling/types.ts:1159](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1159)
 
 ___
 
@@ -219,7 +244,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1019](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1019)
+[src/scheduling/types.ts:1158](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1158)
 
 ___
 
@@ -229,7 +254,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1025](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1025)
+[src/scheduling/types.ts:1164](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1164)
 
 ___
 
@@ -239,7 +264,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1015](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1015)
+[src/scheduling/types.ts:1131](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1131)
 
 ___
 
@@ -249,7 +274,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1014](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1014)
+[src/scheduling/types.ts:1130](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1130)
 
 ___
 
@@ -261,7 +286,7 @@ Employee id → the natural person it belongs to (CJEU C-585/19).
 
 #### Defined in
 
-[src/scheduling/types.ts:1048](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1048)
+[src/scheduling/types.ts:1189](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1189)
 
 ___
 
@@ -271,7 +296,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1056](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1056)
+[src/scheduling/types.ts:1197](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1197)
 
 ___
 
@@ -281,7 +306,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1053](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1053)
+[src/scheduling/types.ts:1194](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1194)
 
 ___
 
@@ -293,7 +318,7 @@ Period minutes the roster was published, when a published roster was supplied.
 
 #### Defined in
 
-[src/scheduling/types.ts:1058](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1058)
+[src/scheduling/types.ts:1199](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1199)
 
 ___
 
@@ -303,7 +328,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1059](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1059)
+[src/scheduling/types.ts:1200](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1200)
 
 ___
 
@@ -315,7 +340,7 @@ Rules after merging the global set with each person's overrides.
 
 #### Defined in
 
-[src/scheduling/types.ts:1032](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1032)
+[src/scheduling/types.ts:1173](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1173)
 
 ___
 
@@ -325,7 +350,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1033](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1033)
+[src/scheduling/types.ts:1174](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1174)
 
 ___
 
@@ -337,4 +362,60 @@ Site registry built from `ScheduleInput.sites`.
 
 #### Defined in
 
-[src/scheduling/types.ts:1022](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1022)
+[src/scheduling/types.ts:1161](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1161)
+
+## Methods
+
+### holdsTagAt
+
+▸ **holdsTagAt**(`employeeId`, `tag`, `date`, `minLevel`): `boolean`
+
+The same question with a grade floor: a dated qualification at or above
+`minLevel`.
+
+A plain `Employee.tags` entry never satisfies this. A tag carries no
+grade, and reading it as "any level" would let an unstated fact answer a
+question about seniority — which is exactly what a graded requirement
+exists to ask.
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `employeeId` | `string` |
+| `tag` | `string` |
+| `date` | `string` |
+| `minLevel` | `number` |
+
+#### Returns
+
+`boolean`
+
+#### Defined in
+
+[src/scheduling/types.ts:1157](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1157)
+
+___
+
+### holdsTagOn
+
+▸ **holdsTagOn**(`employeeId`, `tag`, `date`): `boolean`
+
+Whether the employee holds `tag` on `date`, by plain tag or by a
+qualification whose validity covers that day.
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `employeeId` | `string` |
+| `tag` | `string` |
+| `date` | `string` |
+
+#### Returns
+
+`boolean`
+
+#### Defined in
+
+[src/scheduling/types.ts:1147](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1147)

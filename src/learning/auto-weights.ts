@@ -41,9 +41,24 @@ type OptionalAutoWeightsKeys =
     | 'vetoCooldownMs'
     | 'totalAttempts';
 
-export const DEFAULT_AUTO_WEIGHTS_OPTIONS: Required<Omit<AutoRoutingWeightsOptions, OptionalAutoWeightsKeys>> & {
-    priorWeight: number;
-} = {
+export const DEFAULT_AUTO_WEIGHTS_OPTIONS: Required<
+    Pick<
+        AutoRoutingWeightsOptions,
+        | 'minSamples'
+        | 'vetoThreshold'
+        | 'maxWeight'
+        | 'explorationBonus'
+        | 'priorWeight'
+        | 'policy'
+        | 'confidenceZ'
+        | 'minTotalSamples'
+        | 'minSamplesForVeto'
+        | 'terminalOnlyTagStats'
+        | 'rewardModel'
+        | 'rewardRange'
+        | 'priorStrength'
+    >
+> = {
     minSamples: 5,
     vetoThreshold: -0.5,
     maxWeight: 100,

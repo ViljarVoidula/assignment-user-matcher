@@ -20,7 +20,7 @@ Indexed view of `ScheduleInput.sites` used by constraints and ranking.
 
 #### Defined in
 
-[src/scheduling/types.ts:191](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L191)
+[src/scheduling/types.ts:242](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L242)
 
 ___
 
@@ -32,7 +32,7 @@ Precomputed travel minutes for every ordered site pair with resolvable data.
 
 #### Defined in
 
-[src/scheduling/types.ts:195](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L195)
+[src/scheduling/types.ts:246](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L246)
 
 ___
 
@@ -44,4 +44,4 @@ Caller-supplied fallback speed for deriving minutes from haversine kilometres.
 
 #### Defined in
 
-[src/scheduling/types.ts:193](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L193)
+[src/scheduling/types.ts:244](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L244)

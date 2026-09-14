@@ -534,7 +534,8 @@ await matcher.addRecurringAssignment({
     id: 'blog-draft',
     tags: ['blog'],
     recurrence: {
-        everyMs: 14 * 24 * 3600_000, // biweekly
+        everyMs: 7 * 24 * 3600_000, // the period …
+        times: 2, // … and two occurrences in it, spread evenly: twice a week
         startAt: Date.parse('2026-09-07T09:00:00Z'), // first window opens here (default: now)
         windowMs: 3 * 24 * 3600_000, // each occurrence offered for 3 days
         onMiss: 'park', // an unserved window parks the occurrence for inspection
@@ -546,7 +547,8 @@ matcher.startMaintenance(); // the recurrence sweep rides the maintenance tick
 
 | Field            | Meaning                                                                                                                             | Default  |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `everyMs`        | Interval between window opens. Minimum 1000                                                                                         | required |
+| `everyMs`        | The repeating period. With `times: 1` this is simply the interval between window opens                                              | required |
+| `times`          | Occurrences per period, spread evenly across it (`gap = everyMs / times`). The **gap** is what must be at least 1000 ms             | `1`      |
 | `startAt`        | Epoch ms the first window opens                                                                                                     | now      |
 | `windowMs`       | Offer window per occurrence (`schedule.notAfter = open + windowMs`). Omitted: occurrences never expire off the offer clock          | none     |
 | `onMiss`         | Per-occurrence miss policy, as in `SchedulePolicy`                                                                                  | `'park'` |
@@ -557,7 +559,8 @@ matcher.startMaintenance(); // the recurrence sweep rides the maintenance tick
 Semantics worth knowing:
 
 - **Occurrence ids are deterministic** — `<templateId>@<openEpochMs>` — so a crashed sweep re-materializing a slot is an idempotent re-add, and any occurrence traces back to its template with no extra state.
-- **Slots never drift.** They align to `startAt + k × everyMs` whatever the sweep cadence; the tick decides when a slot is _noticed_, never where it sits.
+- **Slots never drift.** They align to `startAt + k × gap` whatever the sweep cadence; the tick decides when a slot is _noticed_, never where it sits.
+- **`times` is sugar with teeth.** It is resolved once into the gap, and every other field is then measured in gaps rather than periods: `windowMs` is one occurrence's offer window, the sweep looks one gap ahead, and `until` / `maxOccurrences` stay totals — so a budget can run out part-way through a period. A period that does not divide evenly rounds the gap to the nearest millisecond; slots stay exactly one gap apart rather than re-anchoring to each period.
 - **One occurrence ahead.** The sweep materializes each occurrence one interval before its window opens, so upcoming work is already visible in the scheduled store (`getScheduledAssignments()`, `getQueueStats().scheduled`).
 - **Skipped slots are free.** Under `catchUp: 'skip'`, slots that fully elapsed during downtime never existed: they don't count against `maxOccurrences` and don't flood the queue on revival. Under `'all'` they materialize and are immediately missed by the schedule sweep (parked/dropped per `onMiss`) — the audit-trail reading of a dead interval.
 - **Re-adding updates the template, not the clock.** Occurrences already cut and the next slot are facts about the past; remove and re-add to restart.

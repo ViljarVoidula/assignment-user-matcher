@@ -536,7 +536,8 @@ await matcher.addRecurringAssignment({
     id: 'blog-draft',
     tags: ['blog'],
     recurrence: {
-        everyMs: 14 * 24 * 3600_000, // biweekly
+        everyMs: 7 * 24 * 3600_000, // the period …
+        times: 2, // … and two occurrences in it, spread evenly: twice a week
         startAt: Date.parse('2026-09-07T09:00:00Z'), // first window opens here (default: now)
         windowMs: 3 * 24 * 3600_000, // each occurrence offered for 3 days
         onMiss: 'park', // an unserved window parks the occurrence for inspection
@@ -548,7 +549,8 @@ matcher.startMaintenance(); // the recurrence sweep rides the maintenance tick
 
 | Field            | Meaning                                                                                                                             | Default  |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `everyMs`        | Interval between window opens. Minimum 1000                                                                                         | required |
+| `everyMs`        | The repeating period. With `times: 1` this is simply the interval between window opens                                              | required |
+| `times`          | Occurrences per period, spread evenly across it (`gap = everyMs / times`). The **gap** is what must be at least 1000 ms             | `1`      |
 | `startAt`        | Epoch ms the first window opens                                                                                                     | now      |
 | `windowMs`       | Offer window per occurrence (`schedule.notAfter = open + windowMs`). Omitted: occurrences never expire off the offer clock          | none     |
 | `onMiss`         | Per-occurrence miss policy, as in `SchedulePolicy`                                                                                  | `'park'` |
@@ -559,7 +561,8 @@ matcher.startMaintenance(); // the recurrence sweep rides the maintenance tick
 Semantics worth knowing:
 
 - **Occurrence ids are deterministic** — `<templateId>@<openEpochMs>` — so a crashed sweep re-materializing a slot is an idempotent re-add, and any occurrence traces back to its template with no extra state.
-- **Slots never drift.** They align to `startAt + k × everyMs` whatever the sweep cadence; the tick decides when a slot is _noticed_, never where it sits.
+- **Slots never drift.** They align to `startAt + k × gap` whatever the sweep cadence; the tick decides when a slot is _noticed_, never where it sits.
+- **`times` is sugar with teeth.** It is resolved once into the gap, and every other field is then measured in gaps rather than periods: `windowMs` is one occurrence's offer window, the sweep looks one gap ahead, and `until` / `maxOccurrences` stay totals — so a budget can run out part-way through a period. A period that does not divide evenly rounds the gap to the nearest millisecond; slots stay exactly one gap apart rather than re-anchoring to each period.
 - **One occurrence ahead.** The sweep materializes each occurrence one interval before its window opens, so upcoming work is already visible in the scheduled store (`getScheduledAssignments()`, `getQueueStats().scheduled`).
 - **Skipped slots are free.** Under `catchUp: 'skip'`, slots that fully elapsed during downtime never existed: they don't count against `maxOccurrences` and don't flood the queue on revival. Under `'all'` they materialize and are immediately missed by the schedule sweep (parked/dropped per `onMiss`) — the audit-trail reading of a dead interval.
 - **Re-adding updates the template, not the clock.** Occurrences already cut and the next slot are facts about the past; remove and re-add to restart.
@@ -1074,7 +1077,7 @@ correctness rests on:
 - **One decision per committed attempt.** A candidate that was scored but lost
   the assignment — to another worker under fair arbitration, or to another
   process at the claim gate — leaves no decision behind. An assignment that is
-  rejected and rematched opens a *second, independent* attempt with its own id;
+  rejected and rematched opens a _second, independent_ attempt with its own id;
   feedback for the first can never reach the second.
 - **Ingestion is idempotent.** Every outcome and every feedback call is gated
   on the attempt's applied-event set, so a redelivered message applies once and
@@ -1227,15 +1230,15 @@ const matcher = new AssignmentMatcher(redisClient, {
 
 Each target gets its own model hash and its own label timing:
 
-| Target | Denominator | Label | Missing data |
-| --- | --- | --- | --- |
-| `acceptance` | one per committed attempt | 1 on accept; 0 on reject or **pre-acceptance** response expiry | attempt still open |
-| `successGivenAcceptance` | one per *accepted* attempt | 1 on complete; 0 on fail or **post-acceptance** expiry | no label when flagged a system fault |
-| `quality` | one per quality observation | normalized `quality` signal, clamped to [0, 1] | **no update at all** |
+| Target                   | Denominator                 | Label                                                          | Missing data                         |
+| ------------------------ | --------------------------- | -------------------------------------------------------------- | ------------------------------------ |
+| `acceptance`             | one per committed attempt   | 1 on accept; 0 on reject or **pre-acceptance** response expiry | attempt still open                   |
+| `successGivenAcceptance` | one per _accepted_ attempt  | 1 on complete; 0 on fail or **post-acceptance** expiry         | no label when flagged a system fault |
+| `quality`                | one per quality observation | normalized `quality` signal, clamped to [0, 1]                 | **no update at all**                 |
 
 Component predictions come back as calibrated probabilities; the combined
 utility is `acceptanceWeight * P(accept) + P(accept) * (successWeight *
-P(success|accept) + qualityWeight * E[quality])` and is deliberately *not*
+P(success|accept) + qualityWeight * E[quality])` and is deliberately _not_
 presented as a probability. Corrections revise a label rather than adding a
 second one — see `learningRewardAccounting` below.
 
@@ -1251,7 +1254,7 @@ statistics that drive automatic routing weights:
   call is one observation. An attempt that accepts, completes and then receives
   a CSAT score counts three times.
 - `'per-attempt'`: one observation per committed attempt, written at the
-  terminal outcome with the attempt's accrued reward. Late feedback *revises*
+  terminal outcome with the attempt's accrued reward. Late feedback _revises_
   that observation instead of adding another.
 
 `'per-attempt'` is what the veto sample floors actually assume — they are
@@ -1285,7 +1288,7 @@ any recoverable probability, so the logs it produces cannot be evaluated
 offline at all. `'jitter'` remains the default for backward compatibility.
 
 One honest caveat: under `fairness: 'best-match'` and the other fair modes,
-allocation is a constrained *joint* decision across workers, and a per-worker
+allocation is a constrained _joint_ decision across workers, and a per-worker
 epsilon-greedy probability is not the probability of the final allocation.
 Treat fair-mode logs as needing an allocation-aware estimator or a randomized
 online comparison, not as ordinary contextual-bandit logs.
@@ -1295,9 +1298,9 @@ passed every hard rule, and it is disabled entirely in shadow mode.
 
 ### Worker Performance Features
 
-By default the feature vector is assignment-side plus the worker's *declared*
+By default the feature vector is assignment-side plus the worker's _declared_
 tags, which means two workers with identical declared tags produce identical
-features for a given assignment — the model has nothing to learn about *who*
+features for a given assignment — the model has nothing to learn about _who_
 should get the work. `enableLearningPerformanceFeatures` adds observed
 behaviour:
 
@@ -1373,7 +1376,7 @@ arbitrary continuous rewards is the error the explicit option exists to make
 visible rather than implicit.
 
 **Evidence is counted in independent attempts, not observations.** With
-`decayHalfLifeMs` set, the decayed weight sum is *not* a sample size: scaling
+`decayHalfLifeMs` set, the decayed weight sum is _not_ a sample size: scaling
 every weight equally leaves it looking like fewer observations than were
 actually seen. `LearningTagStat` therefore carries `attempts` (never decayed)
 and `effectiveSampleSize` (the Kish quantity `sum(w)² / sum(w²)`), and sample
@@ -2032,6 +2035,16 @@ Break entitlements are checked against shift design: `unpaidBreakMinutes` (deduc
 
 **Overtime** is regulated separately from total working time where national law does so. `rules.overtime` defines the ordinary baseline (`ordinaryPerDayMinutes` / `ordinaryPerWeekMinutes`; a person's `contract.weeklyMinutes` overrides the weekly figure, so a part-timer's overtime starts at their agreed hours), caps the overtime portion per rolling 24h or per rolling window, and with `requiresConsent` makes any overtime conditional on the employee's recorded `overtimeConsent`. With `compensation: 'timeOff'`, each employee's period overtime accrues a `timeOffInLieu` entry in `result.ledger`.
 
+**Skill mix — how good the people on a shift are, and in what proportion.** `tagRequirements` counts heads holding a tag, which answers "two nurses" and neither of the two questions operational buyers ask first. The **object form** adds a grade floor: `tagRequirements: { nurse: { min: 1, level: 3 } }` is "at least one senior on every shift", satisfied only by a dated `Qualification` at or above that level — a plain `Employee.tags` entry carries no grade, so it cannot answer a question about seniority. `tagRatios: { nurse: 0.6 }` is the **proportion** form: a floor, rounded up (60% of four people is 2.4, and nobody staffs 2.4, so it means three), and silent on an empty shift because a proportion of nobody is undefined rather than zero. Both count through the same dated check `requiredTags` uses, so a lapsed certificate satisfies neither. The plain number form is unchanged and means exactly what it always meant.
+
+**Weekend sequencing.** `consecutive.maxConsecutiveWeekends: 1` is "every second weekend off" — the most commonly negotiated scheduling term in Europe and the one shape fairness cannot hold, because equalising _counts_ is satisfied exactly as well by three weekends in a row as by alternating ones, and the arrangement is what people agreed to. It is a sequence rule beside consecutive days and nights, and a Saturday and the Sunday after it are one weekend; counting them as two would make an ordinary weekend breach the term.
+
+**Contracts that do not span the period.** `contract.startDate` gates eligibility at the head as `endDate` does at the tail, and both **pro-rate what the person is owed**: somebody joining on day fifteen of a four-week period is owed a fortnight, not a month. Without it the contract-hours objective spent the solve closing a shortfall that was an artefact of the arithmetic, loading a new starter past everybody who had been there all month. `contract.openingBalanceMinutes` carries hours already worked into every rolling average — the scalar a twelve-month reference period needs instead of replaying a year of shift-level history on every solve.
+
+**Sites carry their own calendar and clock.** `Site.publicHolidays` replaces `calendar.publicHolidays` for that site's shifts, which is what lets one roster read a border correctly: Midsummer is a public holiday on one side of it and an ordinary Friday on the other, and both are true at once. An empty array means "no holidays here"; omit the field to inherit. `Site.timeZone` is declared for **validation, not arithmetic** — instances resolve once against the period's single `PeriodClock`, so a roster whose sites span zones would place one site's night band, breaks and day boundaries an hour out and still report itself compliant. The engine refuses that input rather than answering it wrongly; solve one roster per zone.
+
+**Seniority** (`Employee.seniority`) orders `rankCandidates` between otherwise indistinguishable candidates, which is what a collective agreement ordering offers by seniority actually says. It never outranks cost, travel or contract debt, and it stays inside the profiling-free boundary — a declared contractual fact of the same class as a qualification, not reliability, acceptance history or anything learned.
+
 **Temporary demand.** A shift template is the standing rule; `demandOverrides` are the temporary ones — each bounded to an inclusive `from`/`to` date range (optionally to `daysOfWeek` inside it) and applied to every occurrence whose date falls in it. An override can replace `minEmployees`, `maxEmployees` (`null` removes it), `tagRequirements`, `tagMaximums` or `requiredTags`, add `extraEmployees` on top of whatever is in force, or set `runs` — whether the shift happens on those dates at all. `runs` works in **both** directions: `false` is a closure, and `true` opens the shift on dates the template's own `dates`/`daysOfWeek` excludes, so a weekday-only shift can take one weekend without widening the template and opening every weekend from then on. A date opened this way inherits the template's own shape unless the override states otherwise. Overrides fold in array order, later wins field by field, `extraEmployees` accumulates, and a minimum raised above the standing maximum lifts the maximum with it — "three at the peak" means three. The result is an ordinary `ShiftInstance` (with `demandLabel` naming the last labelled override that touched it), so the solver, `checkCompliance`, `explainCandidate`, `rankCandidates` and `expandShiftInstances` all read one headcount and none of them knows an override exists. The day after `to`, the shift is back to its standing shape without anybody editing it.
 
 ```ts
@@ -2105,6 +2118,24 @@ diagnoseInfeasibility(input); // why it cannot be solved, before solving
 `repairSchedule` is the call-in path: everything untouched is pinned, so you get a **diff** rather than an unrecognisable new roster, plus a ranked list of who can lawfully cover, each with compliance verdicts, marginal cost and a rationale. All four share the solver's constraint set — there is deliberately no second validation path. `checkCompliance` also runs the solver's ledger pass, so a hand-edited roster reports the same accrued obligations (compensatory rest, late-cancellation pay, protection fallbacks, time off in lieu) that `solveSchedule` would report for the same assignments — a human override can never validate as "compliant but owing nothing".
 
 `expandShiftInstances(input)` returns the dated planning grid a host should render before anything is assigned — the same `<templateId>@<date>` ids every other call refers to. Use it so the grid ids never drift from the instances the solver will judge.
+
+### Validation and replay (engine version 3)
+
+`checkCompliance` reports staffing and skill shortfalls alongside assignment violations. Its `compliant` flag means no hard breaches; `coverageComplete` means every staffing requirement is met; `publishable` requires both. The host must still handle any medium-severity obligations and publication approvals required by its workflow. Duplicate assignments are input errors and do not inflate worked hours.
+
+Employee `rules` replace whole global rule families, including families absent globally. The same effective rules apply during solving, candidate checks, and compliance. Night classification uses the employee's effective night window. Rule hardness overrides also apply to returned verdicts; only hard constraints prune eligibility. Absence repair preserves published assignments outside the actual absence interval, including when a shift starts before that interval and overlaps it.
+
+Date-time fields (`asOf`, publication time, absences, external commitments) accept local date-times in the roster zone or ISO instants with `Z`/`±HH:MM`. Bare absence end dates include the entire local day. Invalid dates, reversed spans, unknown absence employees, and invalid search budgets throw `ScheduleValidationError`. Leave beyond the final planning date still blocks overnight work that reaches it.
+
+For repeatable optimization, use a fixed iteration count and omit `timeBudgetMs`:
+
+```ts
+const result = solveSchedule({ ...input, seed: 42, maxIterations: 500, timeBudgetMs: undefined });
+```
+
+With both limits set, search stops at whichever is reached first, so wall-clock termination can change the result. Persist the full input, engine version, and custom-rule implementations for replay. `rulesHash` includes effective employee rules and optional custom constraint `version` strings; it is a configuration fingerprint, not a complete input archive.
+
+Custom `evaluate(state)` violations now influence search selection as well as final validation. These hooks must be pure and fast, and should express obligations not already scored by `delta`. Candidate checks still use pair-level hooks; implement `delta`/`verdict` for restrictions that must also block an individual cover suggestion. Search remains heuristic and does not prove optimality or infeasibility.
 
 ### Compliance boundary
 

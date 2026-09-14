@@ -41,6 +41,7 @@ matcher.startMaintenance(); // the recurrence sweep rides the maintenance tick
 - [maxOccurrences](RecurrencePolicy.md#maxoccurrences)
 - [onMiss](RecurrencePolicy.md#onmiss)
 - [startAt](RecurrencePolicy.md#startat)
+- [times](RecurrencePolicy.md#times)
 - [until](RecurrencePolicy.md#until)
 - [windowMs](RecurrencePolicy.md#windowms)
 
@@ -67,7 +68,7 @@ What to do with slots whose time already passed when the sweep runs
 
 #### Defined in
 
-[src/types/matcher.ts:336](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L336)
+[src/types/matcher.ts:350](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L350)
 
 ___
 
@@ -79,7 +80,7 @@ Milliseconds between one occurrence's window opening and the next. Minimum 1000.
 
 #### Defined in
 
-[src/types/matcher.ts:306](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L306)
+[src/types/matcher.ts:306](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L306)
 
 ___
 
@@ -91,7 +92,7 @@ Stop recurring after this many occurrences have been materialized.
 
 #### Defined in
 
-[src/types/matcher.ts:324](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L324)
+[src/types/matcher.ts:338](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L338)
 
 ___
 
@@ -109,7 +110,7 @@ Per-occurrence miss policy (see `SchedulePolicy.onMiss`).
 
 #### Defined in
 
-[src/types/matcher.ts:320](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L320)
+[src/types/matcher.ts:334](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L334)
 
 ___
 
@@ -127,7 +128,34 @@ now — the first sweep materializes an occurrence immediately
 
 #### Defined in
 
-[src/types/matcher.ts:311](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L311)
+[src/types/matcher.ts:325](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L325)
+
+___
+
+### times
+
+• `Optional` **times**: `number`
+
+How many occurrences one `everyMs` period contains, spread evenly across
+it: occurrence *k* opens at `startAt + k × everyMs / times`. This is what
+"twice a week" means — `{ everyMs: 7 × 86400_000, times: 2 }` — without
+the caller hand-dividing the period into an interval that no longer reads
+back as the cadence they asked for.
+
+The derived gap is what every other field is measured against: it must
+still be at least 1000 ms, and `windowMs` is an occurrence's own offer
+window, not the period's. `maxOccurrences` and `until` stay totals across
+every occurrence, whichever period it falls in.
+
+**`Default`**
+
+```ts
+1
+```
+
+#### Defined in
+
+[src/types/matcher.ts:320](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L320)
 
 ___
 
@@ -139,7 +167,7 @@ Stop recurring: no occurrence opens after this epoch ms; the template retires.
 
 #### Defined in
 
-[src/types/matcher.ts:322](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L322)
+[src/types/matcher.ts:336](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L336)
 
 ___
 
@@ -154,4 +182,4 @@ moment its successor's time arrives).
 
 #### Defined in
 
-[src/types/matcher.ts:318](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L318)
+[src/types/matcher.ts:332](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L332)

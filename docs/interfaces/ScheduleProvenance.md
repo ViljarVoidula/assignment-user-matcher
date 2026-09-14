@@ -10,6 +10,7 @@ Identifying stamp for a solve.
 
 - [dutyClassificationNotes](ScheduleProvenance.md#dutyclassificationnotes)
 - [engineVersion](ScheduleProvenance.md#engineversion)
+- [maxIterations](ScheduleProvenance.md#maxiterations)
 - [profilingFree](ScheduleProvenance.md#profilingfree)
 - [rulesHash](ScheduleProvenance.md#ruleshash)
 - [seed](ScheduleProvenance.md#seed)
@@ -24,7 +25,7 @@ Duty classifications the caller supplied, recorded verbatim.
 
 #### Defined in
 
-[src/scheduling/types.ts:867](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L867)
+[src/scheduling/types.ts:981](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L981)
 
 ___
 
@@ -34,7 +35,19 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:863](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L863)
+[src/scheduling/types.ts:975](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L975)
+
+___
+
+### maxIterations
+
+• `Optional` **maxIterations**: `number`
+
+Fixed iteration limit used for this run, if supplied. Persist the full input for replay.
+
+#### Defined in
+
+[src/scheduling/types.ts:977](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L977)
 
 ___
 
@@ -50,7 +63,7 @@ unconditionally high-risk under AI Act Annex III point 4(b).
 
 #### Defined in
 
-[src/scheduling/types.ts:875](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L875)
+[src/scheduling/types.ts:989](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L989)
 
 ___
 
@@ -60,7 +73,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:865](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L865)
+[src/scheduling/types.ts:979](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L979)
 
 ___
 
@@ -70,4 +83,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:864](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L864)
+[src/scheduling/types.ts:978](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L978)

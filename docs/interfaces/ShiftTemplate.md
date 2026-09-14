@@ -23,6 +23,7 @@ A recurring or dated shift definition. Times are local time-of-day `HH:MM` or `H
 - [siteId](ShiftTemplate.md#siteid)
 - [startTime](ShiftTemplate.md#starttime)
 - [tagMaximums](ShiftTemplate.md#tagmaximums)
+- [tagRatios](ShiftTemplate.md#tagratios)
 - [tagRequirements](ShiftTemplate.md#tagrequirements)
 - [unpaidBreakMinutes](ShiftTemplate.md#unpaidbreakminutes)
 
@@ -36,7 +37,7 @@ Inclusive ISO dates this template occurs on. Mutually exclusive with `daysOfWeek
 
 #### Defined in
 
-[src/scheduling/types.ts:623](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L623)
+[src/scheduling/types.ts:704](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L704)
 
 ___
 
@@ -48,7 +49,7 @@ ISO weekdays 1 (Mon) .. 7 (Sun) within the scheduling period. Mutually exclusive
 
 #### Defined in
 
-[src/scheduling/types.ts:625](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L625)
+[src/scheduling/types.ts:706](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L706)
 
 ___
 
@@ -62,7 +63,7 @@ See `ShiftDemandOverride` for how they combine.
 
 #### Defined in
 
-[src/scheduling/types.ts:642](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L642)
+[src/scheduling/types.ts:752](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L752)
 
 ___
 
@@ -81,7 +82,7 @@ C-580/19). The caller classifies; the engine does the arithmetic.
 
 #### Defined in
 
-[src/scheduling/types.ts:669](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L669)
+[src/scheduling/types.ts:779](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L779)
 
 ___
 
@@ -93,7 +94,7 @@ Time of day the shift ends; `endTime <= startTime` means it runs into the next d
 
 #### Defined in
 
-[src/scheduling/types.ts:621](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L621)
+[src/scheduling/types.ts:702](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L702)
 
 ___
 
@@ -103,7 +104,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:616](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L616)
+[src/scheduling/types.ts:697](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L697)
 
 ___
 
@@ -115,7 +116,7 @@ Cap on assignees. Useful for supervision limits and to stop over-staffing.
 
 #### Defined in
 
-[src/scheduling/types.ts:632](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L632)
+[src/scheduling/types.ts:742](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L742)
 
 ___
 
@@ -127,7 +128,7 @@ Minimum employees that must be assigned to each occurrence. Defaults to 1.
 
 #### Defined in
 
-[src/scheduling/types.ts:627](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L627)
+[src/scheduling/types.ts:708](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L708)
 
 ___
 
@@ -137,7 +138,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:617](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L617)
+[src/scheduling/types.ts:698](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L698)
 
 ___
 
@@ -150,7 +151,7 @@ deduction), and they are what discharges a `BreakRule` with `paid: true`.
 
 #### Defined in
 
-[src/scheduling/types.ts:658](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L658)
+[src/scheduling/types.ts:768](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L768)
 
 ___
 
@@ -162,7 +163,7 @@ Tags every assignee must hold, checked against date-valid qualifications.
 
 #### Defined in
 
-[src/scheduling/types.ts:636](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L636)
+[src/scheduling/types.ts:746](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L746)
 
 ___
 
@@ -175,7 +176,7 @@ Classification tag for sequence rules — `'night'`, `'early'`, `'late'`.
 
 #### Defined in
 
-[src/scheduling/types.ts:647](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L647)
+[src/scheduling/types.ts:757](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L757)
 
 ___
 
@@ -187,7 +188,7 @@ Site this shift is at, for multi-site rosters.
 
 #### Defined in
 
-[src/scheduling/types.ts:671](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L671)
+[src/scheduling/types.ts:781](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L781)
 
 ___
 
@@ -199,7 +200,7 @@ Time of day the shift starts.
 
 #### Defined in
 
-[src/scheduling/types.ts:619](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L619)
+[src/scheduling/types.ts:700](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L700)
 
 ___
 
@@ -211,19 +212,54 @@ Per-tag maximums, e.g. at most 2 trainees on a shift.
 
 #### Defined in
 
-[src/scheduling/types.ts:634](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L634)
+[src/scheduling/types.ts:744](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L744)
+
+___
+
+### tagRatios
+
+• `Optional` **tagRatios**: `Record`\<`string`, `number`\>
+
+Per-tag **proportions** of the assigned team, as a fraction of 0 to 1.
+
+The other shape a headcount cannot express, and the one the composition
+rule's own header has always named as its motivation: German ward
+staffing is a proportion by ward and shift, and "no fewer than 60%
+registered nurses" is not two nurses or three — it depends on how many
+people are on.
+
+A **floor, rounded up**: 60% of four people is 2.4, and nobody staffs
+2.4, so it means three. An empty shift is silent rather than 0% — a
+proportion of nobody is undefined, and reporting it as a breach would
+bury the real finding, which is that the shift is unstaffed.
+
+#### Defined in
+
+[src/scheduling/types.ts:739](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L739)
 
 ___
 
 ### tagRequirements
 
-• `Optional` **tagRequirements**: `Record`\<`string`, `number`\>
+• `Optional` **tagRequirements**: `Record`\<`string`, `number` \| [`TagRequirement`](TagRequirement.md)\>
 
-Per-tag minimums: at least `count` assigned employees must carry the tag.
+Per-tag minimums: at least this many assigned employees must carry the tag.
+
+A plain number counts heads holding the tag at all. The object form adds
+a **grade floor** — `{ min: 1, level: 3 }` is "at least one senior on
+every shift", the question operational buyers ask first and the one a
+headcount cannot answer. `Qualification.level` has always been stored and
+`holds(..., minLevel)` has always accepted a floor; this is what finally
+passes one.
+
+A graded requirement is satisfied only by a dated qualification at or
+above the level. A plain `Employee.tags` entry carries no grade, so it
+cannot answer a question about seniority — reading it as "any level"
+would let an unstated fact settle one.
 
 #### Defined in
 
-[src/scheduling/types.ts:629](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L629)
+[src/scheduling/types.ts:724](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L724)
 
 ___
 
@@ -237,4 +273,4 @@ hours budget — not 9h.
 
 #### Defined in
 
-[src/scheduling/types.ts:653](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L653)
+[src/scheduling/types.ts:763](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L763)

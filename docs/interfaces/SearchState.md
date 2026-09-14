@@ -29,7 +29,7 @@ instanceId -> set of assigned employee ids.
 
 #### Defined in
 
-[src/scheduling/types.ts:1077](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1077)
+[src/scheduling/types.ts:1218](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1218)
 
 ___
 
@@ -41,7 +41,7 @@ employeeId -> assigned instance ids.
 
 #### Defined in
 
-[src/scheduling/types.ts:1079](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1079)
+[src/scheduling/types.ts:1220](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1220)
 
 ___
 
@@ -51,7 +51,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1075](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1075)
+[src/scheduling/types.ts:1216](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1216)
 
 ___
 
@@ -63,7 +63,7 @@ employeeId -> total assigned minutes in the period.
 
 #### Defined in
 
-[src/scheduling/types.ts:1081](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1081)
+[src/scheduling/types.ts:1222](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1222)
 
 ___
 
@@ -77,7 +77,7 @@ schedule from `byEmployee` on each evaluation.
 
 #### Defined in
 
-[src/scheduling/types.ts:1089](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1089)
+[src/scheduling/types.ts:1230](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1230)
 
 ## Methods
 
@@ -100,4 +100,4 @@ Whether `(employeeId, instanceId)` is currently assigned.
 
 #### Defined in
 
-[src/scheduling/types.ts:1083](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1083)
+[src/scheduling/types.ts:1224](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1224)

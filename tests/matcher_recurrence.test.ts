@@ -256,6 +256,79 @@ describe('Recurring assignments', function () {
         });
     });
 
+    describe('times per interval', function () {
+        it('spreads N occurrences evenly across one everyMs period', async function () {
+            const t0 = Date.now();
+            await matcher.addRecurringAssignment(template({ everyMs: EVERY, times: 2, startAt: t0 }));
+
+            const result = await matcher.processRecurringAssignments();
+            // Horizon is one gap ahead, and the gap is EVERY/2: slots t0 and t0+5s.
+            expect(result.materialized).to.equal(2);
+            expect(await redisClient.hGet(refKey, `rec@${t0}`)).to.be.a('string');
+            expect(await redisClient.hGet(scheduledKey, `rec@${t0 + 5_000}`)).to.be.a('string');
+
+            // The next period continues the same cadence rather than jumping a whole period.
+            clock.tick(5_000);
+            await matcher.processRecurringAssignments();
+            expect(await redisClient.hGet(scheduledKey, `rec@${t0 + 10_000}`)).to.be.a('string');
+            expect((await matcher.getRecurringAssignment('rec'))!.occurrences).to.equal(3);
+        });
+
+        it('times: 1 and an omitted times are the same template', async function () {
+            const t0 = Date.now();
+            await matcher.addRecurringAssignment(template({ everyMs: EVERY, times: 1, startAt: t0 }));
+            const withTimes = await matcher.processRecurringAssignments();
+            const explicit = await redisClient.hGet(scheduledKey, `rec@${t0 + EVERY}`);
+
+            await redisClient.flushDb();
+            await matcher.addRecurringAssignment(template({ everyMs: EVERY, startAt: t0 }));
+            const without = await matcher.processRecurringAssignments();
+
+            expect(withTimes.materialized).to.equal(without.materialized);
+            expect(await redisClient.hGet(scheduledKey, `rec@${t0 + EVERY}`)).to.equal(explicit);
+        });
+
+        it('refuses a times that cuts the gap below the minimum', async function () {
+            try {
+                await matcher.addRecurringAssignment(template({ everyMs: 2_000, times: 3 }));
+                expect.fail('should have thrown');
+            } catch (err) {
+                expect((err as Error).message).to.contain('recurrence');
+            }
+            expect(await redisClient.hLen(recurringKey)).to.equal(0);
+        });
+
+        it("'skip' after downtime resumes on the next live sub-slot, not the period boundary", async function () {
+            const t0 = Date.now();
+            await matcher.addRecurringAssignment(template({ everyMs: EVERY, times: 2, startAt: t0, windowMs: 1_000 }));
+
+            // Gap is 5s; slots t0..t0+10s have all closed their 1s windows by t0+12s.
+            clock.tick(12_000);
+            const result = await matcher.processRecurringAssignments();
+            expect(result.materialized).to.equal(1);
+            expect(await redisClient.hGet(scheduledKey, `rec@${t0 + 15_000}`)).to.be.a('string');
+            expect((await matcher.getRecurringAssignment('rec'))!.occurrences).to.equal(1);
+        });
+
+        it('maxOccurrences can retire a template part-way through a period', async function () {
+            const t0 = Date.now();
+            await matcher.addRecurringAssignment(template({ everyMs: EVERY, times: 2, startAt: t0, maxOccurrences: 3 }));
+
+            // First period's pair: t0 and t0+5s, well inside the budget.
+            expect((await matcher.processRecurringAssignments()).materialized).to.equal(2);
+
+            // The third occurrence opens the second period and exhausts the
+            // budget there, so the period's own second slot is never cut.
+            clock.tick(5_000);
+            const result = await matcher.processRecurringAssignments();
+            expect(result.materialized).to.equal(1);
+            expect(result.retired).to.equal(1);
+            expect(kinds('recurrenceRetired')[0]).to.include({ reason: 'maxOccurrences' });
+            expect(await redisClient.hGet(scheduledKey, `rec@${t0 + 10_000}`)).to.be.a('string');
+            expect(await redisClient.hGet(scheduledKey, `rec@${t0 + 15_000}`)).to.be.null;
+        });
+    });
+
     describe('lifecycle of the template', function () {
         it('remove stops future occurrences; dropScheduled also clears the held one', async function () {
             const t0 = Date.now();

@@ -8,7 +8,9 @@
 
 - [compliant](ComplianceReport.md#compliant)
 - [contractHours](ComplianceReport.md#contracthours)
+- [coverageComplete](ComplianceReport.md#coveragecomplete)
 - [ledger](ComplianceReport.md#ledger)
+- [publishable](ComplianceReport.md#publishable)
 - [verdicts](ComplianceReport.md#verdicts)
 - [violations](ComplianceReport.md#violations)
 
@@ -20,7 +22,7 @@
 
 #### Defined in
 
-[src/scheduling/operations.ts:57](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/operations.ts#L57)
+[src/scheduling/operations.ts:61](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L61)
 
 ___
 
@@ -32,7 +34,19 @@ Planned against contracted hours — the same summary the solver reports for the
 
 #### Defined in
 
-[src/scheduling/operations.ts:69](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/operations.ts#L69)
+[src/scheduling/operations.ts:77](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L77)
+
+___
+
+### coverageComplete
+
+• **coverageComplete**: `boolean`
+
+Whether all headcount and skill coverage requirements are met.
+
+#### Defined in
+
+[src/scheduling/operations.ts:63](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L63)
 
 ___
 
@@ -47,7 +61,19 @@ never validate as "compliant but owing nothing".
 
 #### Defined in
 
-[src/scheduling/operations.ts:67](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/operations.ts#L67)
+[src/scheduling/operations.ts:75](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L75)
+
+___
+
+### publishable
+
+• **publishable**: `boolean`
+
+A fully covered roster with no hard breaches.
+
+#### Defined in
+
+[src/scheduling/operations.ts:65](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L65)
 
 ___
 
@@ -59,7 +85,7 @@ Per-assignment verdicts for every rule that had something to say.
 
 #### Defined in
 
-[src/scheduling/operations.ts:60](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/operations.ts#L60)
+[src/scheduling/operations.ts:68](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L68)
 
 ___
 
@@ -69,4 +95,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/operations.ts:58](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/operations.ts#L58)
+[src/scheduling/operations.ts:66](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L66)

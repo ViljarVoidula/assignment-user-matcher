@@ -13,6 +13,7 @@ pure with respect to the passed-in state — the engine owns all mutation.
 - [citation](SchedulingConstraint.md#citation)
 - [hardness](SchedulingConstraint.md#hardness)
 - [id](SchedulingConstraint.md#id)
+- [version](SchedulingConstraint.md#version)
 - [weight](SchedulingConstraint.md#weight)
 
 ### Methods
@@ -34,7 +35,7 @@ Legal source, echoed into every violation and verdict this rule produces.
 
 #### Defined in
 
-[src/scheduling/types.ts:1107](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1107)
+[src/scheduling/types.ts:1250](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1250)
 
 ___
 
@@ -47,7 +48,7 @@ Lexicographic level. `'hard'` breaches are never accepted by construction;
 
 #### Defined in
 
-[src/scheduling/types.ts:1103](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1103)
+[src/scheduling/types.ts:1246](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1246)
 
 ___
 
@@ -57,7 +58,19 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1098](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1098)
+[src/scheduling/types.ts:1239](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1239)
+
+___
+
+### version
+
+• `Optional` **version**: `string`
+
+Caller-maintained implementation/configuration version, included in the rule hash.
+
+#### Defined in
+
+[src/scheduling/types.ts:1241](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1241)
 
 ___
 
@@ -69,7 +82,7 @@ Drives soft/medium score contribution, violation severity and repair priority.
 
 #### Defined in
 
-[src/scheduling/types.ts:1105](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1105)
+[src/scheduling/types.ts:1248](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1248)
 
 ## Methods
 
@@ -98,7 +111,7 @@ infeasible region instead of sitting on a plateau.
 
 #### Defined in
 
-[src/scheduling/types.ts:1119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1119)
+[src/scheduling/types.ts:1262](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1262)
 
 ___
 
@@ -123,7 +136,7 @@ the surrounding sequence should implement it.
 
 #### Defined in
 
-[src/scheduling/types.ts:1125](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1125)
+[src/scheduling/types.ts:1268](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1268)
 
 ___
 
@@ -132,8 +145,9 @@ ___
 ▸ **evaluate**(`state`): [`ConstraintViolation`](ConstraintViolation.md)[]
 
 Breaches visible only across the whole roster — staffing shortfalls,
-per-person window totals, team fairness spread. Pair-scoped `delta`
-cannot see these.
+per-person window totals, team fairness spread. Custom aggregate violations
+contribute to search scoring as well as final validation. Keep this hook
+pure and inexpensive, and avoid repeating breaches already scored by delta.
 
 #### Parameters
 
@@ -147,7 +161,7 @@ cannot see these.
 
 #### Defined in
 
-[src/scheduling/types.ts:1131](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1131)
+[src/scheduling/types.ts:1275](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1275)
 
 ___
 
@@ -170,7 +184,7 @@ Human-readable breach description for the violation report, or null when complia
 
 #### Defined in
 
-[src/scheduling/types.ts:1135](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1135)
+[src/scheduling/types.ts:1279](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1279)
 
 ___
 
@@ -193,7 +207,7 @@ Prune ineligible (employee, shiftInstance) pairs before search, in place on `eli
 
 #### Defined in
 
-[src/scheduling/types.ts:1109](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1109)
+[src/scheduling/types.ts:1252](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1252)
 
 ___
 
@@ -216,4 +230,4 @@ Structured judgement for explanations and swap validation.
 
 #### Defined in
 
-[src/scheduling/types.ts:1133](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/scheduling/types.ts#L1133)
+[src/scheduling/types.ts:1277](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1277)

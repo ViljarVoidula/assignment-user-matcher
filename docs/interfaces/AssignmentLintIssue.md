@@ -24,7 +24,7 @@ in a way that is probably not intended; `info` is worth knowing.
 
 #### Defined in
 
-[src/types/matcher.ts:687](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L687)
+[src/types/matcher.ts:701](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L701)
 
 ___
 
@@ -36,7 +36,7 @@ Human-readable explanation, safe to surface to operators
 
 #### Defined in
 
-[src/types/matcher.ts:701](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L701)
+[src/types/matcher.ts:715](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L715)
 
 ___
 
@@ -46,7 +46,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:686](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L686)
+[src/types/matcher.ts:700](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L700)
 
 ___
 
@@ -58,4 +58,4 @@ The tag concerned, for tag-scoped issues
 
 #### Defined in
 
-[src/types/matcher.ts:703](https://github.com/ViljarVoidula/assignment-user-matcher/blob/5c10f943144f74081b307cfec3d33835ccc204df/src/types/matcher.ts#L703)
+[src/types/matcher.ts:717](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L717)
