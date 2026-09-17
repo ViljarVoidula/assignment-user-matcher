@@ -22,7 +22,7 @@ Only traces for this assignment (an assignment re-queued and re-matched has seve
 
 #### Defined in
 
-[src/types/matcher.ts:793](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L793)
+[src/types/matcher.ts:793](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L793)
 
 ___
 
@@ -34,7 +34,7 @@ Maximum traces returned (default 50), newest first
 
 #### Defined in
 
-[src/types/matcher.ts:797](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L797)
+[src/types/matcher.ts:797](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L797)
 
 ___
 
@@ -46,4 +46,4 @@ Only traces where this user was chosen
 
 #### Defined in
 
-[src/types/matcher.ts:795](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L795)
+[src/types/matcher.ts:795](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L795)

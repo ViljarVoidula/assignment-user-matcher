@@ -29,6 +29,16 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         // acceptedAssignments hash on read and self-healed with a zRem.
         userAcceptedAssignments: (userId: string) => `${prefix}user:${userId}:accepted`,
 
+        // Who holds each accepted assignment: hash of assignmentId -> userId,
+        // written in the accept transaction. Acceptance deletes the pending
+        // owner hash, and only SLA-bearing records carry an `_acceptedBy`
+        // stamp (the byte-identical rule forbids stamping the rest), so
+        // without this there is no index answering "who accepted this" for an
+        // ordinary assignment. Every accept overwrites its own entry, so an
+        // entry orphaned by a missed removal is never read: the accepted hash
+        // is the gate, and a record absent from it is nobody's.
+        acceptedAssignmentOwner: () => `${prefix}assignments:accepted:owner`,
+
         // Assignment keys
         assignments: () => `${prefix}assignments`,
         assignmentsRef: () => `${prefix}assignments:ref`,

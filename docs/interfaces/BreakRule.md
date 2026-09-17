@@ -24,7 +24,7 @@ Working minutes after which the break is owed.
 
 #### Defined in
 
-[src/scheduling/types.ts:540](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L540)
+[src/scheduling/types.ts:540](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L540)
 
 ___
 
@@ -38,7 +38,7 @@ an interruptible break never satisfies this rule.
 
 #### Defined in
 
-[src/scheduling/types.ts:553](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L553)
+[src/scheduling/types.ts:553](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L553)
 
 ___
 
@@ -48,7 +48,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:541](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L541)
+[src/scheduling/types.ts:541](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L541)
 
 ___
 
@@ -62,4 +62,4 @@ Unset, any declared break (paid or unpaid) counts.
 
 #### Defined in
 
-[src/scheduling/types.ts:547](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L547)
+[src/scheduling/types.ts:547](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L547)

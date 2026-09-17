@@ -22,7 +22,7 @@
 
 #### Defined in
 
-[src/scheduling/operations.ts:61](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L61)
+[src/scheduling/operations.ts:61](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/operations.ts#L61)
 
 ___
 
@@ -34,7 +34,7 @@ Planned against contracted hours — the same summary the solver reports for the
 
 #### Defined in
 
-[src/scheduling/operations.ts:77](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L77)
+[src/scheduling/operations.ts:77](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/operations.ts#L77)
 
 ___
 
@@ -46,7 +46,7 @@ Whether all headcount and skill coverage requirements are met.
 
 #### Defined in
 
-[src/scheduling/operations.ts:63](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L63)
+[src/scheduling/operations.ts:63](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/operations.ts#L63)
 
 ___
 
@@ -61,7 +61,7 @@ never validate as "compliant but owing nothing".
 
 #### Defined in
 
-[src/scheduling/operations.ts:75](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L75)
+[src/scheduling/operations.ts:75](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/operations.ts#L75)
 
 ___
 
@@ -73,7 +73,7 @@ A fully covered roster with no hard breaches.
 
 #### Defined in
 
-[src/scheduling/operations.ts:65](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L65)
+[src/scheduling/operations.ts:65](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/operations.ts#L65)
 
 ___
 
@@ -85,7 +85,7 @@ Per-assignment verdicts for every rule that had something to say.
 
 #### Defined in
 
-[src/scheduling/operations.ts:68](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L68)
+[src/scheduling/operations.ts:68](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/operations.ts#L68)
 
 ___
 
@@ -95,4 +95,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/operations.ts:66](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/operations.ts#L66)
+[src/scheduling/operations.ts:66](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/operations.ts#L66)

@@ -29,7 +29,7 @@ budget. Working-time volume belongs to `workingTime`, not here.
 
 #### Defined in
 
-[src/scheduling/types.ts:466](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L466)
+[src/scheduling/types.ts:466](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L466)
 
 ___
 
@@ -39,7 +39,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:465](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L465)
+[src/scheduling/types.ts:465](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L465)
 
 ___
 
@@ -51,7 +51,7 @@ Cap on the number of matching duties in any window.
 
 #### Defined in
 
-[src/scheduling/types.ts:463](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L463)
+[src/scheduling/types.ts:463](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L463)
 
 ___
 
@@ -63,7 +63,7 @@ Cap on elapsed minutes of matching duties in any window.
 
 #### Defined in
 
-[src/scheduling/types.ts:461](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L461)
+[src/scheduling/types.ts:461](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L461)
 
 ___
 
@@ -75,7 +75,7 @@ Which duties count: exact match on the instance's `shiftTypeTag`.
 
 #### Defined in
 
-[src/scheduling/types.ts:459](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L459)
+[src/scheduling/types.ts:459](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L459)
 
 ___
 
@@ -85,4 +85,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:464](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L464)
+[src/scheduling/types.ts:464](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L464)

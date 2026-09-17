@@ -19,7 +19,7 @@ Raw training sample for offline/batch model updates
 
 #### Defined in
 
-[src/types/matcher.ts:1944](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1944)
+[src/types/matcher.ts:1962](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1962)
 
 ___
 
@@ -29,4 +29,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1945](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1945)
+[src/types/matcher.ts:1963](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1963)

@@ -30,7 +30,7 @@ Number of admissible candidates the choice was made from
 
 #### Defined in
 
-[src/types/matcher.ts:1885](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1885)
+[src/types/matcher.ts:1903](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1903)
 
 ___
 
@@ -42,7 +42,7 @@ Per-target component predictions, when multi-target modelling is on
 
 #### Defined in
 
-[src/types/matcher.ts:1877](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1877)
+[src/types/matcher.ts:1895](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1895)
 
 ___
 
@@ -54,7 +54,7 @@ Feature-extractor contract version
 
 #### Defined in
 
-[src/types/matcher.ts:1887](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1887)
+[src/types/matcher.ts:1905](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1905)
 
 ___
 
@@ -64,7 +64,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1874](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1874)
+[src/types/matcher.ts:1892](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1892)
 
 ___
 
@@ -76,7 +76,7 @@ Model generation this prediction was made against
 
 #### Defined in
 
-[src/types/matcher.ts:1889](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1889)
+[src/types/matcher.ts:1907](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1907)
 
 ___
 
@@ -88,7 +88,7 @@ Name of the selection policy that produced `propensity`
 
 #### Defined in
 
-[src/types/matcher.ts:1883](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1883)
+[src/types/matcher.ts:1901](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1901)
 
 ___
 
@@ -98,7 +98,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1875](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1875)
+[src/types/matcher.ts:1893](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1893)
 
 ___
 
@@ -110,7 +110,7 @@ Probability with which the policy actually selected this candidate
 
 #### Defined in
 
-[src/types/matcher.ts:1881](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1881)
+[src/types/matcher.ts:1899](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1899)
 
 ___
 
@@ -122,4 +122,4 @@ Assignment tags captured at decision time
 
 #### Defined in
 
-[src/types/matcher.ts:1879](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1879)
+[src/types/matcher.ts:1897](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1897)

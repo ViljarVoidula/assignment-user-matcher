@@ -21,7 +21,7 @@ Output of `AssignmentMatcher.previewMatch()`: ranked candidates for a hypothetic
 
 #### Defined in
 
-[src/types/matcher.ts:690](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L690)
+[src/types/matcher.ts:690](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L690)
 
 ___
 
@@ -31,7 +31,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:689](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L689)
+[src/types/matcher.ts:689](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L689)
 
 ___
 
@@ -41,7 +41,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:688](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L688)
+[src/types/matcher.ts:688](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L688)
 
 ___
 
@@ -51,4 +51,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:687](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L687)
+[src/types/matcher.ts:687](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L687)

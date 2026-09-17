@@ -111,6 +111,9 @@ export type {
     AssignmentCounts,
 } from './matcher.class';
 
+// Post-creation task edits: what a patch may change, and what a retag implies
+export type { AssignmentUpdate, UpdatableStatus, UpdateAssignmentResult } from './updates/assignment-update';
+
 // Decision-trace scoring explainer (same numbers as calculateMatchScore, plus reasons)
 export { explainMatchScore, type MatchScoreExplanation } from './scoring/match-score';
 

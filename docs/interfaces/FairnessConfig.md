@@ -29,7 +29,7 @@ back to their auto-derived behavior.
 
 #### Defined in
 
-[src/types/matcher.ts:562](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L562)
+[src/types/matcher.ts:562](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L562)
 
 ___
 
@@ -39,7 +39,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:561](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L561)
+[src/types/matcher.ts:561](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L561)
 
 ___
 
@@ -49,7 +49,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:563](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L563)
+[src/types/matcher.ts:563](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L563)
 
 ___
 
@@ -59,7 +59,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:565](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L565)
+[src/types/matcher.ts:565](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L565)
 
 ___
 
@@ -69,7 +69,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:564](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L564)
+[src/types/matcher.ts:564](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L564)
 
 ___
 
@@ -79,4 +79,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:566](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L566)
+[src/types/matcher.ts:566](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L566)

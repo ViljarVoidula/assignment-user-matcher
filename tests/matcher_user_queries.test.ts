@@ -114,17 +114,24 @@ describe('User status & workload query APIs', function () {
             expect(await redisClient.zCard(acceptedIndexKey('u1'))).to.equal(0);
         });
 
-        it('filters and self-heals the stale member left by removeAssignment on a non-SLA accepted assignment', async function () {
+        it('clears the index when a non-SLA accepted assignment is removed', async function () {
+            // Non-SLA records carry no `_acceptedBy`; the accepted owner index
+            // is what lets removal find the right person's index to clean.
             const matcher = createMatcher();
             await matcher.addUser({ id: 'u1', tags: ['t'] });
             await pendOne(matcher, 'u1', 'a1');
             await matcher.acceptAssignment('u1', 'a1');
 
-            // Non-SLA records carry no _acceptedBy, so the index member survives
             await matcher.removeAssignment('a1');
-            expect(await redisClient.zCard(acceptedIndexKey('u1'))).to.equal(1);
 
-            // The read filters it against the accepted store and self-heals
+            expect(await redisClient.zCard(acceptedIndexKey('u1'))).to.equal(0);
+        });
+
+        it('filters and self-heals a member orphaned from the accepted store', async function () {
+            const matcher = createMatcher();
+            await matcher.addUser({ id: 'u1', tags: ['t'] });
+            await redisClient.zAdd(acceptedIndexKey('u1'), { score: Date.now(), value: 'ghost' });
+
             expect(await matcher.getActiveAssignmentsForUser('u1')).to.deep.equal([]);
             expect(await redisClient.zCard(acceptedIndexKey('u1'))).to.equal(0);
         });

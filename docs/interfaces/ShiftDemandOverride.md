@@ -45,7 +45,7 @@ Only these ISO weekdays (1 Mon .. 7 Sun) inside the range. Absent means every da
 
 #### Defined in
 
-[src/scheduling/types.ts:648](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L648)
+[src/scheduling/types.ts:648](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L648)
 
 ___
 
@@ -58,7 +58,7 @@ replacing them — "two more than usual" without restating the usual.
 
 #### Defined in
 
-[src/scheduling/types.ts:659](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L659)
+[src/scheduling/types.ts:659](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L659)
 
 ___
 
@@ -70,7 +70,7 @@ Inclusive ISO date (YYYY-MM-DD) the override starts applying.
 
 #### Defined in
 
-[src/scheduling/types.ts:644](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L644)
+[src/scheduling/types.ts:644](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L644)
 
 ___
 
@@ -82,7 +82,7 @@ Why — carried onto every occurrence it touches as `ShiftInstance.demandLabel`.
 
 #### Defined in
 
-[src/scheduling/types.ts:650](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L650)
+[src/scheduling/types.ts:650](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L650)
 
 ___
 
@@ -94,7 +94,7 @@ Replaces the template's maximum. `null` removes it, leaving no room above cover.
 
 #### Defined in
 
-[src/scheduling/types.ts:654](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L654)
+[src/scheduling/types.ts:654](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L654)
 
 ___
 
@@ -106,7 +106,7 @@ Replaces the template's minimum on these dates.
 
 #### Defined in
 
-[src/scheduling/types.ts:652](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L652)
+[src/scheduling/types.ts:652](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L652)
 
 ___
 
@@ -118,7 +118,7 @@ Replaces the tags every assignee must hold.
 
 #### Defined in
 
-[src/scheduling/types.ts:667](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L667)
+[src/scheduling/types.ts:667](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L667)
 
 ___
 
@@ -138,7 +138,7 @@ the template's own pattern deciding.
 
 #### Defined in
 
-[src/scheduling/types.ts:679](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L679)
+[src/scheduling/types.ts:679](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L679)
 
 ___
 
@@ -150,7 +150,7 @@ Replaces the template's per-tag maximums.
 
 #### Defined in
 
-[src/scheduling/types.ts:665](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L665)
+[src/scheduling/types.ts:665](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L665)
 
 ___
 
@@ -162,7 +162,7 @@ Replaces the template's per-tag proportions.
 
 #### Defined in
 
-[src/scheduling/types.ts:663](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L663)
+[src/scheduling/types.ts:663](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L663)
 
 ___
 
@@ -174,7 +174,7 @@ Replaces the template's per-tag minimums. Same shapes as the template's own.
 
 #### Defined in
 
-[src/scheduling/types.ts:661](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L661)
+[src/scheduling/types.ts:661](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L661)
 
 ___
 
@@ -186,4 +186,4 @@ Inclusive ISO date it stops applying. Equal to `from` for a single day.
 
 #### Defined in
 
-[src/scheduling/types.ts:646](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L646)
+[src/scheduling/types.ts:646](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L646)

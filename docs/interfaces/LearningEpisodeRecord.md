@@ -29,7 +29,7 @@ Reward already written into per-tag statistics (per-attempt accounting)
 
 #### Defined in
 
-[src/types/matcher.ts:1933](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1933)
+[src/types/matcher.ts:1951](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1951)
 
 ___
 
@@ -39,7 +39,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1924](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1924)
+[src/types/matcher.ts:1942](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1942)
 
 ___
 
@@ -51,7 +51,7 @@ Unique id of the attempt this episode closes
 
 #### Defined in
 
-[src/types/matcher.ts:1922](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1922)
+[src/types/matcher.ts:1940](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1940)
 
 ___
 
@@ -61,7 +61,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1925](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1925)
+[src/types/matcher.ts:1943](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1943)
 
 ___
 
@@ -73,7 +73,7 @@ Model generation this decision was committed against
 
 #### Defined in
 
-[src/types/matcher.ts:1931](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1931)
+[src/types/matcher.ts:1949](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1949)
 
 ___
 
@@ -85,7 +85,7 @@ Terminal outcome that archived this episode
 
 #### Defined in
 
-[src/types/matcher.ts:1927](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1927)
+[src/types/matcher.ts:1945](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1945)
 
 ___
 
@@ -97,7 +97,7 @@ When that per-tag contribution was written (needed to revise it under decay)
 
 #### Defined in
 
-[src/types/matcher.ts:1935](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1935)
+[src/types/matcher.ts:1953](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1953)
 
 ___
 
@@ -109,7 +109,7 @@ Assignment tags captured at decision time (used for auto routing weights)
 
 #### Defined in
 
-[src/types/matcher.ts:1929](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1929)
+[src/types/matcher.ts:1947](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1947)
 
 ___
 
@@ -119,7 +119,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1936](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1936)
+[src/types/matcher.ts:1954](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1954)
 
 ___
 
@@ -129,4 +129,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1923](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1923)
+[src/types/matcher.ts:1941](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1941)

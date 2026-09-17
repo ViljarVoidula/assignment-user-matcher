@@ -25,7 +25,7 @@ The contracted week pro-rated to the period.
 
 #### Defined in
 
-[src/scheduling/types.ts:1043](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1043)
+[src/scheduling/types.ts:1043](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L1043)
 
 ___
 
@@ -37,7 +37,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1046](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1046)
+[src/scheduling/types.ts:1046](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L1046)
 
 ___
 
@@ -47,7 +47,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1037](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1037)
+[src/scheduling/types.ts:1037](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L1037)
 
 ___
 
@@ -59,7 +59,7 @@ As supplied, or derived from `weeklyMinutes` when a full-time week is known.
 
 #### Defined in
 
-[src/scheduling/types.ts:1041](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1041)
+[src/scheduling/types.ts:1041](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L1041)
 
 ___
 
@@ -69,7 +69,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:1044](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1044)
+[src/scheduling/types.ts:1044](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L1044)
 
 ___
 
@@ -81,4 +81,4 @@ The contracted week, explicit or resolved from `fte`.
 
 #### Defined in
 
-[src/scheduling/types.ts:1039](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L1039)
+[src/scheduling/types.ts:1039](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L1039)

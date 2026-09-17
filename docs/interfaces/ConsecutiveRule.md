@@ -25,7 +25,7 @@ The classic is Night → Early ("quick return").
 
 #### Defined in
 
-[src/scheduling/types.ts:496](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L496)
+[src/scheduling/types.ts:496](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L496)
 
 ___
 
@@ -48,7 +48,7 @@ opposite of what the term asks for.
 
 #### Defined in
 
-[src/scheduling/types.ts:491](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L491)
+[src/scheduling/types.ts:491](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L491)
 
 ___
 
@@ -60,7 +60,7 @@ e.g. Finland 5, Netherlands 7.
 
 #### Defined in
 
-[src/scheduling/types.ts:474](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L474)
+[src/scheduling/types.ts:474](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L474)
 
 ___
 
@@ -72,7 +72,7 @@ e.g. Portugal's 6.
 
 #### Defined in
 
-[src/scheduling/types.ts:472](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L472)
+[src/scheduling/types.ts:472](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L472)
 
 ___
 
@@ -84,4 +84,4 @@ Rest owed once the night run ends: NL 2760 (46h), FI 1440 (24h).
 
 #### Defined in
 
-[src/scheduling/types.ts:476](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L476)
+[src/scheduling/types.ts:476](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L476)

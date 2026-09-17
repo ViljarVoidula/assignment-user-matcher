@@ -27,7 +27,7 @@ not appear.
 
 #### Defined in
 
-[src/types/matcher.ts:645](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L645)
+[src/types/matcher.ts:645](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L645)
 
 ___
 
@@ -39,7 +39,7 @@ Chosen candidate first, then eligible candidates by effective priority
 
 #### Defined in
 
-[src/types/matcher.ts:650](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L650)
+[src/types/matcher.ts:650](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L650)
 
 ___
 
@@ -49,7 +49,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:646](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L646)
+[src/types/matcher.ts:646](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L646)
 
 ___
 
@@ -59,7 +59,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:644](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L644)
+[src/types/matcher.ts:644](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L644)
 
 ___
 
@@ -69,7 +69,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:647](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L647)
+[src/types/matcher.ts:647](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L647)
 
 ___
 
@@ -79,4 +79,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:648](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L648)
+[src/types/matcher.ts:648](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L648)

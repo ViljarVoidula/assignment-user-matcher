@@ -25,7 +25,7 @@ Type of action
 
 #### Defined in
 
-[src/types/matcher.ts:1691](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1691)
+[src/types/matcher.ts:1709](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1709)
 
 ___
 
@@ -37,7 +37,7 @@ Consumer ID that processed the event
 
 #### Defined in
 
-[src/types/matcher.ts:1697](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1697)
+[src/types/matcher.ts:1715](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1715)
 
 ___
 
@@ -49,7 +49,7 @@ Additional details
 
 #### Defined in
 
-[src/types/matcher.ts:1699](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1699)
+[src/types/matcher.ts:1717](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1717)
 
 ___
 
@@ -61,7 +61,7 @@ Resource ID (event ID, workflow instance ID, etc.)
 
 #### Defined in
 
-[src/types/matcher.ts:1693](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1693)
+[src/types/matcher.ts:1711](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1711)
 
 ___
 
@@ -73,7 +73,7 @@ Type of resource
 
 #### Defined in
 
-[src/types/matcher.ts:1695](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1695)
+[src/types/matcher.ts:1713](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1713)
 
 ___
 
@@ -85,4 +85,4 @@ Timestamp of the action
 
 #### Defined in
 
-[src/types/matcher.ts:1689](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1689)
+[src/types/matcher.ts:1707](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1707)

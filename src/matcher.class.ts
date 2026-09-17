@@ -15,6 +15,16 @@ import {
     type AssignmentCounts,
 } from './queries/pagination';
 import { getUsersPaginatedFromStore, getUserSummariesBatch, getActiveAssignmentsFromStore } from './queries/users';
+import {
+    applyUpdate,
+    consumeOfferWindow,
+    diffTagIndexes,
+    normalizeUpdateTags,
+    type AssignmentUpdate,
+    type TagIndexDiff,
+    type UpdatableStatus,
+    type UpdateAssignmentResult,
+} from './updates/assignment-update';
 import { calculateMatchScore, calculateDefaultPriority, explainMatchScore } from './scoring/match-score';
 import { arbitrateFair, resolveFairnessKnobs } from './scoring/fair-arbitration';
 import {
@@ -2056,17 +2066,11 @@ export default class AssignmentMatcher implements WorkflowHost {
             this.redisClient.sMembers(this.keys.assignmentVetoed(id)),
         ]);
 
-        // Best-effort owner of the accepted record: only SLA-bearing items
-        // carry _acceptedBy, so a non-SLA accepted assignment leaves a stale
-        // per-user index member here — reads filter it out and self-heal.
-        let acceptedBy: string | null = null;
-        if (acceptedJson && acceptedJson.indexOf('"sla"') !== -1) {
-            try {
-                acceptedBy = (JSON.parse(acceptedJson) as Record<string, any>)[SLA_ACCEPTED_BY_FIELD] ?? null;
-            } catch {
-                // keep null on parse failure
-            }
-        }
+        // Who accepted it, from the index written in the accept transaction.
+        // Reading the record's `_acceptedBy` instead would find nothing for an
+        // ordinary assignment and leave that person's per-user index pointing
+        // at work that no longer exists.
+        const acceptedBy = acceptedJson ? await this.ownerOf(id, 'accepted', acceptedJson) : null;
 
         let tags: string[] = [];
         if (tagsCsv && tagsCsv.length > 0) {
@@ -2100,6 +2104,7 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         // 3. Remove from Accepted state
         multi.hDel(this.acceptedAssignmentsKey, id);
+        multi.hDel(this.keys.acceptedAssignmentOwner(), id);
         if (acceptedBy) {
             multi.zRem(this.keys.userAcceptedAssignments(acceptedBy), id);
         }
@@ -2710,6 +2715,341 @@ export default class AssignmentMatcher implements WorkflowHost {
         }
 
         return relevantAssignments.map((assignment) => ({ id: assignment.id, priority }));
+    }
+
+    /**
+     * Edit a task that already exists — including one somebody is holding.
+     *
+     * Creation is not the last moment a task's facts are known: a title is
+     * wrong, a description gains the detail that was missing, and — the one
+     * that matters here — the routing tags turn out to describe the wrong kind
+     * of work. `tags` and `priority` decide who should have the task, so
+     * changing them is not a metadata write; it is a re-statement of who this
+     * work is for.
+     *
+     * The rule, applied in every state: **retag always, then re-check the
+     * holder.** The new tags are written wherever the task lives, and if the
+     * task is out with somebody, that person is scored against the new tag set
+     * exactly as organic matching would score them. Still eligible and they
+     * keep it — including work they have already accepted, because nothing
+     * about the job changed for them. No longer eligible and the task is taken
+     * back and returned to the queue (`requeued: true`), where the next pass
+     * offers it to somebody the new tags actually reach. That is the whole of
+     * the redistribution: this method never picks the replacement, it only
+     * puts the work back where matching can find it.
+     *
+     * An edit that does not touch the tags never moves anything, whoever holds
+     * the task and however they came by it — a typo fixed in a title is not a
+     * reason to pull a job off the person doing it. `updateAssignment` is also
+     * the only path that re-checks eligibility mid-flight; `assignToUser`
+     * remains the operator's deliberate override and is unaffected.
+     *
+     * Terminal work cannot be edited: a completed or failed task is a record
+     * of what happened. Returns `null` when no live record exists.
+     *
+     * @example
+     * ```typescript
+     * const result = await matcher.updateAssignment('job-12', {
+     *     title: 'Leaking kitchen tap',
+     *     tags: ['plumbing', 'urgent'],
+     * });
+     * if (result?.requeued) {
+     *     // the previous holder no longer matches — it is back in the queue
+     * }
+     * ```
+     */
+    async updateAssignment(id: string, patch: AssignmentUpdate): Promise<UpdateAssignmentResult | null> {
+        await this.readyPromise;
+
+        const normalizedTags = patch.tags !== undefined ? normalizeUpdateTags(patch.tags) : undefined;
+        if (normalizedTags !== undefined && normalizedTags.length === 0) {
+            throw new Error(`An assignment must carry at least one tag: ${id}`);
+        }
+
+        // Where the task lives now. Read in lifecycle order and take the first
+        // hit: the stores are disjoint in steady state, but a claim racing this
+        // read can briefly show two, and the earlier state is the one whose
+        // indexes still need moving.
+        const [queuedJson, pendingJson, acceptedJson, parkedJson, scheduledJson, indexedPriority] = (await this.redisClient
+            .multi()
+            .hGet(this.assignmentsRefKey, id)
+            .hGet(this.pendingAssignmentsKey, id)
+            .hGet(this.acceptedAssignmentsKey, id)
+            .hGet(this.keys.parkedAssignments(), id)
+            .hGet(this.scheduledAssignmentsKey, id)
+            // Read for free in the same round trip: a task created without
+            // an explicit priority has one only here (see `priority` below).
+            .hGet(this.keys.assignmentPriority(id), 'priority')
+            .exec()) as unknown as (string | null)[];
+
+        const located: { status: UpdatableStatus; json: string } | null = queuedJson
+            ? { status: 'queued', json: queuedJson }
+            : pendingJson
+              ? { status: 'pending', json: pendingJson }
+              : acceptedJson
+                ? { status: 'accepted', json: acceptedJson }
+                : parkedJson
+                  ? { status: 'parked', json: parkedJson }
+                  : scheduledJson
+                    ? { status: 'scheduled', json: scheduledJson }
+                    : null;
+        if (!located) return null;
+
+        const current: Assignment = JSON.parse(located.json);
+        const updated = applyUpdate(current, patch, normalizedTags);
+        const diff = diffTagIndexes(current.tags ?? [], updated.tags ?? [], this.enableDefaultMatching);
+        // `enqueueAssignment` derives a priority for a task created without one
+        // (queue age by default, or the caller's `prioritizationFunction`) and
+        // writes it to the indexes but never into the stored record. Reading
+        // the priority back off the JSON therefore finds nothing, and taking
+        // that for zero would send an edited task to the back of the queue for
+        // a title fix — so the index is the fallback, not `0`.
+        const storedPriority =
+            indexedPriority !== null && indexedPriority !== undefined && indexedPriority !== ''
+                ? Number(indexedPriority)
+                : undefined;
+        const priority =
+            updated.priority ?? (Number.isFinite(storedPriority as number) ? storedPriority : current.priority);
+
+        switch (located.status) {
+            case 'scheduled':
+                // Held out of matching entirely: raw JSON is the only storage a
+                // pre-activation task has, so there are no indexes to move. The
+                // activation sweep enqueues whatever is written here.
+                await this.redisClient.hSet(this.scheduledAssignmentsKey, id, JSON.stringify(updated));
+                break;
+            case 'parked':
+                // Same shape as scheduled — the parked hash holds the only copy,
+                // and `unparkAssignment` re-enqueues it through `addAssignment`,
+                // which builds every index from these tags.
+                await this.redisClient.hSet(this.keys.parkedAssignments(), id, JSON.stringify(updated));
+                break;
+            case 'queued':
+                await this.rewriteQueuedAssignment(id, updated, diff, priority);
+                break;
+            case 'pending':
+            case 'accepted':
+                // The record's own JSON is the whole edit for held work. The
+                // `assignment:<id>:tags` hash belongs to the queued universe —
+                // `claimSelected` deletes it on the way out and nothing reads
+                // it again — so re-creating it here would leak one key per
+                // edited task past completion.
+                await this.redisClient.hSet(
+                    located.status === 'pending' ? this.pendingAssignmentsKey : this.acceptedAssignmentsKey,
+                    id,
+                    JSON.stringify(updated),
+                );
+                break;
+        }
+
+        const result: UpdateAssignmentResult = {
+            id,
+            status: located.status,
+            tags: updated.tags ?? [],
+            priority,
+            requeued: false,
+            previousOwnerId: null,
+        };
+
+        // Only a genuine routing change can cost somebody their work.
+        if (!diff.changed || (located.status !== 'pending' && located.status !== 'accepted')) return result;
+
+        const ownerId = await this.ownerOf(id, located.status, located.json);
+        result.previousOwnerId = ownerId;
+        if (!ownerId) return result;
+
+        // A workflow-targeted task is routed by name, not by tags: the targeted
+        // lookup grants it to its target without reading a tag at all. Evicting
+        // the holder on a retag would therefore be a round trip to nowhere —
+        // the very next pass hands it straight back — so tags do not un-route
+        // what tags never routed.
+        if (
+            (updated as Record<string, any>)._workflowInstanceId &&
+            (updated as Record<string, any>)._targetUserId === ownerId
+        ) {
+            return result;
+        }
+
+        const [userJson, vetoed] = await Promise.all([
+            this.redisClient.hGet(this.usersKey, ownerId),
+            this.redisClient.sIsMember(this.keys.assignmentVetoed(id), ownerId),
+        ]);
+        const user: User | null = userJson ? JSON.parse(userJson) : null;
+        if (!user) {
+            await this.reclaimIfStillHeld(id, updated, ownerId, located.status, result);
+            return result;
+        }
+        // The same judgement the matching pass makes — the caller's own
+        // `matchingFunction` when there is one, plus the CIDR and geo rules —
+        // rather than a second, smaller copy of it that could keep somebody
+        // `explainMatch` calls ineligible, or confiscate work a custom scorer
+        // would still award.
+        //
+        // What is deliberately neutralised: backlog depth, pause state and
+        // prior rejections. Those are reasons not to *newly* offer work; none
+        // of them is a reason to take back work somebody already holds.
+        const evaluated = await this.evaluateCandidateForAssignment(user, updated, diff.tagsCsv, priority ?? 0, undefined, {
+            assignmentId: id,
+            ownerId,
+            isRejected: false,
+            isPaused: false,
+            backlog: 0,
+        });
+        if (evaluated.eligible && !vetoed) return result;
+
+        await this.reclaimIfStillHeld(id, updated, ownerId, located.status, result);
+        return result;
+    }
+
+    /** Requeue a retagged task and record it on the result, unless it moved on first. */
+    private async reclaimIfStillHeld(
+        id: string,
+        updated: Assignment,
+        ownerId: string,
+        from: 'pending' | 'accepted',
+        result: UpdateAssignmentResult,
+    ): Promise<void> {
+        if (!(await this.reclaimForRematch(id, updated, ownerId, from))) return;
+        result.status = 'queued';
+        result.requeued = true;
+    }
+
+    /**
+     * Move a queued task between per-tag indexes.
+     *
+     * Carries the same claim-race guard as `setAssignmentPriority`: the read
+     * that found this task queued can be overtaken by an atomic claim, in which
+     * case the writes below resurrect a ghost queued entry for work somebody
+     * already holds. Detect it by the owner appearing, and undo — under the new
+     * tags, which are the ones just written.
+     */
+    private async rewriteQueuedAssignment(
+        id: string,
+        updated: Assignment,
+        diff: TagIndexDiff,
+        priority: number | undefined,
+    ): Promise<void> {
+        const score = Number(priority ?? 0);
+        const multi = this.redisClient
+            .multi()
+            .hSet(this.assignmentsRefKey, id, JSON.stringify(updated))
+            .hSet(this.keys.assignmentTags(id), 'tags', diff.tagsCsv)
+            .hSet(this.keys.assignmentPriority(id), 'priority', score)
+            .zAdd(this.assignmentsKey, { score, value: id });
+        for (const tag of diff.removed) multi.zRem(this.keys.tagAssignments(tag), id);
+        // Every surviving tag is rescored, not just the new ones: a patch may
+        // change the priority as well, and a half-rescored index would order
+        // this task differently depending on which tag the union came through.
+        for (const tag of diff.indexTags) {
+            multi.zAdd(this.keys.tagAssignments(tag), { score, value: id });
+            multi.zAdd(this.allTagsKey, { score: 0, value: tag });
+        }
+        await multi.exec();
+
+        const owner = await this.redisClient.hGet(this.assignmentOwnerKey, id);
+        if (!owner) return;
+        const cleanup = this.redisClient.multi().hDel(this.assignmentsRefKey, id).zRem(this.assignmentsKey, id);
+        for (const tag of diff.indexTags) cleanup.zRem(this.keys.tagAssignments(tag), id);
+        await cleanup.exec();
+    }
+
+    /**
+     * Who holds a pending or accepted task.
+     *
+     * Each state has its own owner hash, so this is one HGET either way. The
+     * `_acceptedBy` fallback is there for records accepted before the accepted
+     * owner index existed; ordinary records never carried that stamp, which is
+     * why the index had to exist.
+     */
+    private async ownerOf(id: string, status: UpdatableStatus, json: string): Promise<string | null> {
+        if (status === 'pending') return (await this.redisClient.hGet(this.assignmentOwnerKey, id)) ?? null;
+        if (status !== 'accepted') return null;
+
+        const indexed = await this.redisClient.hGet(this.keys.acceptedAssignmentOwner(), id);
+        if (indexed) return indexed;
+        // Records accepted before the owner index existed still carry the
+        // stamp when they declare an SLA.
+        try {
+            const stamped = (JSON.parse(json) as Record<string, any>)[SLA_ACCEPTED_BY_FIELD];
+            if (typeof stamped === 'string') return stamped;
+        } catch {
+            // an unparseable record has no owner to report
+        }
+        return null;
+    }
+
+    /**
+     * Take a task back off its holder and return it to the open pool.
+     *
+     * Deliberately not `releaseUserPendingAssignments`: that one walks a whole
+     * backlog. This is one task. What it does share with that path is closing
+     * the worker's learning attempt, as a system fault: the reason the work
+     * moved is that an operator changed what it *is*, which says nothing about
+     * how the worker was doing it, and `systemFault` is exactly how the layer
+     * is told to record an attempt without scoring it as a failure. Leaving
+     * the attempt open instead would leave it the *live* attempt for this
+     * assignment, so quality feedback arriving afterwards would train the
+     * worker who no longer holds the work.
+     *
+     * The HDEL out of the holder's store is the claim gate, exactly as it is
+     * for an organic claim: the read that found this task pending can be
+     * overtaken by the holder accepting it, and a task that is no longer where
+     * we found it must not be requeued — that would put one task in the open
+     * pool and in the accepted store at once. Returns whether the reclaim
+     * actually happened.
+     */
+    private async reclaimForRematch(
+        id: string,
+        updated: Assignment,
+        ownerId: string,
+        from: 'pending' | 'accepted',
+    ): Promise<boolean> {
+        const now = Date.now();
+        const multi = this.redisClient.multi();
+        multi.sRem(this.keys.userAssignments(ownerId), `assignment:${id}`);
+        if (from === 'pending') {
+            multi.hDel(this.pendingAssignmentsKey, id);
+            multi.zRem(this.pendingAssignmentsExpiryKey, id);
+            multi.hDel(this.assignmentOwnerKey, id);
+        } else {
+            multi.hDel(this.acceptedAssignmentsKey, id);
+            multi.zRem(this.keys.userAcceptedAssignments(ownerId), id);
+            multi.hDel(this.keys.acceptedAssignmentOwner(), id);
+            // The completion clock started when this person accepted; they no
+            // longer have the work, so it must not keep ticking against them.
+            multi.zRem(this.acceptedAssignmentsExpiryKey, id);
+        }
+        // The store HDEL is the second command in either branch; a zero means
+        // the task left that store between the locate read and this write.
+        const results = (await multi.exec()) as unknown as number[];
+        if (Number(results?.[1] ?? 0) === 0) return false;
+
+        // The acceptance stamps describe a hand-over that has been undone.
+        // Left in place they would make the requeued record look accepted to
+        // `removeAssignment`'s owner lookup and to the completion sweep.
+        const record = updated as Record<string, any>;
+        delete record[SLA_ACCEPTED_AT_FIELD];
+        delete record[SLA_ACCEPTED_BY_FIELD];
+        delete record[SLA_MATCHED_AT_FIELD];
+        if (from === 'accepted') consumeOfferWindow(record);
+
+        this.emitAssignmentLifecycle({
+            kind: 'released',
+            taskId: id,
+            workerId: ownerId,
+            reason: 'retagged',
+            releasedAt: now,
+        });
+
+        if (this.enableLearning) {
+            // Closes the attempt without scoring it against the worker, and —
+            // the point of the call — retires it as the live attempt for this
+            // assignment so later feedback cannot be attributed to them.
+            await this.learning.applyOutcome(id, 'expire', { expectedUserId: ownerId, systemFault: true });
+        }
+
+        await this.addAssignment(updated);
+        return true;
     }
 
     /**
@@ -3747,12 +4087,28 @@ export default class AssignmentMatcher implements WorkflowHost {
             this.redisClient.hGet(this.assignmentOwnerKey, assignmentId),
         ]);
         if (previousOwnerId === userId) return { previousOwnerId: userId };
+
+        // Already accepted? Reassigning work somebody took on is the "during
+        // execution" case: a supervisor moving a job that has started. It comes
+        // back as a fresh *offer* rather than transferring the acceptance,
+        // because the new worker has not agreed to anything yet and a task
+        // sitting in the accepted store under somebody who never said yes is a
+        // completion clock running against a promise nobody made.
+        let acceptedJson: string | null = null;
         if (!queuedJson && !previousOwnerId) {
+            acceptedJson = await this.redisClient.hGet(this.acceptedAssignmentsKey, assignmentId);
+            if (acceptedJson) {
+                previousOwnerId = await this.ownerOf(assignmentId, 'accepted', acceptedJson);
+                if (previousOwnerId === userId) return { previousOwnerId: userId };
+            }
+        }
+
+        if (!queuedJson && !previousOwnerId && !acceptedJson) {
             // Held by schedule.notBefore? Operators may early-activate with
             // force; without it the hold is honored like any other rule.
             const scheduledJson = await this.redisClient.hGet(this.scheduledAssignmentsKey, assignmentId);
             if (!scheduledJson) {
-                throw new Error(`Assignment not found in queued or pending state: ${assignmentId}`);
+                throw new Error(`Assignment not found in queued, pending or accepted state: ${assignmentId}`);
             }
             const held: Assignment = JSON.parse(scheduledJson);
             const heldPolicy = normalizeSchedulePolicy(held.schedule);
@@ -3790,7 +4146,9 @@ export default class AssignmentMatcher implements WorkflowHost {
             if (hasRejected) throw new Error(`User previously rejected this assignment: ${userId}`);
         }
 
-        if (queuedJson) {
+        if (acceptedJson) {
+            await this.offerAcceptedToUser(assignmentId, acceptedJson, previousOwnerId, userId);
+        } else if (queuedJson) {
             // Queued -> pending through the same atomic claim gate as organic
             // matching; losing it means a concurrent pass just took the
             // assignment.
@@ -3842,6 +4200,109 @@ export default class AssignmentMatcher implements WorkflowHost {
         await this.touchUser(userId);
         await this.recordManualAssignTrace(assignmentId, userId, force, previousOwnerId ?? null);
         return { previousOwnerId: previousOwnerId ?? null };
+    }
+
+    /**
+     * Hand accepted work to a different person as a pending offer.
+     *
+     * Everything the acceptance established is undone: the record leaves the
+     * accepted store and the previous owner's accepted index, the completion
+     * deadline they were working to is dropped, and the `_acceptedAt` /
+     * `_acceptedBy` stamps go with it — a record that still claimed to be
+     * accepted would be read as such by the completion sweep and by
+     * `removeAssignment`'s owner lookup.
+     *
+     * The wait clock is restarted rather than left cleared. `acceptAssignment`
+     * stops it because somebody took the work; this puts the task back among
+     * the unaccepted, and a queue-age dashboard that could not see it would be
+     * under-reporting real waiting work. It anchors at the hand-over, which is
+     * when this particular wait began.
+     */
+    private async offerAcceptedToUser(
+        assignmentId: string,
+        acceptedJson: string,
+        previousOwnerId: string | null,
+        userId: string,
+    ): Promise<void> {
+        // The accepted hash is the only copy, so the HDEL is the claim gate:
+        // losing it means a completion, failure or sweep got there first.
+        const claimed = await this.redisClient.hDel(this.acceptedAssignmentsKey, assignmentId);
+        if (!claimed) throw new Error(`Assignment is no longer available: ${assignmentId}`);
+
+        const now = Date.now();
+        let pendingJson = acceptedJson;
+        // Only records that were stamped need rewriting, and only SLA-bearing
+        // ones get a fresh match timestamp — the same cheap guards the organic
+        // claim and the pending-to-pending transfer use, so an assignment
+        // without an SLA keeps byte-identical stored JSON through a hand-over.
+        const isSla = acceptedJson.indexOf('"sla"') !== -1;
+        let tags: string[] = [];
+        if (
+            isSla ||
+            acceptedJson.indexOf('"' + SLA_ACCEPTED_AT_FIELD + '"') !== -1 ||
+            acceptedJson.indexOf('"notAfter"') !== -1
+        ) {
+            try {
+                const parsed = JSON.parse(acceptedJson) as Record<string, any>;
+                delete parsed[SLA_ACCEPTED_AT_FIELD];
+                delete parsed[SLA_ACCEPTED_BY_FIELD];
+                if (isSla) parsed[SLA_MATCHED_AT_FIELD] = now;
+                // The first acceptance answered the offer window; this
+                // hand-over is not a second chance to miss it.
+                consumeOfferWindow(parsed);
+                tags = (parsed.tags ?? []) as string[];
+                pendingJson = JSON.stringify(parsed);
+            } catch {
+                // keep the original JSON on parse failure
+            }
+        }
+        const deadlineMs = responseDeadlineFromJson(pendingJson, this.matchExpirationMs);
+
+        const multi = this.redisClient
+            .multi()
+            .hSet(this.pendingAssignmentsKey, assignmentId, pendingJson)
+            .hSet(this.assignmentOwnerKey, assignmentId, userId)
+            .zAdd(this.pendingAssignmentsExpiryKey, { score: now + deadlineMs, value: assignmentId })
+            .sAdd(this.keys.userAssignments(userId), `assignment:${assignmentId}`)
+            .zAdd(this.keys.assignmentsQueuedAt(), { score: now, value: assignmentId }, { NX: true })
+            .zRem(this.acceptedAssignmentsExpiryKey, assignmentId);
+        if (previousOwnerId) {
+            multi.zRem(this.keys.userAcceptedAssignments(previousOwnerId), assignmentId);
+            multi.sRem(this.keys.userAssignments(previousOwnerId), `assignment:${assignmentId}`);
+        }
+        multi.hDel(this.keys.acceptedAssignmentOwner(), assignmentId);
+        // A re-offer is an offer. Without counting it, the new worker's accept
+        // lands against the original offer and the acceptance rate reads above
+        // 100%.
+        if (isSla) {
+            multi.hIncrByFloat(this.keys.slaStats(), 'offers', 1);
+            for (const tag of tags) {
+                if (tag) multi.hIncrByFloat(this.keys.slaTagStats(tag), 'offers', 1);
+            }
+        }
+        await multi.exec();
+
+        if (previousOwnerId) {
+            // Nothing else names them: the `pending` event below is about the
+            // new worker. Without this the person who was actually doing the
+            // job is never told it moved, and anything mirroring their accepted
+            // work goes on showing it.
+            this.emitAssignmentLifecycle({
+                kind: 'released',
+                taskId: assignmentId,
+                workerId: previousOwnerId,
+                reason: 'reassigned',
+                releasedAt: now,
+            });
+        }
+
+        this.emitAssignmentLifecycle({
+            kind: 'pending',
+            taskId: assignmentId,
+            workerId: userId,
+            matchedAt: now,
+            expiresAt: now + deadlineMs,
+        });
     }
 
     /** Audit record for an assignToUser() override; failures never break the assignment. */
@@ -3938,6 +4399,10 @@ export default class AssignmentMatcher implements WorkflowHost {
             // Inside the guard: an accept whose pending JSON is missing stores
             // nothing, so it must index nothing.
             multi.zAdd(this.keys.userAcceptedAssignments(userId), { score: now, value: assignmentId });
+            // Acceptance deletes the pending owner hash, and the byte-identical
+            // rule keeps `_acceptedBy` off ordinary records — so without this
+            // there is no index saying who holds accepted work.
+            multi.hSet(this.keys.acceptedAssignmentOwner(), assignmentId, userId);
         }
         await multi.exec();
 
@@ -4101,12 +4566,25 @@ export default class AssignmentMatcher implements WorkflowHost {
             throw new Error('Assignment not found in accepted state');
         }
 
+        // Work can change hands after acceptance (`assignToUser` on accepted
+        // work, or a retag that takes it back), and the person who used to
+        // hold it may still have it on screen. Finishing somebody else's task
+        // would delete their record, clear the wrong per-user index and
+        // attribute the outcome to the wrong worker, so the holder is checked
+        // rather than assumed. An entry is absent only for work accepted
+        // before the owner index existed, which is left alone.
+        const holderId = await this.ownerOf(assignmentId, 'accepted', json);
+        if (holderId && holderId !== userId) {
+            throw new Error(`Assignment is not held by this user: ${assignmentId}`);
+        }
+
         const assignment = JSON.parse(json);
         const now = Date.now();
 
         // Move from accepted to completed
         const multi = this.redisClient.multi();
         multi.hDel(this.acceptedAssignmentsKey, assignmentId);
+        multi.hDel(this.keys.acceptedAssignmentOwner(), assignmentId);
         multi.zRem(this.keys.userAcceptedAssignments(userId), assignmentId);
         // Clear SLA indexes (no-ops for non-SLA assignments)
         multi.zRem(this.acceptedAssignmentsExpiryKey, assignmentId);
@@ -4185,12 +4663,25 @@ export default class AssignmentMatcher implements WorkflowHost {
             throw new Error('Assignment not found in accepted state');
         }
 
+        // Work can change hands after acceptance (`assignToUser` on accepted
+        // work, or a retag that takes it back), and the person who used to
+        // hold it may still have it on screen. Finishing somebody else's task
+        // would delete their record, clear the wrong per-user index and
+        // attribute the outcome to the wrong worker, so the holder is checked
+        // rather than assumed. An entry is absent only for work accepted
+        // before the owner index existed, which is left alone.
+        const holderId = await this.ownerOf(assignmentId, 'accepted', json);
+        if (holderId && holderId !== userId) {
+            throw new Error(`Assignment is not held by this user: ${assignmentId}`);
+        }
+
         const assignment = JSON.parse(json);
         const now = Date.now();
 
         // Move from accepted to completed (with failed status)
         const multi = this.redisClient.multi();
         multi.hDel(this.acceptedAssignmentsKey, assignmentId);
+        multi.hDel(this.keys.acceptedAssignmentOwner(), assignmentId);
         multi.zRem(this.keys.userAcceptedAssignments(userId), assignmentId);
         // Clear SLA indexes (no-ops for non-SLA assignments)
         multi.zRem(this.acceptedAssignmentsExpiryKey, assignmentId);

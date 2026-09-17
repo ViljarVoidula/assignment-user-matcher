@@ -25,7 +25,7 @@ Minimum `Qualification.level`. Absent counts anybody holding the tag.
 
 #### Defined in
 
-[src/scheduling/types.ts:692](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L692)
+[src/scheduling/types.ts:692](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L692)
 
 ___
 
@@ -35,4 +35,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:690](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L690)
+[src/scheduling/types.ts:690](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L690)

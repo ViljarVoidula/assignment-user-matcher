@@ -128,7 +128,12 @@ describe('Direct Assignment (assignToUser) Tests', async function () {
             await expectRejection(matcher.assignToUser('ghost', 'u1'), 'not found');
         });
 
-        it('rejects an accepted assignment', async function () {
+        it('moves an accepted assignment on as a fresh offer', async function () {
+            // Reassigning work somebody already took on used to be refused
+            // outright. It is the supervisor's move when a job has started and
+            // has to change hands, so it is allowed — but it lands as pending,
+            // not accepted, because the new person has agreed to nothing yet.
+            // The full behaviour is covered in matcher_task_update.test.ts.
             const matcher = createMatcher();
             await matcher.addUser({ id: 'u1', tags: ['t1'] });
             await matcher.addUser({ id: 'u2', tags: ['t1'] });
@@ -136,7 +141,12 @@ describe('Direct Assignment (assignToUser) Tests', async function () {
             await matcher.assignToUser('a1', 'u1');
             await matcher.acceptAssignment('u1', 'a1');
 
-            await expectRejection(matcher.assignToUser('a1', 'u2'), 'not found');
+            const { previousOwnerId } = await matcher.assignToUser('a1', 'u2');
+
+            expect(previousOwnerId).to.equal('u1');
+            const counts = await matcher.getAssignmentCounts();
+            expect(counts.accepted).to.equal(0);
+            expect(counts.pending).to.equal(1);
         });
 
         it('rejects a paused user unless forced', async function () {

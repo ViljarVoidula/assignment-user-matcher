@@ -397,9 +397,41 @@ The redistribution counterpart to `pauseUser`: requeue every pending (matched bu
 
 ### `assignToUser(assignmentId: string, userId: string, options?: { force?: boolean }): Promise<{ previousOwnerId: string | null }>`
 
-Operator override: hand an assignment directly to a user, bypassing tag/weight selection. Works on queued assignments and on pending assignments held by another user (the previous owner's backlog slot is released and the expiry clock restarts). Idempotent when the user already owns the assignment.
+Operator override: hand an assignment directly to a user, bypassing tag/weight selection. Works on queued assignments, on pending assignments held by another user (the previous owner's backlog slot is released and the expiry clock restarts), and on **accepted** work already in progress. Idempotent when the user already owns the assignment.
+
+Reassigning accepted work lands it as **pending**, not accepted: the new user gets a fresh offer they still have to answer, because they have agreed to nothing yet and an accepted record under somebody who never said yes is a completion deadline running against a promise nobody made. The previous owner's accepted index entry, their `sla.completeWithinMs` deadline and the `_acceptedAt` / `_acceptedBy` stamps are all cleared; the wait clock restarts at the hand-over, so queue-age dashboards can still see the work as unaccepted. The previous owner gets a `released` event with `reason: 'reassigned'` — nothing else names them, and anything mirroring their accepted work needs to hear that it moved. An offer window (`schedule.notAfter`) that the first acceptance already answered is not re-armed, and for SLA-bearing work the re-offer is counted as an offer so the acceptance rate cannot read above 100%.
 
 Hard rules still apply unless `force: true`: the user must not be paused, must have backlog headroom, must not be vetoed on the assignment, and must not have previously rejected it. The learning layer is never fed by manual assignments. When tracing is active the override is recorded as a decision trace with mode `'manual'`, so supervisor actions land in the same audit trail as organic matches.
+
+### `updateAssignment(id: string, patch: AssignmentUpdate): Promise<UpdateAssignmentResult | null>`
+
+Edit a task that already exists — including one somebody is holding. The patch may carry `tags`, `priority`, `title` and `meta`; a field left `undefined` is untouched, and `title` / `meta` accept `null` to clear them. Policies (`escalation`, `sla`, `schedule`, `vetoedUsers`) are chosen when the work is created and are not patched piecemeal. Returns `null` when no live record exists; terminal work is not editable.
+
+`tags` and `priority` decide who *should* have the task, so changing them is not a metadata write. The rule, applied in every state, is **retag always, then re-check the holder**:
+
+| State | What happens |
+| --- | --- |
+| `queued` | Per-tag sorted sets move: removed tags are evicted, every surviving tag is rescored. |
+| `scheduled` / `parked` | The held record is rewritten in place; no indexes exist yet, and the activation or unpark builds them from the new tags. |
+| `pending` / `accepted` | The record is rewritten, then the current holder is scored against the new tag set exactly as organic matching scores them. |
+
+A holder who still scores above zero keeps the task — including accepted work, because nothing about the job changed for them. A holder who no longer matches (or whom the new tags hard-veto) loses it: the task is taken back, an `AssignmentLifecycleEvent` of kind `released` fires with `reason: 'retagged'`, and the record returns to the queue under its new tags with `requeued: true` in the result. The next matching pass offers it to somebody the new tags actually reach — this method never picks the replacement itself.
+
+The re-check is the judgement the matching pass makes, not a smaller copy of it: a custom `matchingFunction`, the CIDR allow-list and the geo range all apply, so `explainMatch` and a retag can never disagree about the same person on the same task. Two holders are exempt. Workflow-targeted work is routed by name rather than by tags, so a tag change cannot un-route it. And a task whose holder accepted it between the read and the write is left where it is rather than requeued into a second copy.
+
+An edit that leaves the tags alone never moves anything, whoever holds the task and however they came by it: fixing a typo in a title is not a reason to pull a job off the person doing it. Restating an identical tag set (in any order) counts as no change. Patch tags are trimmed and de-duplicated but never case-folded, because tags are compared exactly everywhere else — `Plumbing` and `plumbing` are two tags at creation, in matching and in an edit alike. An edit that omits `priority` keeps whatever the task already has, including a priority the engine derived at creation. Note that under `enableDefaultMatching` every user carries the shared `default` tag, so a retag can never strand a holder on tags alone — only an explicit zero-weight veto or a skill threshold will.
+
+Like `assignToUser`, `updateAssignment` never feeds the learning layer: an operator changing what the work *is* says nothing about how well the worker was doing it.
+
+```typescript
+const result = await matcher.updateAssignment('job-12', {
+    title: 'Leaking kitchen tap',
+    tags: ['plumbing', 'urgent'],
+});
+if (result?.requeued) {
+    // the previous holder no longer matches — it is back in the queue
+}
+```
 
 ### Response deadlines & escalation (`Assignment.escalation`)
 
@@ -605,6 +637,10 @@ Removes a specific assignment from the system. Requires tags to efficiently loca
 ### `completeAssignmentForUser(userId: string, assignmentId: string): Promise<void>`
 
 Marks an assignment as completed by a user, removing it from their backlog and potentially making them available for new assignments.
+
+### Finishing work that moved on
+
+`completeAssignment` and `failAssignment` check that the caller is the worker who accepted the task, and throw otherwise. Accepted work can change hands — a supervisor reassigning it, or an edit that retags it away — and the person who used to hold it may still have it on screen. Without the check, finishing it would delete the current holder's record, clear the wrong per-user index and attribute the outcome to the wrong worker. Work accepted before this index existed carries no holder and is left alone.
 
 ### `waitUntilReady(): Promise<AssignmentMatcher>`
 

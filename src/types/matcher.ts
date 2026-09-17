@@ -800,7 +800,25 @@ export interface DecisionTraceQuery {
 export type AssignmentLifecycleEvent =
     | { kind: 'pending'; taskId: string; workerId: string; matchedAt: number; expiresAt: number }
     | { kind: 'expired'; taskId: string; workerId: string | null; expiredAt: number }
-    | { kind: 'released'; taskId: string; workerId: string; reason: 'idle' | 'operator'; releasedAt: number }
+    /**
+     * A pending or accepted task was taken back off its holder without them
+     * refusing it. `'idle'` is the inactivity sweep, `'operator'` an explicit
+     * redistribution, and `'retagged'` an `updateAssignment` whose new routing
+     * tags no longer reach the person holding it — in every case the task goes
+     * straight back to the queue rather than anywhere terminal.
+     */
+    | {
+          kind: 'released';
+          taskId: string;
+          workerId: string;
+          /**
+           * `reassigned` is the only one that can name a worker who had
+           * *accepted* the task: an operator moved work that was already under
+           * way. The others release an unanswered offer.
+           */
+          reason: 'idle' | 'operator' | 'retagged' | 'reassigned';
+          releasedAt: number;
+      }
     | { kind: 'accepted'; taskId: string; workerId: string; acceptedAt: number }
     | { kind: 'rejected'; taskId: string; workerId: string; rejectedAt: number }
     | { kind: 'completed'; taskId: string; workerId: string; completedAt: number }

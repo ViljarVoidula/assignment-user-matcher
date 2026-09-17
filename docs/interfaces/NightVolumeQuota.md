@@ -23,7 +23,7 @@ Only count shifts ending after this wall-clock time (NL counts those past 02:00)
 
 #### Defined in
 
-[src/scheduling/types.ts:530](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L530)
+[src/scheduling/types.ts:530](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L530)
 
 ___
 
@@ -33,7 +33,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:531](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L531)
+[src/scheduling/types.ts:531](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L531)
 
 ___
 
@@ -43,7 +43,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:527](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L527)
+[src/scheduling/types.ts:527](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L527)
 
 ___
 
@@ -53,4 +53,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:528](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L528)
+[src/scheduling/types.ts:528](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L528)

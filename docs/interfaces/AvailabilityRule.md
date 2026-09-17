@@ -26,7 +26,7 @@ ISO weekdays 1 (Mon) .. 7 (Sun). Omit for every day.
 
 #### Defined in
 
-[src/scheduling/types.ts:93](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L93)
+[src/scheduling/types.ts:93](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L93)
 
 ___
 
@@ -38,7 +38,7 @@ Wall-clock window within the day. Omit for the whole day.
 
 #### Defined in
 
-[src/scheduling/types.ts:98](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L98)
+[src/scheduling/types.ts:98](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L98)
 
 ___
 
@@ -50,7 +50,7 @@ Inclusive ISO date bounds. Omit for the whole period.
 
 #### Defined in
 
-[src/scheduling/types.ts:95](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L95)
+[src/scheduling/types.ts:95](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L95)
 
 ___
 
@@ -64,7 +64,7 @@ windows (any shift outside every `available` rule is ineligible);
 
 #### Defined in
 
-[src/scheduling/types.ts:105](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L105)
+[src/scheduling/types.ts:105](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L105)
 
 ___
 
@@ -74,7 +74,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:99](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L99)
+[src/scheduling/types.ts:99](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L99)
 
 ___
 
@@ -84,7 +84,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:96](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L96)
+[src/scheduling/types.ts:96](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L96)
 
 ___
 
@@ -96,4 +96,4 @@ Soft-rule strength. Defaults to 1.
 
 #### Defined in
 
-[src/scheduling/types.ts:107](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L107)
+[src/scheduling/types.ts:107](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L107)

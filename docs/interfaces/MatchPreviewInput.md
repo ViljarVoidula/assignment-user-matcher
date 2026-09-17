@@ -26,7 +26,7 @@ Input for `AssignmentMatcher.previewMatch()`: describe a hypothetical assignment
 
 #### Defined in
 
-[src/types/matcher.ts:677](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L677)
+[src/types/matcher.ts:677](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L677)
 
 ___
 
@@ -36,7 +36,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:679](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L679)
+[src/types/matcher.ts:679](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L679)
 
 ___
 
@@ -46,7 +46,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:680](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L680)
+[src/types/matcher.ts:680](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L680)
 
 ___
 
@@ -56,7 +56,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:681](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L681)
+[src/types/matcher.ts:681](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L681)
 
 ___
 
@@ -66,7 +66,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:675](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L675)
+[src/types/matcher.ts:675](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L675)
 
 ___
 
@@ -76,7 +76,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:682](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L682)
+[src/types/matcher.ts:682](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L682)
 
 ___
 
@@ -86,7 +86,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:676](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L676)
+[src/types/matcher.ts:676](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L676)
 
 ___
 
@@ -96,7 +96,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:674](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L674)
+[src/types/matcher.ts:674](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L674)
 
 ___
 
@@ -106,4 +106,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:678](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L678)
+[src/types/matcher.ts:678](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L678)

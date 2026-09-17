@@ -34,7 +34,7 @@ Assignment template - merged with workflow context when creating the assignment
 
 #### Defined in
 
-[src/types/matcher.ts:1473](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1473)
+[src/types/matcher.ts:1491](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1491)
 
 ___
 
@@ -46,7 +46,7 @@ Default next step if no routing condition matches (null = end workflow)
 
 #### Defined in
 
-[src/types/matcher.ts:1483](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1483)
+[src/types/matcher.ts:1501](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1501)
 
 ___
 
@@ -58,7 +58,7 @@ External (callback) task metadata used when taskType is 'external'
 
 #### Defined in
 
-[src/types/matcher.ts:1479](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1479)
+[src/types/matcher.ts:1497](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1497)
 
 ___
 
@@ -70,7 +70,7 @@ Failure policy for parallel steps: 'abort' | 'continue' | 'retry'
 
 #### Defined in
 
-[src/types/matcher.ts:1489](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1489)
+[src/types/matcher.ts:1507](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1507)
 
 ___
 
@@ -82,7 +82,7 @@ Unique identifier for this step within the workflow
 
 #### Defined in
 
-[src/types/matcher.ts:1467](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1467)
+[src/types/matcher.ts:1485](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1485)
 
 ___
 
@@ -94,7 +94,7 @@ Machine task metadata used for code/task worker execution
 
 #### Defined in
 
-[src/types/matcher.ts:1477](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1477)
+[src/types/matcher.ts:1495](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1495)
 
 ___
 
@@ -106,7 +106,7 @@ Maximum retries for this step (default: 0)
 
 #### Defined in
 
-[src/types/matcher.ts:1491](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1491)
+[src/types/matcher.ts:1509](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1509)
 
 ___
 
@@ -118,7 +118,7 @@ Human-readable name
 
 #### Defined in
 
-[src/types/matcher.ts:1469](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1469)
+[src/types/matcher.ts:1487](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1487)
 
 ___
 
@@ -137,7 +137,7 @@ steps that are members of a parallel group.
 
 #### Defined in
 
-[src/types/matcher.ts:1504](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1504)
+[src/types/matcher.ts:1522](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1522)
 
 ___
 
@@ -149,7 +149,7 @@ For parallel execution: IDs of steps to execute simultaneously
 
 #### Defined in
 
-[src/types/matcher.ts:1485](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1485)
+[src/types/matcher.ts:1503](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1503)
 
 ___
 
@@ -161,7 +161,7 @@ Routing rules for branching (evaluated in order, first match wins)
 
 #### Defined in
 
-[src/types/matcher.ts:1481](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1481)
+[src/types/matcher.ts:1499](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1499)
 
 ___
 
@@ -173,7 +173,7 @@ Target user selector: 'initiator' | 'previous' | specific userId | tag-based sel
 
 #### Defined in
 
-[src/types/matcher.ts:1475](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1475)
+[src/types/matcher.ts:1493](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1493)
 
 ___
 
@@ -185,7 +185,7 @@ Step execution mode (default: 'assignment')
 
 #### Defined in
 
-[src/types/matcher.ts:1471](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1471)
+[src/types/matcher.ts:1489](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1489)
 
 ___
 
@@ -197,7 +197,7 @@ Timeout override for this step in milliseconds
 
 #### Defined in
 
-[src/types/matcher.ts:1493](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1493)
+[src/types/matcher.ts:1511](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1511)
 
 ___
 
@@ -209,4 +209,4 @@ For parallel joins: wait for all parallel steps before continuing
 
 #### Defined in
 
-[src/types/matcher.ts:1487](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1487)
+[src/types/matcher.ts:1505](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1505)

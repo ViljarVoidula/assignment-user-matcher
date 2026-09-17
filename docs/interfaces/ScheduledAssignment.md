@@ -23,7 +23,7 @@ ISO date of the shift occurrence (its start day).
 
 #### Defined in
 
-[src/scheduling/types.ts:899](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L899)
+[src/scheduling/types.ts:899](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L899)
 
 ___
 
@@ -33,7 +33,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:897](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L897)
+[src/scheduling/types.ts:897](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L897)
 
 ___
 
@@ -45,7 +45,7 @@ Human-readable reasons produced by the constraint layer.
 
 #### Defined in
 
-[src/scheduling/types.ts:901](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L901)
+[src/scheduling/types.ts:901](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L901)
 
 ___
 
@@ -55,4 +55,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:896](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L896)
+[src/scheduling/types.ts:896](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L896)

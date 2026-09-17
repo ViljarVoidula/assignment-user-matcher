@@ -22,7 +22,7 @@ Optional label used in violation messages, e.g. "48h/4 months".
 
 #### Defined in
 
-[src/scheduling/types.ts:366](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L366)
+[src/scheduling/types.ts:366](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L366)
 
 ___
 
@@ -32,7 +32,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:363](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L363)
+[src/scheduling/types.ts:363](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L363)
 
 ___
 
@@ -42,4 +42,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:364](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/scheduling/types.ts#L364)
+[src/scheduling/types.ts:364](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L364)

@@ -19,4 +19,4 @@ Centralized key generation for consistent Redis key naming
 
 #### Defined in
 
-[src/utils/keys.ts:7](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/utils/keys.ts#L7)
+[src/utils/keys.ts:7](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/utils/keys.ts#L7)

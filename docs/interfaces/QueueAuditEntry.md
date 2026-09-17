@@ -23,7 +23,7 @@ One queued assignment's stuck-analysis from `auditQueue()`.
 
 #### Defined in
 
-[src/types/matcher.ts:753](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L753)
+[src/types/matcher.ts:753](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L753)
 
 ___
 
@@ -37,7 +37,7 @@ by tag/weight mismatch are counted under `noTagMatch`.
 
 #### Defined in
 
-[src/types/matcher.ts:766](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L766)
+[src/types/matcher.ts:766](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L766)
 
 ___
 
@@ -49,7 +49,7 @@ Users eligible right now under the full hard rules
 
 #### Defined in
 
-[src/types/matcher.ts:758](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L758)
+[src/types/matcher.ts:758](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L758)
 
 ___
 
@@ -59,7 +59,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:754](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L754)
+[src/types/matcher.ts:754](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L754)
 
 ___
 
@@ -71,7 +71,7 @@ Assignment tags no active (non-paused) user can currently serve
 
 #### Defined in
 
-[src/types/matcher.ts:760](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L760)
+[src/types/matcher.ts:760](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L760)
 
 ___
 
@@ -83,4 +83,4 @@ Ms since first enqueue; null when the wait-clock entry is missing
 
 #### Defined in
 
-[src/types/matcher.ts:756](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L756)
+[src/types/matcher.ts:756](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L756)

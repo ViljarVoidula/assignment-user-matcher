@@ -25,7 +25,7 @@ Event published to Redis Streams for workflow orchestration
 
 #### Defined in
 
-[src/types/matcher.ts:1449](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1449)
+[src/types/matcher.ts:1467](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1467)
 
 ___
 
@@ -35,7 +35,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1446](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1446)
+[src/types/matcher.ts:1464](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1464)
 
 ___
 
@@ -45,7 +45,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1453](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1453)
+[src/types/matcher.ts:1471](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1471)
 
 ___
 
@@ -55,7 +55,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1451](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1451)
+[src/types/matcher.ts:1469](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1469)
 
 ___
 
@@ -65,7 +65,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1452](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1452)
+[src/types/matcher.ts:1470](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1470)
 
 ___
 
@@ -75,7 +75,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1447](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1447)
+[src/types/matcher.ts:1465](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1465)
 
 ___
 
@@ -85,7 +85,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1448](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1448)
+[src/types/matcher.ts:1466](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1466)
 
 ___
 
@@ -95,4 +95,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1450](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L1450)
+[src/types/matcher.ts:1468](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1468)

@@ -25,7 +25,7 @@ actually happened, use decision traces instead.
 
 #### Defined in
 
-[src/types/matcher.ts:660](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L660)
+[src/types/matcher.ts:660](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L660)
 
 ___
 
@@ -35,7 +35,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:669](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L669)
+[src/types/matcher.ts:669](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L669)
 
 ___
 
@@ -45,7 +45,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:668](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L668)
+[src/types/matcher.ts:668](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L668)
 
 ___
 
@@ -59,7 +59,7 @@ released on acceptance — consult decision traces for the full history).
 
 #### Defined in
 
-[src/types/matcher.ts:667](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L667)
+[src/types/matcher.ts:667](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L667)
 
 ___
 
@@ -69,4 +69,4 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:661](https://github.com/ViljarVoidula/assignment-user-matcher/blob/18a837e2d48156ed11f2e3ec23754ebc79f4706c/src/types/matcher.ts#L661)
+[src/types/matcher.ts:661](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L661)
