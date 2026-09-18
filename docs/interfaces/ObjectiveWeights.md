@@ -30,7 +30,7 @@ term off.
 
 #### Defined in
 
-[src/scheduling/types.ts:1021](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L1021)
+[src/scheduling/types.ts:1021](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L1021)
 
 ___
 
@@ -46,7 +46,7 @@ summary still use the cost model either way.
 
 #### Defined in
 
-[src/scheduling/types.ts:1007](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L1007)
+[src/scheduling/types.ts:1007](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L1007)
 
 ___
 
@@ -65,7 +65,7 @@ only *distribute* the demand and never grow it.
 
 #### Defined in
 
-[src/scheduling/types.ts:1032](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L1032)
+[src/scheduling/types.ts:1032](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L1032)
 
 ___
 
@@ -80,4 +80,4 @@ this is declared data, kept outside AI Act Annex III point 4(b).
 
 #### Defined in
 
-[src/scheduling/types.ts:1014](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L1014)
+[src/scheduling/types.ts:1014](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L1014)

@@ -29,7 +29,7 @@ quality 0 (or 1 when `quality` is the only non-acceptance target).
 
 #### Defined in
 
-[src/types/matcher.ts:1845](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1845)
+[src/types/matcher.ts:1884](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1884)
 
 ___
 
@@ -41,7 +41,7 @@ Per-target learning-rate overrides (default: the shared learning rate).
 
 #### Defined in
 
-[src/types/matcher.ts:1849](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1849)
+[src/types/matcher.ts:1888](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1888)
 
 ___
 
@@ -51,7 +51,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1847](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1847)
+[src/types/matcher.ts:1886](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1886)
 
 ___
 
@@ -61,7 +61,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1846](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1846)
+[src/types/matcher.ts:1885](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1885)
 
 ___
 
@@ -76,7 +76,7 @@ not the worker's failure, so it produces no label at all.
 
 #### Defined in
 
-[src/types/matcher.ts:1856](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1856)
+[src/types/matcher.ts:1895](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1895)
 
 ___
 
@@ -88,4 +88,4 @@ Targets to model. Default when enabled: acceptance + successGivenAcceptance.
 
 #### Defined in
 
-[src/types/matcher.ts:1838](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L1838)
+[src/types/matcher.ts:1877](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1877)

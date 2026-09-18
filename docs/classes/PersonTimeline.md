@@ -53,7 +53,7 @@ next query rather than one per mutation.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:62](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L62)
+[src/scheduling/engine/timeline.ts:62](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L62)
 
 ## Methods
 
@@ -73,7 +73,7 @@ next query rather than one per mutation.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:80](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L80)
+[src/scheduling/engine/timeline.ts:80](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L80)
 
 ___
 
@@ -89,7 +89,7 @@ readonly [`TimelineEntry`](../interfaces/TimelineEntry.md)[]
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:69](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L69)
+[src/scheduling/engine/timeline.ts:69](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L69)
 
 ___
 
@@ -112,7 +112,7 @@ Number of entries in `window` satisfying `predicate`.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:273](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L273)
+[src/scheduling/engine/timeline.ts:273](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L273)
 
 ___
 
@@ -134,7 +134,7 @@ Entries intersecting `window`, in order.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:181](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L181)
+[src/scheduling/engine/timeline.ts:181](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L181)
 
 ___
 
@@ -154,7 +154,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:96](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L96)
+[src/scheduling/engine/timeline.ts:96](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L96)
 
 ___
 
@@ -178,7 +178,7 @@ a day so the caller's clock owns DST, not this structure.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:303](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L303)
+[src/scheduling/engine/timeline.ts:303](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L303)
 
 ___
 
@@ -210,7 +210,7 @@ what it asks. A Sunday belongs to the week whose Saturday preceded it.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:333](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L333)
+[src/scheduling/engine/timeline.ts:333](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L333)
 
 ___
 
@@ -235,7 +235,7 @@ window has 7 days of rest, and a weekly-rest rule must see that.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:240](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L240)
+[src/scheduling/engine/timeline.ts:240](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L240)
 
 ___
 
@@ -259,7 +259,7 @@ between them. Backs `max consecutive night shifts`.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:283](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L283)
+[src/scheduling/engine/timeline.ts:283](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L283)
 
 ___
 
@@ -290,7 +290,7 @@ candidates worth evaluating.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:135](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L135)
+[src/scheduling/engine/timeline.ts:135](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L135)
 
 ___
 
@@ -315,7 +315,7 @@ something overlaps — overlap is a different rule's business.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:260](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L260)
+[src/scheduling/engine/timeline.ts:260](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L260)
 
 ___
 
@@ -342,7 +342,7 @@ never reads as a breach.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:153](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L153)
+[src/scheduling/engine/timeline.ts:153](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L153)
 
 ___
 
@@ -362,7 +362,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:88](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L88)
+[src/scheduling/engine/timeline.ts:88](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L88)
 
 ___
 
@@ -386,7 +386,7 @@ just the longest one.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:219](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L219)
+[src/scheduling/engine/timeline.ts:219](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L219)
 
 ___
 
@@ -402,7 +402,7 @@ Total working minutes currently on the timeline, history included.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:75](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L75)
+[src/scheduling/engine/timeline.ts:75](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L75)
 
 ___
 
@@ -440,7 +440,7 @@ roster) `fn` simply runs against the timeline as it stands.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:204](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L204)
+[src/scheduling/engine/timeline.ts:204](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L204)
 
 ___
 
@@ -469,4 +469,4 @@ to save a walk over a few dozen items.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:110](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/engine/timeline.ts#L110)
+[src/scheduling/engine/timeline.ts:110](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L110)

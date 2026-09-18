@@ -29,7 +29,7 @@ Minutes payable when an assignment is cancelled late (NL pays the called hours).
 
 #### Defined in
 
-[src/scheduling/types.ts:596](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L596)
+[src/scheduling/types.ts:596](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L596)
 
 ___
 
@@ -41,7 +41,7 @@ After this deadline, cancelling owes compensation.
 
 #### Defined in
 
-[src/scheduling/types.ts:594](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L594)
+[src/scheduling/types.ts:594](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L594)
 
 ___
 
@@ -53,7 +53,7 @@ Whether a published roster may be changed at all. Finland requires consent or ca
 
 #### Defined in
 
-[src/scheduling/types.ts:598](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L598)
+[src/scheduling/types.ts:598](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L598)
 
 ___
 
@@ -65,7 +65,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:592](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L592)
+[src/scheduling/types.ts:592](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L592)
 
 ___
 
@@ -77,4 +77,4 @@ The reference hours and days within which work may be required at all.
 
 #### Defined in
 
-[src/scheduling/types.ts:590](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L590)
+[src/scheduling/types.ts:590](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L590)

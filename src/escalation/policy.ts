@@ -16,6 +16,8 @@ import type { Assignment, EscalationPolicy } from '../types/matcher';
 export interface NormalizedEscalationPolicy {
     respondWithinMs: number;
     onNoResponse: 'block' | 'allow';
+    /** 0 when the policy declares none — the caller then falls back to the matcher-wide value. */
+    offerCooldownMs: number;
     priorityBoost: number;
     tiers?: string[][];
     maxEscalations: number;
@@ -40,6 +42,8 @@ export function normalizeEscalationPolicy(policy: EscalationPolicy | undefined |
         ? policy.tiers.filter((tier) => Array.isArray(tier) && tier.length > 0)
         : undefined;
 
+    const declaredCooldown = Number(policy.offerCooldownMs);
+
     const declaredMax = Number(policy.maxEscalations);
     // With a tier ladder the natural ceiling is "one hop per remaining tier".
     const defaultMax = tiers && tiers.length > 0 ? tiers.length - 1 : Number.POSITIVE_INFINITY;
@@ -47,6 +51,7 @@ export function normalizeEscalationPolicy(policy: EscalationPolicy | undefined |
     return {
         respondWithinMs,
         onNoResponse: policy.onNoResponse === 'block' ? 'block' : 'allow',
+        offerCooldownMs: Number.isFinite(declaredCooldown) && declaredCooldown > 0 ? declaredCooldown : 0,
         priorityBoost: Number.isFinite(Number(policy.priorityBoost)) ? Number(policy.priorityBoost) : 0,
         tiers: tiers && tiers.length > 0 ? tiers : undefined,
         maxEscalations: Number.isFinite(declaredMax) && declaredMax >= 0 ? declaredMax : defaultMax,
@@ -82,6 +87,22 @@ export function responseDeadlineFromJson(json: string | null | undefined, fallba
     } catch {
         return fallbackMs;
     }
+}
+
+/**
+ * How long the non-responder rests before this assignment can be offered to
+ * them again, in ms. `0` means no cooldown — the historical behaviour, where
+ * the requeue may land straight back on them.
+ *
+ * A blocking policy returns 0: the owner is barred outright, and a rest period
+ * on top of a permanent bar would be redundant bookkeeping.
+ */
+export function offerCooldownMs(assignment: Assignment | null | undefined, fallbackMs: number): number {
+    if (!assignment) return fallbackMs;
+    const policy = normalizeEscalationPolicy(assignment.escalation);
+    if (!policy) return fallbackMs;
+    if (policy.onNoResponse === 'block') return 0;
+    return policy.offerCooldownMs > 0 ? policy.offerCooldownMs : fallbackMs;
 }
 
 export interface EscalationDecision {

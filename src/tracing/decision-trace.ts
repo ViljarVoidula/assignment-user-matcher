@@ -52,6 +52,11 @@ export interface TraceUserContext {
     vetoed: Set<string>;
     /** Whether the user was paused during the pass (excluded from all matching) */
     paused?: boolean;
+    /**
+     * Offers this user let lapse and is still resting from, mapped to the epoch
+     * ms the rest ends. Present only while a cooldown is configured.
+     */
+    cooldown?: Map<string, number>;
 }
 
 /** Chosen candidate first, then eligible before ineligible, then by effective priority. */
@@ -73,6 +78,8 @@ function excludedCandidate(ctx: TraceUserContext, assignmentId: string, tags: st
     if (ctx.paused) reasons.push({ kind: 'paused' });
     if (ctx.vetoed.has(assignmentId)) reasons.push({ kind: 'assignmentVeto' });
     if (ctx.rejected.has(assignmentId)) reasons.push({ kind: 'rejectedPreviously' });
+    const cooldownUntil = ctx.cooldown?.get(assignmentId);
+    if (cooldownUntil !== undefined) reasons.push({ kind: 'offerCooldown', until: cooldownUntil });
     const weights = ctx.user.routingWeights;
     if (weights) {
         for (const [pattern, weight] of Object.entries(weights)) {

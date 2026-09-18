@@ -28,7 +28,7 @@ false
 
 #### Defined in
 
-[src/types/matcher.ts:748](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L748)
+[src/types/matcher.ts:771](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L771)
 
 ___
 
@@ -46,7 +46,7 @@ Examine at most this many queued assignments, longest-waiting first.
 
 #### Defined in
 
-[src/types/matcher.ts:744](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L744)
+[src/types/matcher.ts:767](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L767)
 
 ___
 
@@ -64,4 +64,4 @@ Only examine assignments that have waited at least this long.
 
 #### Defined in
 
-[src/types/matcher.ts:746](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/types/matcher.ts#L746)
+[src/types/matcher.ts:769](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L769)

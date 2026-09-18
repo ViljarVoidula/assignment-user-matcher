@@ -28,7 +28,7 @@ Last day the contract runs; shifts after it are ineligible. Pro-rates the total 
 
 #### Defined in
 
-[src/scheduling/types.ts:145](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L145)
+[src/scheduling/types.ts:145](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L145)
 
 ___
 
@@ -44,7 +44,7 @@ rejects the input rather than guess a working week. Ignored when
 
 #### Defined in
 
-[src/scheduling/types.ts:127](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L127)
+[src/scheduling/types.ts:127](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L127)
 
 ___
 
@@ -54,7 +54,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:112](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L112)
+[src/scheduling/types.ts:112](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L112)
 
 ___
 
@@ -66,7 +66,7 @@ Day-count contracts: maximum working days in the period (e.g. FR forfait jours).
 
 #### Defined in
 
-[src/scheduling/types.ts:129](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L129)
+[src/scheduling/types.ts:129](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L129)
 
 ___
 
@@ -76,7 +76,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:132](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L132)
+[src/scheduling/types.ts:132](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L132)
 
 ___
 
@@ -88,7 +88,7 @@ Hard bounds over the period, in minutes.
 
 #### Defined in
 
-[src/scheduling/types.ts:131](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L131)
+[src/scheduling/types.ts:131](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L131)
 
 ___
 
@@ -110,7 +110,7 @@ not a contract total.
 
 #### Defined in
 
-[src/scheduling/types.ts:159](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L159)
+[src/scheduling/types.ts:159](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L159)
 
 ___
 
@@ -129,7 +129,7 @@ there all month.
 
 #### Defined in
 
-[src/scheduling/types.ts:143](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L143)
+[src/scheduling/types.ts:143](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L143)
 
 ___
 
@@ -144,4 +144,4 @@ towards. Takes precedence over `fte`.
 
 #### Defined in
 
-[src/scheduling/types.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L119)
+[src/scheduling/types.ts:119](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L119)

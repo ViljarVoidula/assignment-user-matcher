@@ -437,7 +437,7 @@ if (result?.requeued) {
 
 ### Response deadlines & escalation (`Assignment.escalation`)
 
-By default an assignment nobody responds to is requeued after the matcher-wide `matchExpirationMs` — and the same user may win it straight back. Attach an `EscalationPolicy` to make that behaviour explicit: a per-assignment deadline, an optional block on the non-responder, a priority climb, and an optional tier ladder that moves the work to a different pool on each hop. **No workflow is required.**
+By default an assignment nobody responds to is requeued after the matcher-wide `matchExpirationMs` — and the same user may win it straight back, on the very next pass. Attach an `EscalationPolicy` to make that behaviour explicit: a per-assignment deadline, a rest period before the same person is asked again, an optional block on the non-responder, a priority climb, and an optional tier ladder that moves the work to a different pool on each hop. **No workflow is required.**
 
 ```ts
 await matcher.addAssignment({
@@ -460,12 +460,41 @@ matcher.startMaintenance(); // deadlines don't fire unless something sweeps them
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
 | `respondWithinMs` | Per-assignment response deadline, overriding `matchExpirationMs`                                                                               | required                           |
 | `onNoResponse`    | `'block'` treats a non-response as a soft rejection (same rejected set an explicit reject writes to); `'allow'` keeps the historical behaviour | `'allow'`                          |
+| `offerCooldownMs` | How long the non-responder rests before this assignment can be offered to them again. Overrides the matcher-wide `offerCooldownMs`. Ignored under `onNoResponse: 'block'` | matcher-wide value |
 | `priorityBoost`   | Priority delta applied on each hop                                                                                                             | `0`                                |
 | `tiers`           | Tag ladder. Tier tags are swapped per hop; tags not named by any tier survive untouched                                                        | none                               |
 | `maxEscalations`  | Hop ceiling                                                                                                                                    | `tiers.length - 1`, else unlimited |
 | `onExhausted`     | `'queue'` keeps recirculating; `'park'` holds it out of matching                                                                               | `'queue'`                          |
 
 The wait clock always survives an escalation: requeues go through `addAssignment`, whose `NX` keeps the original first-enqueue time, so `getQueueStats().oldestWaitingMs` measures the work item rather than the current tier.
+
+#### Offer cooldowns (`offerCooldownMs`)
+
+`onNoResponse` has only two settings, and neither suits work with a small eligible pool: `'allow'` hands the assignment straight back to whoever just ignored it, and `'block'` bars them permanently — which, when they are the *only* eligible worker, means the work is never assigned to anybody. A cooldown is the middle ground. The non-responder is held out of matching **for that one assignment** for a while, so anybody else gets a clear run at it, and they are asked again afterwards.
+
+```ts
+const matcher = new AssignmentMatcher(redis, {
+    matchExpirationMs: 60_000,
+    offerCooldownMs: 60_000, // default 0 (off): historical behaviour is unchanged
+});
+```
+
+Per assignment, `escalation.offerCooldownMs` overrides it. The cooldown never applies to operator overrides (`assignToUser`) or workflow-targeted grants, is skipped entirely under `onNoResponse: 'block'` (a permanent bar makes a rest period moot), and is cleared when the user accepts the work or an operator hands it to them. A resting candidate is struck out in `explainMatch()` and in decision traces with `{ kind: 'offerCooldown', until }`, so "nobody is eligible right now" always says why.
+
+#### Bounding an unanswered-offer loop
+
+Cooldowns slow a loop down; they do not end one. Work that nobody ever answers should eventually stop circulating and become somebody's problem to look at. `maxEscalations` **does not need `tiers`** — with no ladder to climb, it is simply a ceiling on how many times the work is re-offered before `onExhausted` fires:
+
+```ts
+escalation: {
+    respondWithinMs: 60_000,
+    offerCooldownMs: 60_000,
+    maxEscalations: 3,   // three unanswered offers is enough
+    onExhausted: 'park', // then it is an operator's problem, not a loop
+}
+```
+
+Without a `maxEscalations` ceiling the ladder is unbounded by design, so an assignment with one eligible worker who never responds is re-offered on every sweep for as long as it exists — and every one of those offers is a real decision, with a decision trace to match. Park it instead: `getParkedAssignments()` lists what nobody answered, and `unparkAssignment(id)` puts it back.
 
 Subscribe via `onAssignmentLifecycle` for `escalated` (`{ fromWorkerId, level, blockedPreviousOwner }`) and `escalationExhausted` (`{ level, parked }`) events; `expired` is still emitted first, so existing consumers are unaffected. Parked assignments are reachable with `getParkedAssignments()`, returned to the queue with `unparkAssignment(id, { resetEscalation? })`, and report `_status: 'parked'` from `getAssignment()` — they never read as "not found". `getEscalationLevel(id)` reports how far an assignment has climbed.
 
@@ -681,6 +710,13 @@ type Options = {
     // - if no positive weights exist, no assignment is pulled from queue
     // If set to false, you should provide a custom `matchingFunction`.
     enableDefaultMatching?: boolean; // Default: true
+
+    // How long a user who let a response deadline lapse is held out of matching
+    // for *that* assignment. The middle ground between letting them win it back
+    // on the next pass (the default) and barring them permanently with
+    // `escalation.onNoResponse: 'block'`. Per-assignment override:
+    // `escalation.offerCooldownMs`.
+    offerCooldownMs?: number; // Default: 0 (off)
 
     // Opt-in idle user auto-rejection. When set, users holding pending
     // (not yet accepted/rejected) assignments with no activity for this many

@@ -29,7 +29,7 @@ Size of the admissible set at that step
 
 #### Defined in
 
-[src/learning/policy.ts:24](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/learning/policy.ts#L24)
+[src/learning/policy.ts:24](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/learning/policy.ts#L24)
 
 ___
 
@@ -41,7 +41,7 @@ True when the step took the exploratory branch
 
 #### Defined in
 
-[src/learning/policy.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/learning/policy.ts#L26)
+[src/learning/policy.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/learning/policy.ts#L26)
 
 ___
 
@@ -51,7 +51,7 @@ ___
 
 #### Defined in
 
-[src/learning/policy.ts:20](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/learning/policy.ts#L20)
+[src/learning/policy.ts:20](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/learning/policy.ts#L20)
 
 ___
 
@@ -63,4 +63,4 @@ Probability of this item being chosen at the step it was chosen
 
 #### Defined in
 
-[src/learning/policy.ts:22](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/learning/policy.ts#L22)
+[src/learning/policy.ts:22](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/learning/policy.ts#L22)

@@ -55,7 +55,7 @@ offset, so repeated conversions cost a map lookup rather than an `Intl` call.
 
 #### Defined in
 
-[src/scheduling/time.ts:53](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L53)
+[src/scheduling/time.ts:53](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L53)
 
 ## Properties
 
@@ -65,7 +65,7 @@ offset, so repeated conversions cost a map lookup rather than an `Intl` call.
 
 #### Defined in
 
-[src/scheduling/time.ts:45](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L45)
+[src/scheduling/time.ts:45](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L45)
 
 ___
 
@@ -75,7 +75,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/time.ts:43](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L43)
+[src/scheduling/time.ts:43](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L43)
 
 ___
 
@@ -85,7 +85,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/time.ts:44](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L44)
+[src/scheduling/time.ts:44](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L44)
 
 ## Methods
 
@@ -110,7 +110,7 @@ callers that need to union several bands rather than total one.
 
 #### Defined in
 
-[src/scheduling/time.ts:186](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L186)
+[src/scheduling/time.ts:186](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L186)
 
 ___
 
@@ -132,7 +132,7 @@ ISO date `offset` days after the period start.
 
 #### Defined in
 
-[src/scheduling/time.ts:84](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L84)
+[src/scheduling/time.ts:84](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L84)
 
 ___
 
@@ -154,7 +154,7 @@ The ISO date a period minute falls on.
 
 #### Defined in
 
-[src/scheduling/time.ts:137](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L137)
+[src/scheduling/time.ts:137](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L137)
 
 ___
 
@@ -176,7 +176,7 @@ Day index of an ISO date relative to the period start; negative before it.
 
 #### Defined in
 
-[src/scheduling/time.ts:78](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L78)
+[src/scheduling/time.ts:78](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L78)
 
 ___
 
@@ -203,7 +203,7 @@ correct or off by one; the two guards settle it.
 
 #### Defined in
 
-[src/scheduling/time.ts:221](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L221)
+[src/scheduling/time.ts:221](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L221)
 
 ___
 
@@ -226,7 +226,7 @@ midnight on `dayIndex` — 1440 per day except across a DST transition.
 
 #### Defined in
 
-[src/scheduling/time.ts:124](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L124)
+[src/scheduling/time.ts:124](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L124)
 
 ___
 
@@ -248,7 +248,7 @@ Period minutes for an absolute UTC epoch instant.
 
 #### Defined in
 
-[src/scheduling/time.ts:159](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L159)
+[src/scheduling/time.ts:159](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L159)
 
 ___
 
@@ -277,7 +277,7 @@ both need "how much of this shift was inside that clock window", not
 
 #### Defined in
 
-[src/scheduling/time.ts:177](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L177)
+[src/scheduling/time.ts:177](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L177)
 
 ___
 
@@ -301,7 +301,7 @@ Resolve a local date-time or an ISO instant with an explicit UTC offset.
 
 #### Defined in
 
-[src/scheduling/time.ts:101](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L101)
+[src/scheduling/time.ts:101](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L101)
 
 ___
 
@@ -328,7 +328,7 @@ start would reintroduce exactly the DST error the clock exists to avoid.
 
 #### Defined in
 
-[src/scheduling/time.ts:154](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L154)
+[src/scheduling/time.ts:154](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L154)
 
 ___
 
@@ -350,7 +350,7 @@ ISO 8601 instant for a period minute, in UTC.
 
 #### Defined in
 
-[src/scheduling/time.ts:164](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L164)
+[src/scheduling/time.ts:164](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L164)
 
 ___
 
@@ -379,7 +379,7 @@ midnight, not 6.
 
 #### Defined in
 
-[src/scheduling/time.ts:96](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L96)
+[src/scheduling/time.ts:96](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L96)
 
 ___
 
@@ -401,4 +401,4 @@ ISO weekday of a period minute: 1 (Mon) .. 7 (Sun).
 
 #### Defined in
 
-[src/scheduling/time.ts:142](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/time.ts#L142)
+[src/scheduling/time.ts:142](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L142)

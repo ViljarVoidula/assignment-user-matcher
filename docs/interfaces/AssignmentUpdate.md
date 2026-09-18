@@ -32,7 +32,7 @@ clear them, which is why they are not simply optional.
 
 #### Defined in
 
-src/updates/assignment-update.ts:32
+[src/updates/assignment-update.ts:32](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/updates/assignment-update.ts#L32)
 
 ___
 
@@ -42,7 +42,7 @@ ___
 
 #### Defined in
 
-src/updates/assignment-update.ts:30
+[src/updates/assignment-update.ts:30](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/updates/assignment-update.ts#L30)
 
 ___
 
@@ -52,7 +52,7 @@ ___
 
 #### Defined in
 
-src/updates/assignment-update.ts:29
+[src/updates/assignment-update.ts:29](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/updates/assignment-update.ts#L29)
 
 ___
 
@@ -62,4 +62,4 @@ ___
 
 #### Defined in
 
-src/updates/assignment-update.ts:31
+[src/updates/assignment-update.ts:31](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/updates/assignment-update.ts#L31)

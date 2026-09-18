@@ -106,6 +106,23 @@ export interface EscalationPolicy {
      * @default 'allow'
      */
     onNoResponse?: 'block' | 'allow';
+    /**
+     * Milliseconds the non-responder is held out of matching for *this*
+     * assignment after letting the clock run out. Per-assignment override of
+     * the matcher-wide `offerCooldownMs`.
+     *
+     * The middle ground between the two pre-existing answers to "they did not
+     * reply": `'allow'` lets them win it back on the very next pass, and
+     * `'block'` bars them forever — which, when they are the only eligible
+     * worker, means the work is never assigned at all. A cooldown lets the
+     * offer rest, gives anybody else a clear run at it, and comes back to them
+     * afterwards.
+     *
+     * Ignored when `onNoResponse` is `'block'`: a block is the stronger
+     * statement and both together would be redundant.
+     * @default the matcher-wide `offerCooldownMs` (itself 0 — off)
+     */
+    offerCooldownMs?: number;
     /** Priority delta applied on each escalation so ignored work climbs the queue. */
     priorityBoost?: number;
     /**
@@ -595,6 +612,12 @@ export type MatchTraceReason =
     | { kind: 'assignmentVeto' }
     /** The user previously rejected this assignment */
     | { kind: 'rejectedPreviously' }
+    /**
+     * The user let this assignment's response deadline lapse and is resting
+     * before it can be offered to them again (`offerCooldownMs`). `until` is
+     * the epoch ms at which they become eligible for it once more.
+     */
+    | { kind: 'offerCooldown'; until: number }
     /** The user has routingWeights but no positive entries, so nothing is eligible */
     | { kind: 'noPositiveWeights' }
     /** A `skillThresholds` requirement was not met */
@@ -1037,6 +1060,22 @@ export type MatcherOptions = {
     maxUserBacklogSize?: number;
     enableDefaultMatching?: boolean;
     matchExpirationMs?: number;
+    /**
+     * Milliseconds a user who let a response deadline lapse is held out of
+     * matching for *that* assignment. Applies to every assignment without its
+     * own `escalation.offerCooldownMs`.
+     *
+     * Off by default (`0`), preserving the documented behaviour that an
+     * unanswered assignment returns to the open pool and the same user may win
+     * it straight back. Set it when a single eligible worker who never answers
+     * would otherwise be re-offered the same work on every pass.
+     *
+     * Never applies to operator overrides (`assignToUser`) or workflow-targeted
+     * grants, and is skipped entirely when the assignment's policy already says
+     * `onNoResponse: 'block'`.
+     * @default 0
+     */
+    offerCooldownMs?: number;
     /**
      * Opt-in idle user auto-rejection. When set, users that have pending
      * (not yet accepted/rejected) assignments and show no activity for this

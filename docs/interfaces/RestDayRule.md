@@ -31,7 +31,7 @@ Deadline for the substitute rest day Sunday or holiday work creates.
 
 #### Defined in
 
-[src/scheduling/types.ts:563](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L563)
+[src/scheduling/types.ts:563](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L563)
 
 ___
 
@@ -41,7 +41,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:566](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L566)
+[src/scheduling/types.ts:566](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L566)
 
 ___
 
@@ -60,7 +60,7 @@ Rolling form, e.g. Poland's one free Sunday per 4 weeks.
 
 #### Defined in
 
-[src/scheduling/types.ts:561](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L561)
+[src/scheduling/types.ts:561](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L561)
 
 ___
 
@@ -72,7 +72,7 @@ e.g. Germany's 15, the Netherlands' 13.
 
 #### Defined in
 
-[src/scheduling/types.ts:559](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L559)
+[src/scheduling/types.ts:559](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L559)
 
 ___
 
@@ -84,4 +84,4 @@ Bar Sunday or holiday work outright.
 
 #### Defined in
 
-[src/scheduling/types.ts:565](https://github.com/ViljarVoidula/assignment-user-matcher/blob/daf0017f81d9a71d344e7779c2b35c1bc27fb284/src/scheduling/types.ts#L565)
+[src/scheduling/types.ts:565](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L565)

@@ -19,6 +19,11 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         userAssignments: (userId: string) => `${prefix}user:${userId}:assignments`,
         userRejected: (userId: string) => `${prefix}user:${userId}:rejected`,
         userVetoed: (userId: string) => `${prefix}user:${userId}:vetoed`,
+        // Offers this user let lapse, resting before they can be made again:
+        // a zset of RAW assignment ids scored by the epoch ms the rest ends.
+        // Subtracted from candidate discovery exactly like the rejected set,
+        // but self-clearing — every pass prunes the elapsed entries first.
+        userOfferCooldown: (userId: string) => `${prefix}user:${userId}:offer-cooldown`,
         userWindowGrants: (userId: string) => `${prefix}user:${userId}:window-grants`,
         userActivity: () => `${prefix}users:activity`,
         pausedUsers: () => `${prefix}users:paused`,

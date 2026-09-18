@@ -31,6 +31,7 @@ import {
     escalateAssignment,
     escalationLevelOf,
     normalizeEscalationPolicy,
+    offerCooldownMs as offerCooldownMsFor,
     responseDeadlineFromJson,
     responseDeadlineMs,
 } from './escalation/policy';
@@ -298,6 +299,8 @@ export default class AssignmentMatcher implements WorkflowHost {
     maxUserBacklogSize: number;
     enableDefaultMatching: boolean;
     matchExpirationMs: number;
+    /** Default rest period after an unanswered offer; 0 = off (see MatcherOptions). */
+    offerCooldownMs: number;
     idleUserTimeoutMs: number | null;
     private completedAssignmentsRetentionMs: number | null;
     pendingAssignmentsKey: string;
@@ -375,6 +378,10 @@ export default class AssignmentMatcher implements WorkflowHost {
         this.assignmentsRefKey = this.keys.assignmentsRef();
         this.maxUserBacklogSize = options?.maxUserBacklogSize ?? 9;
         this.matchExpirationMs = options?.matchExpirationMs ?? 60000;
+        this.offerCooldownMs =
+            Number.isFinite(Number(options?.offerCooldownMs)) && Number(options?.offerCooldownMs) > 0
+                ? Number(options?.offerCooldownMs)
+                : 0;
         this.idleUserTimeoutMs = options?.idleUserTimeoutMs ?? null;
         const completedRetentionMs = options?.completedAssignmentsRetentionMs;
         this.completedAssignmentsRetentionMs =
@@ -1115,15 +1122,17 @@ export default class AssignmentMatcher implements WorkflowHost {
         ownerId: string | null,
         modelWeights?: Record<string, string>,
     ): Promise<MatchCandidateTrace> {
-        const [isRejected, backlog, isPaused] = await Promise.all([
+        const [isRejected, backlog, isPaused, cooldownUntil] = await Promise.all([
             this.redisClient.sIsMember(this.keys.userRejected(user.id), assignmentId),
             this.redisClient.sCard(this.keys.userAssignments(user.id)),
             this.redisClient.sIsMember(this.keys.pausedUsers(), user.id),
+            this.redisClient.zScore(this.keys.userOfferCooldown(user.id), assignmentId),
         ]);
         return this.evaluateCandidateForAssignment(user, assignment, tagsCsv, basePriority, modelWeights, {
             assignmentId,
             ownerId,
             isRejected: Boolean(isRejected),
+            cooldownUntil: cooldownUntil === null ? null : Number(cooldownUntil),
             backlog,
             isPaused: Boolean(isPaused),
         });
@@ -1143,6 +1152,8 @@ export default class AssignmentMatcher implements WorkflowHost {
             assignmentId?: string | null;
             ownerId?: string | null;
             isRejected?: boolean;
+            /** Epoch ms this user may be offered the assignment again, if resting. */
+            cooldownUntil?: number | null;
             backlog?: number;
             isPaused?: boolean;
         },
@@ -1162,6 +1173,11 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         if (isRejected) {
             reasons.push({ kind: 'rejectedPreviously' });
+            eligible = false;
+        }
+        const cooldownUntil = opts.cooldownUntil ?? null;
+        if (cooldownUntil !== null && cooldownUntil > Date.now()) {
+            reasons.push({ kind: 'offerCooldown', until: cooldownUntil });
             eligible = false;
         }
         if (isPaused) {
@@ -1458,11 +1474,15 @@ export default class AssignmentMatcher implements WorkflowHost {
 
             const evaluations = await Promise.all(
                 users.map(async (user) => {
-                    const isRejected = await this.redisClient.sIsMember(this.keys.userRejected(user.id), id);
+                    const [isRejected, cooldownUntil] = await Promise.all([
+                        this.redisClient.sIsMember(this.keys.userRejected(user.id), id),
+                        this.redisClient.zScore(this.keys.userOfferCooldown(user.id), id),
+                    ]);
                     return this.evaluateCandidateForAssignment(user, assignment, tagsCsv, basePriority, modelWeights, {
                         assignmentId: id,
                         ownerId: null,
                         isRejected: Boolean(isRejected),
+                        cooldownUntil: cooldownUntil === null ? null : Number(cooldownUntil),
                         backlog: backlogs.get(user.id) ?? 0,
                         isPaused: paused.has(user.id),
                     });
@@ -1558,14 +1578,24 @@ export default class AssignmentMatcher implements WorkflowHost {
         const paused = new Set<string>(await this.redisClient.sMembers(this.keys.pausedUsers()));
         return Promise.all(
             users.map(async (user) => {
-                const [rejected, vetoed] = await Promise.all([
+                const [rejected, vetoed, resting] = await Promise.all([
                     this.redisClient.sMembers(this.keys.userRejected(user.id)),
                     this.redisClient.sMembers(this.keys.userVetoed(user.id)),
+                    // Only the entries still in force: an elapsed rest is not a
+                    // reason anybody was struck out of this pass.
+                    this.redisClient.zRangeByScoreWithScores(
+                        this.keys.userOfferCooldown(user.id),
+                        Date.now(),
+                        '+inf',
+                    ),
                 ]);
                 return {
                     user,
                     rejected: new Set<string>(rejected),
                     vetoed: new Set<string>(vetoed),
+                    cooldown: new Map<string, number>(
+                        (resting as { value: string; score: number }[]).map((e) => [e.value, Number(e.score)]),
+                    ),
                     paused: paused.has(user.id),
                 };
             }),
@@ -2130,6 +2160,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             .del(this.keys.userAssignments(userId))
             .del(this.keys.userRejected(userId))
             .del(this.keys.userVetoed(userId))
+            .del(this.keys.userOfferCooldown(userId))
             .del(this.keys.userAcceptedAssignments(userId))
             .zRem(this.keys.userActivity(), userId)
             .sRem(this.keys.pausedUsers(), userId)
@@ -3244,7 +3275,16 @@ export default class AssignmentMatcher implements WorkflowHost {
         excludeKeys.push(rejectedKey);
         excludeKeys.push(this.keys.userVetoed(user.id));
 
-        // Final = candidates - exclude (zero weights + rejected + vetoed)
+        // Offers this user let lapse and has not finished resting from. Elapsed
+        // entries are dropped first, so the zset is its own expiry clock and
+        // the diff below needs no scores. One extra command in a pipeline that
+        // was already going to Redis — no additional round trip, and a key that
+        // never gets written costs a no-op prune.
+        const cooldownKey = this.keys.userOfferCooldown(user.id);
+        multi.zRemRangeByScore(cooldownKey, '-inf', Date.now());
+        excludeKeys.push(cooldownKey);
+
+        // Final = candidates - exclude (zero weights + rejected + vetoed + resting)
         multi.zDiffStore(tempFinalKey, [tempKey, ...excludeKeys]);
 
         // Set short TTLs to clean up
@@ -4146,6 +4186,12 @@ export default class AssignmentMatcher implements WorkflowHost {
             if (hasRejected) throw new Error(`User previously rejected this assignment: ${userId}`);
         }
 
+        // An operator override is a human decision about this one task, so a
+        // rest period is not a reason to refuse it — the claim below never
+        // reads the cooldown anyway. Clearing it stops a bar that is now moot
+        // from surviving into the next organic pass.
+        await this.redisClient.zRem(this.keys.userOfferCooldown(userId), assignmentId);
+
         if (acceptedJson) {
             await this.offerAcceptedToUser(assignmentId, acceptedJson, previousOwnerId, userId);
         } else if (queuedJson) {
@@ -4361,6 +4407,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         multi.hDel(this.assignmentOwnerKey, assignmentId);
         // The wait clock stops when a user takes the work
         multi.zRem(this.keys.assignmentsQueuedAt(), assignmentId);
+        // Taking the work settles any earlier unanswered offer of it.
+        multi.zRem(this.keys.userOfferCooldown(userId), assignmentId);
         // Acceptance ends the offer window: the notAfter clock dies here, so
         // no post-accept path ever needs to clear it. One indexOf keeps
         // schedule-less assignments free of any extra cost.
@@ -5009,6 +5057,21 @@ export default class AssignmentMatcher implements WorkflowHost {
                 // so the requeue cannot land back on the non-responder, and
                 // decision traces already explain it as `rejectedPreviously`.
                 if (decision?.blockPreviousOwner) multi.sAdd(this.keys.userRejected(owner), id);
+                else {
+                    // Not blocked, but not asked again immediately either: the
+                    // offer rests. Without this the requeue below lands back on
+                    // the same person on the very next pass, which for work
+                    // with a single eligible worker is an endless re-offer loop
+                    // — one decision trace, and one "offered" row in any host
+                    // UI, every deadline for as long as the task lives.
+                    const cooldownMs = offerCooldownMsFor(assignment, this.offerCooldownMs);
+                    if (cooldownMs > 0) {
+                        const cooldownKey = this.keys.userOfferCooldown(owner);
+                        multi.zAdd(cooldownKey, { score: now + cooldownMs, value: id });
+                        // Self-clearing: the key cannot outlive its last entry.
+                        multi.pExpire(cooldownKey, cooldownMs + 60_000);
+                    }
+                }
             }
             multi.hDel(this.pendingAssignmentsKey, id);
             multi.zRem(this.pendingAssignmentsExpiryKey, id);
