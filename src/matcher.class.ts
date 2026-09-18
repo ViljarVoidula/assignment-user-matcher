@@ -1582,10 +1582,12 @@ export default class AssignmentMatcher implements WorkflowHost {
                     this.redisClient.sMembers(this.keys.userRejected(user.id)),
                     this.redisClient.sMembers(this.keys.userVetoed(user.id)),
                     // Only the entries still in force: an elapsed rest is not a
-                    // reason anybody was struck out of this pass.
+                    // reason anybody was struck out of this pass. Exclusive at
+                    // `now`, the mirror of the prune in discovery, which drops
+                    // everything up to and including it.
                     this.redisClient.zRangeByScoreWithScores(
                         this.keys.userOfferCooldown(user.id),
-                        Date.now(),
+                        `(${Date.now()}`,
                         '+inf',
                     ),
                 ]);
@@ -5057,19 +5059,29 @@ export default class AssignmentMatcher implements WorkflowHost {
                 // so the requeue cannot land back on the non-responder, and
                 // decision traces already explain it as `rejectedPreviously`.
                 if (decision?.blockPreviousOwner) multi.sAdd(this.keys.userRejected(owner), id);
-                else {
+                else if (assignment) {
                     // Not blocked, but not asked again immediately either: the
                     // offer rests. Without this the requeue below lands back on
                     // the same person on the very next pass, which for work
                     // with a single eligible worker is an endless re-offer loop
                     // — one decision trace, and one "offered" row in any host
                     // UI, every deadline for as long as the task lives.
+                    //
+                    // Guarded on `assignment`: a null here means the record was
+                    // removed or accepted between the index read and ours, and
+                    // there is nothing left to rest from.
                     const cooldownMs = offerCooldownMsFor(assignment, this.offerCooldownMs);
                     if (cooldownMs > 0) {
                         const cooldownKey = this.keys.userOfferCooldown(owner);
+                        // Elapsed entries go first so the set never grows past
+                        // what is still in force. No key TTL, deliberately: a
+                        // per-key expiry set from *this* cooldown would cut short
+                        // any longer one the same user is already serving, and
+                        // per-entry expiry is exactly what the score is. An
+                        // empty zset deletes itself, and removeUser drops the
+                        // key — the same lifetime the rejected set has.
+                        multi.zRemRangeByScore(cooldownKey, '-inf', now);
                         multi.zAdd(cooldownKey, { score: now + cooldownMs, value: id });
-                        // Self-clearing: the key cannot outlive its last entry.
-                        multi.pExpire(cooldownKey, cooldownMs + 60_000);
                     }
                 }
             }

@@ -21,8 +21,11 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         userVetoed: (userId: string) => `${prefix}user:${userId}:vetoed`,
         // Offers this user let lapse, resting before they can be made again:
         // a zset of RAW assignment ids scored by the epoch ms the rest ends.
-        // Subtracted from candidate discovery exactly like the rejected set,
-        // but self-clearing — every pass prunes the elapsed entries first.
+        // Subtracted from candidate discovery exactly like the rejected set.
+        // Elapsed entries are pruned on every write and every read, an empty
+        // zset deletes itself, and removeUser drops the key; there is no key
+        // TTL, because one set from a short cooldown would cut a longer one
+        // short. Lifetime is therefore the rejected set's, not a timer's.
         userOfferCooldown: (userId: string) => `${prefix}user:${userId}:offer-cooldown`,
         userWindowGrants: (userId: string) => `${prefix}user:${userId}:window-grants`,
         userActivity: () => `${prefix}users:activity`,
