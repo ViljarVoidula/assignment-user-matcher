@@ -54,13 +54,45 @@ calendar; if nobody is free, it goes to the whole pool."*; the agenda shows
 The whole booking API was also driven against the dev server (create → candidates → book →
 clash 409 → calendar → per-worker filter → release 204 → 404).
 
-## Sub-project 3 — the worker's calendar — PARTLY DONE
+## Sub-project 3 — the worker's calendar — PORTAL + GOOGLE DONE, ICS NOT
 
 | Surface | State |
 |---|---|
 | **Portal view** | **DONE** — `packages/portal-templates/src/core/MyBookings.tsx`, commit `7019f74`, 8 tests, Estonian done (the portal's i18n gate is hard). `GET /portal/me/bookings` + `POST /portal/me/bookings/:taskId/hand-back`. |
 | **ICS feed** | **NOT DONE.** Needs a revocable per-worker secret, which means a column on `worker_identities` and a migration. Deriving the token by HMAC would avoid the migration but leaves no way to revoke one worker's URL, and a feed URL is a bearer capability — so the migration is the right answer, not a shortcut. |
-| **Google Calendar write** | **NOT DONE.** Today's Google integration is inbound and read-only (free/busy). Writing needs the wider `calendar.events` scope, per-event state to reconcile on change and cancel, and a re-consent for every already-connected worker. |
+| **Google Calendar write** | **DONE** — `projectBookings` in `apps/api/src/google-calendar.ts`, platform commit `ea7e636`, 12 + 5 tests. |
+
+### Google Calendar write — what it actually took
+
+**No re-consent, contrary to the first reading of it.** The integration was never
+inbound-only: it already holds `calendar.app.created`, which *is* a write scope, and already
+projects shifts and approved leave into a 5xer calendar it created. Appointments go into that
+same calendar under the same grant, so every already-connected worker gets them with nothing
+to re-authorize. The only reason it looked read-only from the outside is that the portal's
+own calendar routes are about free/busy import.
+
+`projectBookings` is `projectTimeOff`'s shape: a desired set keyed by task, a patch where the
+managed hash moved, an insert otherwise, a tombstone for whatever is no longer booked, with
+the 409 (our own event, no link row — a crash between insert and save) and 412 (somebody
+edited it under us) paths both handled. Timed rather than all-day, written as absolute
+instants with **no `timeZone` beside them**, so nothing can shift the hour — the class of bug
+the roster's own UTC default produced.
+
+One-way by design. A shift accepts a worker's edit and routes it for approval because a roster
+is negotiable; an appointment with a customer at the other end is not, and the event says so.
+Refusing one is a hand-back in the portal.
+
+**A hazard this would otherwise have introduced:** standalone event links (`rosterId IS NULL`)
+are shared by everything that is not a shift, and each projection reconciles by *deleting every
+link it does not want*. Leave and bookings would have erased each other on every pass — which
+from outside looks like Google losing events at random. The key prefix (`timeoff:` /
+`booking:`) is now the partition and both projections filter on it before reading.
+
+**The seam, which is the part that fails silently:** the sweep that books runs in the matching
+worker, and the projection is drained by the API. A booking change therefore queues a pass
+through the lifecycle hook's `onWorkerCalendarChanged` → `CalendarStore.enqueueWorkerBookingsChanged`,
+wired in *both* processes. The projection can be perfect and the events still never appear if
+that callback is dropped, and nothing else fails loudly when it is — hence its own test file.
 
 A live portal does not pick up a new bundle on its own — **each workspace must republish its
 portal** before workers see the Booked jobs section.
