@@ -97,6 +97,18 @@ that callback is dropped, and nothing else fails loudly when it is — hence its
 A live portal does not pick up a new bundle on its own — **each workspace must republish its
 portal** before workers see the Booked jobs section.
 
+## Review pass (same day) — seven defects, all with tests
+
+| # | Where | What was wrong |
+|---|---|---|
+| 1 | engine `processSlotBookings` | Loaded availability once **per slot** and again **per candidate** — up to slots×workers host calls in one sweep, against the once-per-pass rule. Now one `loadUsers` + one `loadBookingPass` over the union window; `reserveSlot` books from it. |
+| 2 | API `activationOf`, console `whenOf` | Ordered an appointment by `max(startAt, notBefore ?? notAfter)`; `notAfter` is a deadline, so a slotted task with only a deadline sorted by it. |
+| 3 | API `validateSlot` | Accepted `schedule.notAfter < slot.startAt` — the sweep then parks it as missed before it can ever activate. Refused. |
+| 4 | API `DELETE …/booking`, portal hand-back | Allowed on a *live* appointment, freeing the hour while the worker still held the pending/accepted work. Both 409 `booking_live`. |
+| 5 | API `POST …/booking` | Every engine error became a 400 `not_bookable`; a leave-service outage read as the planner's mistake. Only the engine's own refusals are the caller's now. |
+| 6 | `book-slot.lua` | Concatenated `tonumber`'d epoch-ms back into strings; Lua 5.1 formats with `%.14g` and epoch ms are 13 digits — one digit of margin. Raw `ARGV` strings pass through now. |
+| 7 | `makeSlotAvailability` | A shift on a *neighbouring* day (the read reaches ±1 day so night shifts count) made a slot read as "outside their rostered shift". Now judged by whether a shift touches the slot's day in the workspace zone. |
+
 ## Things worth remembering
 
 **Two real defects, both found by reaching for the seam rather than the unit:**

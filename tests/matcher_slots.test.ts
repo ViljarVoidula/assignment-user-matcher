@@ -298,6 +298,42 @@ describe('Timeslots and advance booking', function () {
             expect(clash.booked === false && clash.refusal.reason).to.equal('clash');
         });
 
+        it('asks the host once per sweep, however many slots are due', async function () {
+            // Fifty due slots and twenty workers must not be a thousand calls
+            // into the leave service. One read over the union of every due
+            // slot, shared by every ranking and every reservation in the pass.
+            await matcher.addUser({ id: 'u1', tags: ['gas-safe'] });
+            await matcher.addUser({ id: 'u2', tags: ['gas-safe'] });
+            await matcher.addUser({ id: 'u3', tags: ['gas-safe'] });
+            await matcher.addAssignment(visit('a1', THURSDAY_14));
+            await matcher.addAssignment(visit('a2', THURSDAY_14 + 3 * HOUR));
+            await matcher.addAssignment(visit('a3', THURSDAY_14 + DAY));
+            availabilityCalls = [];
+
+            expect(await matcher.processSlotBookings()).to.deep.equal({ booked: 3, unfillable: 0 });
+            expect(availabilityCalls).to.have.length(1);
+            // The one read spans the earliest start to the latest end.
+            expect(availabilityCalls[0].from).to.equal(THURSDAY_14);
+            expect(availabilityCalls[0].to).to.equal(THURSDAY_14 + DAY + 90 * MINUTE);
+        });
+
+        it('applies the pass-wide absence to every slot in it', async function () {
+            // The one read has to be as good as a per-slot read would have been:
+            // an absence covering the second slot must still refuse it.
+            await matcher.addUser({ id: 'u1', tags: ['gas-safe'] });
+            await matcher.addAssignment(visit('a1', THURSDAY_14));
+            await matcher.addAssignment(visit('a2', THURSDAY_14 + DAY));
+            availability = [
+                {
+                    userId: 'u1',
+                    blocked: [{ from: THURSDAY_14 + DAY - HOUR, to: THURSDAY_14 + DAY + 4 * HOUR, reason: 'Leave' }],
+                },
+            ];
+            expect(await matcher.processSlotBookings()).to.deep.equal({ booked: 1, unfillable: 1 });
+            expect((await matcher.getSlotBooking('a1'))?.userId).to.equal('u1');
+            expect(await matcher.getSlotBooking('a2')).to.equal(null);
+        });
+
         it('asks the host once per pass, not once per candidate', async function () {
             await matcher.addUser({ id: 'u1', tags: ['gas-safe'] });
             await matcher.addUser({ id: 'u2', tags: ['gas-safe'] });

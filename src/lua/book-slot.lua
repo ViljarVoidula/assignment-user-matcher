@@ -48,11 +48,16 @@ end
 -- begin before this slot ends, and no earlier than the lookback bound. The
 -- upper bound is exclusive, so a booking starting exactly at end_at -- the
 -- back-to-back case -- is never even considered.
+-- Bounds go to Redis as strings. Concatenating a Lua number would format it
+-- with %.14g, and an epoch in milliseconds is 13 digits: correct today by one
+-- digit of margin, which is not a margin. The exclusive upper bound is the
+-- caller's own string; the lower bound is the one value that has to be
+-- computed, so it is printed without an exponent.
 local lower = start_at - lookback
 if lower < 0 then
     lower = 0
 end
-local candidates = redis.call('ZRANGEBYSCORE', user_key, lower, '(' .. end_at)
+local candidates = redis.call('ZRANGEBYSCORE', user_key, string.format('%.0f', lower), '(' .. ARGV[3])
 
 for i = 1, #candidates do
     local candidate = candidates[i]
@@ -73,7 +78,7 @@ for i = 1, #candidates do
 end
 
 redis.call('HSET', bookings_key, assignment_id, record)
-redis.call('HSET', spans_key, assignment_id, tostring(start_at) .. ':' .. tostring(end_at))
-redis.call('ZADD', user_key, start_at, assignment_id)
+redis.call('HSET', spans_key, assignment_id, ARGV[2] .. ':' .. ARGV[3])
+redis.call('ZADD', user_key, ARGV[2], assignment_id)
 
 return {'booked'}

@@ -5699,11 +5699,29 @@ export default class AssignmentMatcher implements WorkflowHost {
         if (!held) throw new Error(`Assignment is not a slotted assignment awaiting its slot: ${assignmentId}`);
 
         const { slot } = held;
+        const availability = (await this.loadSlotAvailability([userId], slot.startAt, slotEndsAt(slot))).get(userId);
+        return this.reserveSlot(assignmentId, userId, slot, availability, options);
+    }
+
+    /**
+     * The reservation itself, given availability already in hand.
+     *
+     * Split from `bookSlot` so the sweep can book from the one availability
+     * read it made for the whole pass, rather than asking the host again per
+     * candidate — the per-candidate round trip every other sweep in this
+     * class is careful not to make.
+     */
+    private async reserveSlot(
+        assignmentId: string,
+        userId: string,
+        slot: NormalizedSlot,
+        availability: SlotAvailability | undefined,
+        options?: { force?: boolean; source?: 'sweep' | 'manual' },
+    ): Promise<{ booked: true; booking: SlotBooking } | { booked: false; refusal: SlotBookingRefusal }> {
         const startAt = slot.startAt;
         const endAt = slotEndsAt(slot);
         const source = options?.source ?? 'manual';
 
-        const availability = (await this.loadSlotAvailability([userId], startAt, endAt)).get(userId);
         const blocking = AssignmentMatcher.coversSlot(availability?.blocked, startAt, endAt);
         if (!options?.force && blocking.length > 0) {
             return { booked: false, refusal: { reason: 'unavailable', detail: blocking[0].reason } };
@@ -5940,21 +5958,51 @@ export default class AssignmentMatcher implements WorkflowHost {
         const held = await this.loadSlottedAssignment(assignmentId);
         if (!held) throw new Error(`Assignment is not a slotted assignment awaiting its slot: ${assignmentId}`);
         const { assignment, slot } = held;
+
+        const users = await this.loadUsers();
+        if (users.length === 0) return [];
+        const pass = await this.loadBookingPass(users, slot.startAt, slotEndsAt(slot));
+        return this.rankForSlot(assignment, slot, users, pass);
+    }
+
+    /** Every user, parsed once. */
+    private async loadUsers(): Promise<User[]> {
+        const all = await this.redisClient.hGetAll(this.usersKey);
+        return Object.values(all).map((json) => JSON.parse(json as string));
+    }
+
+    /**
+     * What one booking pass reads once and every slot in it shares: the
+     * host's availability over the whole window, and the learning model.
+     */
+    private async loadBookingPass(
+        users: User[],
+        from: number,
+        to: number,
+    ): Promise<{ availability: Map<string, SlotAvailability>; modelWeights: Record<string, string> | undefined }> {
+        const [availability, modelWeights] = await Promise.all([
+            this.loadSlotAvailability(
+                users.map((user) => user.id),
+                from,
+                to,
+            ),
+            this.enableLearning ? this.learning.getModel() : Promise.resolve(undefined),
+        ]);
+        return { availability, modelWeights };
+    }
+
+    private async rankForSlot(
+        assignment: Assignment,
+        slot: NormalizedSlot,
+        users: User[],
+        pass: { availability: Map<string, SlotAvailability>; modelWeights: Record<string, string> | undefined },
+    ): Promise<SlotCandidate[]> {
+        const assignmentId = assignment.id;
         const startAt = slot.startAt;
         const endAt = slotEndsAt(slot);
-
-        const all = await this.redisClient.hGetAll(this.usersKey);
-        const users: User[] = Object.values(all).map((json) => JSON.parse(json as string));
-        if (users.length === 0) return [];
-
+        const { availability, modelWeights } = pass;
         const tagsCsv = assignment.tags.join(',');
         const basePriority = assignment.priority ?? 0;
-        const modelWeights = this.enableLearning ? await this.learning.getModel() : undefined;
-        const availability = await this.loadSlotAvailability(
-            users.map((user) => user.id),
-            startAt,
-            endAt,
-        );
 
         const rejected = await Promise.all(
             users.map((user) => this.redisClient.sIsMember(this.keys.userRejected(user.id), assignmentId)),
@@ -6044,30 +6092,54 @@ export default class AssignmentMatcher implements WorkflowHost {
         let unfillable = 0;
 
         const dueIds = await this.redisClient.zRangeByScore(this.slotBookingDueAtKey, '-inf', now);
+        if (dueIds.length === 0) return { booked, unfillable };
+
+        // Claim first, then read once for the whole pass: the host is asked
+        // for availability one time over the union of every due slot, not once
+        // per slot and again per candidate. Claims that turn out to be stale
+        // (activated, removed, already booked) are simply dropped.
+        const due: { id: string; assignment: Assignment; slot: NormalizedSlot }[] = [];
         for (const id of dueIds) {
             const claimed = await this.redisClient.zRem(this.slotBookingDueAtKey, id);
             if (!claimed) continue;
-
             const held = await this.loadSlottedAssignment(id);
-            // Activated, removed or force-assigned since the range read; the
-            // claim above was the whole cleanup.
             if (!held) continue;
             if (await this.redisClient.hExists(this.slotBookingsKey, id)) continue;
+            due.push({ id, ...held });
+        }
+        if (due.length === 0) return { booked, unfillable };
 
-            let candidates: SlotCandidate[];
-            try {
-                candidates = await this.rankSlotCandidates(id);
-            } catch (err) {
-                // Without restoring the index entry a failed pass strands the
-                // slot unbooked forever — nothing else re-examines it.
-                await this.redisClient.zAdd(this.slotBookingDueAtKey, { score: now, value: id });
-                throw err;
+        const restore = async () => {
+            // Without restoring the index entries a failed pass strands every
+            // slot in it unbooked forever — nothing else re-examines them.
+            for (const entry of due) {
+                await this.redisClient.zAdd(this.slotBookingDueAtKey, { score: now, value: entry.id });
             }
+        };
+
+        let users: User[];
+        let pass: { availability: Map<string, SlotAvailability>; modelWeights: Record<string, string> | undefined };
+        try {
+            users = await this.loadUsers();
+            pass = await this.loadBookingPass(
+                users,
+                Math.min(...due.map((entry) => entry.slot.startAt)),
+                Math.max(...due.map((entry) => slotEndsAt(entry.slot))),
+            );
+        } catch (err) {
+            await restore();
+            throw err;
+        }
+
+        for (const { id, assignment, slot } of due) {
+            const candidates = users.length === 0 ? [] : await this.rankForSlot(assignment, slot, users, pass);
 
             let placed = false;
             for (const candidate of candidates) {
                 if (!candidate.bookable) break;
-                const result = await this.bookSlot(id, candidate.userId, { source: 'sweep' });
+                const result = await this.reserveSlot(id, candidate.userId, slot, pass.availability.get(candidate.userId), {
+                    source: 'sweep',
+                });
                 if (result.booked) {
                     booked++;
                     placed = true;
@@ -6090,8 +6162,8 @@ export default class AssignmentMatcher implements WorkflowHost {
                 this.emitAssignmentLifecycle({
                     kind: 'slotUnfillable',
                     taskId: id,
-                    startAt: held.slot.startAt,
-                    endAt: slotEndsAt(held.slot),
+                    startAt: slot.startAt,
+                    endAt: slotEndsAt(slot),
                     at: now,
                 });
             }
