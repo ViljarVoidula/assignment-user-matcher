@@ -85,6 +85,29 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         // sla.expireAfterMs and schedule.notAfter.
         scheduleNotAfter: () => `${prefix}assignments:schedule:notAfter`,
 
+        // Slot / booking keys
+        // Who is reserved for each slotted assignment: hash id -> JSON
+        // SlotBooking. Its presence is the claim gate (see book-slot.lua), so
+        // this is the single index answering "is this booked, and by whom".
+        // The row is written when the reservation is made and cleared only on
+        // hand-back or a terminal transition -- NOT at activation: "this
+        // person's 14:00 is spoken for" stays true while they are doing the
+        // work, and keeping it means the overlap rule protects in-flight
+        // appointments too.
+        slotBookings: () => `${prefix}assignments:bookings`,
+        // Span index backing the overlap probe: id -> "<startAt>:<endAt>".
+        // Separate from the record above because the probe reads it for every
+        // candidate in the window and must not pay for a JSON decode each time.
+        bookingSpans: () => `${prefix}assignments:bookings:spans`,
+        // One worker's calendar: zset of assignment ids scored by slot start.
+        // Backs both the overlap probe (a bounded range read) and the
+        // worker-facing calendar query.
+        userBookings: (userId: string) => `${prefix}user:${userId}:bookings`,
+        // Booking sweep index: slotted assignment id scored by the epoch ms at
+        // which it may be booked (slot.startAt - bookAheadMs). One-shot zRem
+        // claims, like scheduledActivateAt.
+        slotBookingDueAt: () => `${prefix}assignments:bookings:dueAt`,
+
         // Recurrence keys
         // Standing recurring templates: raw JSON records ({template, nextAt,
         // occurrences}). Never matchable themselves — the recurrence sweep

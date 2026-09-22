@@ -586,6 +586,56 @@ Lifecycle events: `scheduleActivated` (`{ taskId, at }`) and `scheduleMissed` (`
 
 **Learning integration.** Misses feed the contextual bandit as `expire` outcomes — a pending-state miss penalizes the user who sat on the offer, so automatic routing-weight vetoes pick up chronic missers with no extra configuration.
 
+### Timeslots and advance booking (`Assignment.slot`)
+
+`SchedulePolicy` says when an assignment may be **offered**; a `TimeSlot` says when the work is **performed** and for how long — a fixed appointment, the thing a calendar entry is made of. They are different clocks and deliberately different objects. A task can carry either, both, or neither.
+
+```ts
+await matcher.addAssignment({
+    id: 'boiler-service-42',
+    tags: ['gas-safe', 'region:north'],
+    slot: {
+        startAt: Date.parse('2026-10-08T14:00:00Z'), // Thursday 14:00
+        durationMs: 90 * 60_000, // for an hour and a half
+        bookAheadMs: 14 * 24 * 3600_000, // reserve an engineer a fortnight out (default: a week)
+        onUnbooked: 'queue', // or 'park' / 'drop' if nobody was booked in time
+    },
+});
+
+matcher.startMaintenance(); // the booking sweep runs on the maintenance tick
+```
+
+Three moments, not one:
+
+```
+startAt − bookAheadMs      the sweep may reserve a worker
+        ↓
+   reservation             on their calendar; blocks the hour; no backlog place, no clocks
+        ↓
+     startAt               activation: a pending offer to whoever holds the booking
+```
+
+| Field         | Meaning                                                                                    | Default   |
+| ------------- | ------------------------------------------------------------------------------------------ | --------- |
+| `startAt`     | Epoch ms the work is performed. Holds the assignment out of matching until then.           | required  |
+| `durationMs`  | How long it takes. Must be `> 0` and at most `maxSlotSpanMs`.                              | required  |
+| `bookAheadMs` | How far ahead of `startAt` the sweep may book.                                             | 7 days    |
+| `onUnbooked`  | `'queue'` (open pool, staffed late) / `'park'` / `'drop'` when `startAt` arrives unbooked. | `'queue'` |
+
+Semantics worth knowing:
+
+- **A reservation is not live work.** Until `startAt` a booked task occupies no backlog place and starts no clock — `accepted` keeps meaning "I am working on this". A week of booked appointments cannot fill somebody's backlog cap, and an SLA completion deadline never runs against work that has not started. The booking sweep therefore ignores today's backlog and pause state when ranking people for next Thursday.
+- **Two appointments never overlap.** The clash check and the write are one Lua script (`book-slot.lua`); two sweeps cannot both book one person's 14:00. Intervals are half-open, so back-to-back appointments stand. `maxSlotSpanMs` (default 24h) bounds how far back the probe reaches, which is why a longer slot is refused at `addAssignment`.
+- **The sweep books; the planner reviews.** `processSlotBookings()` reserves the best eligible worker — ranked by the same evaluator `explainMatch` uses, so routing weights, wildcards, vetoes, thresholds, CIDR and geo all apply — once the book-ahead window opens. A slot nobody can take emits `slotUnfillable` and is re-examined every `slotBookingRetryMs` (default 15 min). It never feeds or consumes the learning layer: nobody was offered anything and nobody chose.
+- **Availability is your input, not the library's guess.** Give `slotAvailability(userIds, from, to)` and return per-worker `blocked` intervals (approved leave — refuses the booking) and `warnings` (outside a rostered shift, a busy personal calendar — allows it and records the reason on the booking). It is called once per pass for the whole candidate set, never per candidate. Without it, the only rule is the overlap rule.
+- **Activation goes to the holder.** At `startAt` the task lands as a **pending** offer on the booked worker, through the same `assignToUser(…, { force: true })` path an operator uses — never as an acceptance, because they have not said yes yet. The booking row survives activation and is cleared only on hand-back, removal, completion or failure, so the overlap rule protects in-flight work too.
+- **Handing back is not declining.** `handBackBooking(id, userId, reason)` releases the reservation and adds the worker to the assignment's rejected set, so the next sweep books somebody else rather than the same person again.
+- **An explicit offer window can delay an appointment, never bring it forward.** With both `slot` and `schedule.notBefore`, activation is the later of the two.
+
+Public surface: `bookSlot(id, userId, { force?, source? })` (the planner's manual booking through the same gate; `force` skips `blocked`, never the overlap rule), `releaseSlotBooking(id)`, `handBackBooking(id, userId, reason?)`, `getSlotBooking(id)`, `getBookings({ from, to, userId? })` (the calendar read, half-open on both sides), `rankSlotCandidates(id)` (best first, each with `bookable` and why not), and `processSlotBookings()` (also run by `runMaintenanceOnce`, before the scheduled sweep, so a slot booked in a pass activates onto its holder in the same pass). `MaintenanceReport` gains `slotsBooked` / `slotsUnfillable`; `MaintenanceOptions.slotBookings` switches the sweep off.
+
+Lifecycle events: `slotBooked` (`{ workerId, startAt, endAt, source, warnings? }`), `slotBookingReleased` (`{ workerId, reason: 'hand-back' | 'operator' | 'terminal', detail? }`) and `slotUnfillable` (`{ startAt, endAt }`).
+
 ### Recurring assignments (`addRecurringAssignment`)
 
 A recurring assignment is a **standing template**, never itself matchable: the recurrence sweep cuts each occurrence from it as an ordinary assignment whose `schedule` is derived from the policy (`notBefore` = the slot's open time, `notAfter` = open + `windowMs`). Everything else the template carries — tags, priority, SLA, escalation, vetoes, geo — is inherited by every occurrence.

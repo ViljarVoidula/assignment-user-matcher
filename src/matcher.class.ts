@@ -50,6 +50,7 @@ import {
     type NormalizedSlaPolicy,
 } from './sla/policy';
 import { isHeld, normalizeSchedulePolicy, type NormalizedSchedulePolicy } from './schedule/policy';
+import { bookingOpensAt, normalizeSlot, slotEndsAt, slotFromJson, type NormalizedSlot } from './schedule/slot';
 import {
     dueSlots,
     materializeOccurrence,
@@ -130,6 +131,12 @@ import type {
     ScheduleSweepResult,
     MaintenanceOptions,
     MaintenanceReport,
+    TimeSlot,
+    SlotAvailability,
+    SlotBooking,
+    SlotBookingRefusal,
+    SlotCandidate,
+    BookingSweepResult,
     SlaPolicy,
     SlaStats,
     SchedulePolicy,
@@ -186,6 +193,12 @@ export type {
     ScheduleSweepResult,
     MaintenanceOptions,
     MaintenanceReport,
+    TimeSlot,
+    SlotAvailability,
+    SlotBooking,
+    SlotBookingRefusal,
+    SlotCandidate,
+    BookingSweepResult,
     SlaPolicy,
     SlaStats,
     SchedulePolicy,
@@ -276,6 +289,20 @@ function loadLuaScript(filename: string): string {
 // Lua script for atomic workflow transitions
 const WORKFLOW_TRANSITION_LUA = loadLuaScript('workflow-transition.lua');
 
+// Lua script for the atomic slot reservation: the clash probe and the write
+// are one decision, or two sweeps both book somebody's 14:00.
+const BOOK_SLOT_LUA = loadLuaScript('book-slot.lua');
+
+/**
+ * The longest appointment allowed by default, and therefore how far back the
+ * overlap probe reaches. A booking that started more than this before the one
+ * being placed cannot still be running.
+ */
+const DEFAULT_MAX_SLOT_SPAN_MS = 24 * 60 * 60 * 1000;
+
+/** How long the booking sweep waits before re-examining a slot it could not fill. */
+const DEFAULT_SLOT_BOOKING_RETRY_MS = 15 * 60 * 1000;
+
 // Retention purges are capped per maintenance pass so enabling retention on a
 // deployment with a large historical completed store drains it across ticks
 // instead of one deletion storm.
@@ -313,6 +340,9 @@ export default class AssignmentMatcher implements WorkflowHost {
     private scheduledAssignmentsKey: string;
     private scheduledActivateAtKey: string;
     private scheduleNotAfterKey: string;
+    private slotBookingsKey: string;
+    private bookingSpansKey: string;
+    private slotBookingDueAtKey: string;
     private recurringAssignmentsKey: string;
     private recurringDueAtKey: string;
     private completedAssignmentsAtKey: string;
@@ -329,6 +359,10 @@ export default class AssignmentMatcher implements WorkflowHost {
     private reliability: ReliabilityManager;
     private telemetry: TelemetryManager;
     private luaScriptSha: string | null = null;
+    private bookSlotSha: string | null = null;
+    private slotAvailability: ((userIds: string[], from: number, to: number) => Promise<SlotAvailability[]>) | null = null;
+    private maxSlotSpanMs: number;
+    private slotBookingRetryMs: number;
     private usingDefaultMatchScore: boolean;
     private readonly readyPromise: Promise<this>;
 
@@ -383,6 +417,9 @@ export default class AssignmentMatcher implements WorkflowHost {
                 ? Number(options?.offerCooldownMs)
                 : 0;
         this.idleUserTimeoutMs = options?.idleUserTimeoutMs ?? null;
+        this.slotAvailability = options?.slotAvailability ?? null;
+        this.maxSlotSpanMs = options?.maxSlotSpanMs ?? DEFAULT_MAX_SLOT_SPAN_MS;
+        this.slotBookingRetryMs = options?.slotBookingRetryMs ?? DEFAULT_SLOT_BOOKING_RETRY_MS;
         const completedRetentionMs = options?.completedAssignmentsRetentionMs;
         this.completedAssignmentsRetentionMs =
             completedRetentionMs !== undefined && Number.isFinite(completedRetentionMs) && completedRetentionMs > 0
@@ -398,6 +435,9 @@ export default class AssignmentMatcher implements WorkflowHost {
         this.scheduledAssignmentsKey = this.keys.scheduledAssignments();
         this.scheduledActivateAtKey = this.keys.scheduledActivateAt();
         this.scheduleNotAfterKey = this.keys.scheduleNotAfter();
+        this.slotBookingsKey = this.keys.slotBookings();
+        this.bookingSpansKey = this.keys.bookingSpans();
+        this.slotBookingDueAtKey = this.keys.slotBookingDueAt();
         this.recurringAssignmentsKey = this.keys.recurringAssignments();
         this.recurringDueAtKey = this.keys.recurringDueAt();
         this.completedAssignmentsKey = this.keys.completedAssignments();
@@ -657,6 +697,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             // The source rides along so a NOSCRIPT after a Redis restart can
             // be answered with a re-load instead of bricking every transition.
             this.workflow.setLuaScriptSha(this.luaScriptSha, WORKFLOW_TRANSITION_LUA);
+            this.bookSlotSha = await this.redisClient.scriptLoad(BOOK_SLOT_LUA);
         } catch (err) {
             console.error('Failed to load Lua scripts:', err);
             // Fallback to non-atomic mode
@@ -1980,13 +2021,43 @@ export default class AssignmentMatcher implements WorkflowHost {
         // The wait clock and SLA freshness TTL therefore anchor at
         // activation, not creation.
         const schedulePolicy = normalizeSchedulePolicy(assignment.schedule);
-        if (schedulePolicy && isHeld(schedulePolicy, Date.now())) {
+        const slot = normalizeSlot(assignment.slot);
+        if (slot && slot.durationMs > this.maxSlotSpanMs) {
+            // The overlap probe only reaches back `maxSlotSpanMs`; a longer
+            // appointment would silently slip past it, so it is refused here
+            // rather than booked and then double-booked.
+            throw new Error(
+                `Assignment slot is longer than maxSlotSpanMs (${slot.durationMs} > ${this.maxSlotSpanMs}): ${assignment.id}`,
+            );
+        }
+
+        const now = Date.now();
+        // A slot is a hold in its own right: the work happens at `startAt`, so
+        // it has no business in the queue before then. When the assignment
+        // also declares an offer window, the later of the two wins — an
+        // explicit `notBefore` can delay an appointment, never bring it
+        // forward.
+        const scheduleHold = schedulePolicy && isHeld(schedulePolicy, now) ? schedulePolicy.notBefore! : null;
+        const slotHold = slot && slot.startAt > now ? slot.startAt : null;
+        const activateAt = scheduleHold !== null || slotHold !== null ? Math.max(scheduleHold ?? 0, slotHold ?? 0) : null;
+
+        if (activateAt !== null) {
             const multi = this.redisClient
                 .multi()
                 .hSet(this.scheduledAssignmentsKey, assignment.id, JSON.stringify(assignment))
-                .zAdd(this.scheduledActivateAtKey, { score: schedulePolicy.notBefore!, value: assignment.id });
-            if (schedulePolicy.notAfter !== undefined) {
+                .zAdd(this.scheduledActivateAtKey, { score: activateAt, value: assignment.id });
+            if (schedulePolicy?.notAfter !== undefined) {
                 multi.zAdd(this.scheduleNotAfterKey, { score: schedulePolicy.notAfter, value: assignment.id });
+            }
+            if (slot) {
+                // The sweep may reserve somebody from here on. Clamped to
+                // `now` so a slot created inside its own book-ahead window is
+                // picked up by the very next pass instead of waiting for a
+                // moment that is already behind us.
+                multi.zAdd(this.slotBookingDueAtKey, {
+                    score: Math.max(now, bookingOpensAt(slot)),
+                    value: assignment.id,
+                });
             }
             await multi.exec();
             return assignment;
@@ -2036,18 +2107,19 @@ export default class AssignmentMatcher implements WorkflowHost {
             multi.zAdd(this.assignmentsSlaExpiryKey, { score: slaExpiry, value: id });
         }
 
-        if (schedulePolicy) {
-            // The offer deadline is absolute, so requeues re-add the same
-            // score — the notAfter clock is never extended.
-            if (schedulePolicy.notAfter !== undefined) {
-                multi.zAdd(this.scheduleNotAfterKey, { score: schedulePolicy.notAfter, value: id });
-            }
-            // Atomic hand-off out of the scheduled store (no-ops when the
-            // assignment was never held); also self-heals an activation
-            // that crashed between the sweep's claim and this enqueue.
-            multi.hDel(this.scheduledAssignmentsKey, id);
-            multi.zRem(this.scheduledActivateAtKey, id);
+        // The offer deadline is absolute, so requeues re-add the same score —
+        // the notAfter clock is never extended.
+        if (schedulePolicy?.notAfter !== undefined) {
+            multi.zAdd(this.scheduleNotAfterKey, { score: schedulePolicy.notAfter, value: id });
         }
+        // Atomic hand-off out of the scheduled store (no-ops when the
+        // assignment was never held); also self-heals an activation that
+        // crashed between the sweep's claim and this enqueue. Unconditional:
+        // a `slot` holds an assignment on its own, with no schedule policy
+        // anywhere, and gating this on one leaves such a task queued *and*
+        // still sitting in the scheduled store.
+        multi.hDel(this.scheduledAssignmentsKey, id);
+        multi.zRem(this.scheduledActivateAtKey, id);
 
         if (isValidLatitude(latitude) && isValidLongitude(longitude)) {
             multi.geoAdd(assignmentGeoKey, {
@@ -2091,11 +2163,12 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         // Fetch tags, owner (in case it's pending), accepted JSON (for the
         // per-user accepted index), and vetoed users for index cleanup
-        const [tagsCsv, owner, acceptedJson, vetoedUsers] = await Promise.all([
+        const [tagsCsv, owner, acceptedJson, vetoedUsers, bookingJson] = await Promise.all([
             this.redisClient.hGet(assignmentTagsKey, 'tags'),
             this.redisClient.hGet(this.assignmentOwnerKey, id),
             this.redisClient.hGet(this.acceptedAssignmentsKey, id),
             this.redisClient.sMembers(this.keys.assignmentVetoed(id)),
+            this.redisClient.hGet(this.slotBookingsKey, id),
         ]);
 
         // Who accepted it, from the index written in the accept transaction.
@@ -2150,7 +2223,26 @@ export default class AssignmentMatcher implements WorkflowHost {
         multi.zRem(this.scheduledActivateAtKey, id);
         multi.zRem(this.scheduleNotAfterKey, id);
 
+        // 6. Clear the booking (no-op for unslotted assignments). Same rule the
+        // wait clock and the SLA indexes carry: a reservation nobody clears
+        // goes on blocking that worker's afternoon forever.
+        multi.hDel(this.slotBookingsKey, id);
+        multi.hDel(this.bookingSpansKey, id);
+        multi.zRem(this.slotBookingDueAtKey, id);
+        const releasedBooking = AssignmentMatcher.parseBooking(bookingJson);
+        if (releasedBooking) multi.zRem(this.keys.userBookings(releasedBooking.userId), id);
+
         await multi.exec();
+
+        if (releasedBooking) {
+            this.emitAssignmentLifecycle({
+                kind: 'slotBookingReleased',
+                taskId: id,
+                workerId: releasedBooking.userId,
+                reason: 'terminal',
+                at: Date.now(),
+            });
+        }
         return id;
     }
 
@@ -4674,6 +4766,8 @@ export default class AssignmentMatcher implements WorkflowHost {
             });
         }
 
+        await this.clearBookingOnTerminal(assignmentId);
+
         this.emitAssignmentLifecycle({
             kind: 'completed',
             taskId: assignmentId,
@@ -4771,6 +4865,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         // worker-reported failure was invisible to lifecycle observers (and
         // therefore to the platform's webhooks, sockets and push) even though
         // the workflow stream above heard about it.
+        await this.clearBookingOnTerminal(assignmentId);
+
         this.emitAssignmentLifecycle({
             kind: 'failed',
             taskId: assignmentId,
@@ -5486,6 +5582,8 @@ export default class AssignmentMatcher implements WorkflowHost {
             // A due notBefore falls straight through addAssignment's hold
             // guard into the normal enqueue, which also clears the scheduled
             // hash atomically with the queued write.
+            const slot = slotFromJson(json);
+            const booking = slot ? await this.getSlotBooking(id) : null;
             try {
                 await this.addAssignment(JSON.parse(json));
             } catch (err) {
@@ -5497,9 +5595,509 @@ export default class AssignmentMatcher implements WorkflowHost {
             }
             activated++;
             this.emitAssignmentLifecycle({ kind: 'scheduleActivated', taskId: id, at: now });
+
+            if (slot) {
+                // The appointment has arrived. A booked one goes to the person
+                // it was booked to, as a pending offer — never as an
+                // acceptance, because they have not said yes to anything yet.
+                // `force` is right here: the booking cleared every guardrail
+                // when it was made, and refusing now on a backlog count would
+                // strand an appointment somebody is expecting.
+                if (booking) {
+                    try {
+                        await this.assignToUser(id, booking.userId, { force: true });
+                    } catch (err) {
+                        // The holder vanished (removed, or the task was taken
+                        // by something else between the enqueue and here).
+                        // The work is queued and matchable, which is the
+                        // honest fallback; the stale reservation is not.
+                        await this.releaseSlotBooking(id, 'operator', (err as Error)?.message);
+                    }
+                } else {
+                    // Nobody booked it in time. `'queue'` leaves it in the open
+                    // pool it was just enqueued into — the appointment is
+                    // simply being staffed late — while park and drop mirror
+                    // `schedule.onMiss`.
+                    const unbooked = slot.onUnbooked;
+                    if (unbooked === 'park') {
+                        await this.redisClient.hSet(this.keys.parkedAssignments(), id, json);
+                        await this.removeAssignment(id);
+                    } else if (unbooked === 'drop') {
+                        await this.removeAssignment(id);
+                    }
+                    await this.redisClient.zRem(this.slotBookingDueAtKey, id);
+                }
+            }
         }
 
         return { activated, missed };
+    }
+
+    // ============================================================================
+    // Slots and bookings — reserving a worker's time ahead of the work
+    // ============================================================================
+
+    /**
+     * Run the booking script, reloading it if Redis has forgotten it.
+     *
+     * The script is the only place a reservation is written, so a NOSCRIPT
+     * after a Redis restart must be answered with a reload rather than a
+     * fallback: a non-atomic path here would be a second claim gate, and two
+     * gates on one resource is how the same hour gets booked twice.
+     */
+    private async runBookSlot(keys: string[], args: string[]): Promise<string[]> {
+        if (!this.bookSlotSha) this.bookSlotSha = await this.redisClient.scriptLoad(BOOK_SLOT_LUA);
+        try {
+            return (await this.redisClient.evalSha(this.bookSlotSha, { keys, arguments: args })) as string[];
+        } catch (err) {
+            if (!String((err as Error).message).includes('NOSCRIPT')) throw err;
+            this.bookSlotSha = await this.redisClient.scriptLoad(BOOK_SLOT_LUA);
+            return (await this.redisClient.evalSha(this.bookSlotSha, { keys, arguments: args })) as string[];
+        }
+    }
+
+    /** The slot of an assignment currently held in the scheduled store. */
+    private async loadSlottedAssignment(
+        assignmentId: string,
+    ): Promise<{ assignment: Assignment; slot: NormalizedSlot } | null> {
+        const json = await this.redisClient.hGet(this.scheduledAssignmentsKey, assignmentId);
+        if (!json) return null;
+        const slot = slotFromJson(json);
+        if (!slot) return null;
+        return { assignment: JSON.parse(json) as Assignment, slot };
+    }
+
+    /**
+     * Reserve a worker for a slotted assignment.
+     *
+     * A reservation is not an offer and not an acceptance: it holds the hour
+     * against anything else landing on it and it puts the job on the worker's
+     * calendar, but it occupies no backlog place and starts no clock. That is
+     * what keeps `accepted` meaning "I am working on this" — a fortnight of
+     * booked appointments must not fill somebody's backlog cap, and a
+     * completion deadline must not run against work that has not started.
+     *
+     * The clash probe and the write happen inside one Lua script, because
+     * checking and then writing lets two callers both book the same hour.
+     *
+     * `force` skips the caller's `blocked` availability — a planner overriding
+     * an absence is a human decision about one job. It never skips the overlap
+     * rule: double-booking one person at 14:00 is a data error, not a
+     * judgement call.
+     */
+    async bookSlot(
+        assignmentId: string,
+        userId: string,
+        options?: { force?: boolean; source?: 'sweep' | 'manual' },
+    ): Promise<{ booked: true; booking: SlotBooking } | { booked: false; refusal: SlotBookingRefusal }> {
+        await this.readyPromise;
+
+        const userJson = await this.redisClient.hGet(this.usersKey, userId);
+        if (!userJson) throw new Error(`User not found: ${userId}`);
+
+        const held = await this.loadSlottedAssignment(assignmentId);
+        if (!held) throw new Error(`Assignment is not a slotted assignment awaiting its slot: ${assignmentId}`);
+
+        const { slot } = held;
+        const startAt = slot.startAt;
+        const endAt = slotEndsAt(slot);
+        const source = options?.source ?? 'manual';
+
+        const availability = (await this.loadSlotAvailability([userId], startAt, endAt)).get(userId);
+        const blocking = AssignmentMatcher.coversSlot(availability?.blocked, startAt, endAt);
+        if (!options?.force && blocking.length > 0) {
+            return { booked: false, refusal: { reason: 'unavailable', detail: blocking[0].reason } };
+        }
+        const soft = AssignmentMatcher.coversSlot(availability?.warnings, startAt, endAt);
+        const warnings = soft.length > 0 ? soft : undefined;
+
+        const booking: SlotBooking = {
+            assignmentId,
+            userId,
+            startAt,
+            endAt,
+            bookedAt: Date.now(),
+            source,
+            ...(warnings ? { warnings } : {}),
+        };
+
+        const result = await this.runBookSlot(
+            [this.slotBookingsKey, this.bookingSpansKey, this.keys.userBookings(userId)],
+            [assignmentId, String(startAt), String(endAt), String(this.maxSlotSpanMs), JSON.stringify(booking)],
+        );
+
+        if (result[0] === 'already-booked') {
+            return { booked: false, refusal: { reason: 'already-booked', holderId: result[1] } };
+        }
+        if (result[0] === 'clash') {
+            return { booked: false, refusal: { reason: 'clash', clashingAssignmentId: result[1] } };
+        }
+
+        // The slot is spoken for; it no longer needs re-examining by the sweep.
+        await this.redisClient.zRem(this.slotBookingDueAtKey, assignmentId);
+        this.emitAssignmentLifecycle({
+            kind: 'slotBooked',
+            taskId: assignmentId,
+            workerId: userId,
+            startAt,
+            endAt,
+            source,
+            ...(warnings ? { warnings } : {}),
+            at: booking.bookedAt,
+        });
+        return { booked: true, booking };
+    }
+
+    /** The booking held against an assignment, if any. */
+    async getSlotBooking(assignmentId: string): Promise<SlotBooking | null> {
+        await this.readyPromise;
+        const json = await this.redisClient.hGet(this.slotBookingsKey, assignmentId);
+        if (!json) return null;
+        try {
+            return JSON.parse(json) as SlotBooking;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Drop a reservation, leaving the assignment slotted but unbooked.
+     *
+     * Every terminal path calls this with `'terminal'` — the same rule the
+     * wait clock and the SLA indexes carry, and for the same reason: a booking
+     * row nobody clears goes on blocking that worker's 14:00 forever.
+     */
+    async releaseSlotBooking(
+        assignmentId: string,
+        reason: 'hand-back' | 'operator' | 'terminal' = 'operator',
+        detail?: string,
+    ): Promise<SlotBooking | null> {
+        await this.readyPromise;
+        const booking = await this.getSlotBooking(assignmentId);
+        if (!booking) return null;
+
+        const multi = this.redisClient
+            .multi()
+            .hDel(this.slotBookingsKey, assignmentId)
+            .hDel(this.bookingSpansKey, assignmentId)
+            .zRem(this.keys.userBookings(booking.userId), assignmentId);
+        // A released booking goes back to the sweep, unless the task is over.
+        if (reason !== 'terminal') {
+            multi.zAdd(this.slotBookingDueAtKey, { score: Date.now(), value: assignmentId });
+        } else {
+            multi.zRem(this.slotBookingDueAtKey, assignmentId);
+        }
+        await multi.exec();
+
+        this.emitAssignmentLifecycle({
+            kind: 'slotBookingReleased',
+            taskId: assignmentId,
+            workerId: booking.userId,
+            reason,
+            ...(detail ? { detail } : {}),
+            at: Date.now(),
+        });
+        return booking;
+    }
+
+    /**
+     * The worker raising a problem with an appointment booked onto them.
+     *
+     * They cannot *decline* it — the planner's decision stands, which is what
+     * makes a published calendar worth trusting — but saying "not me" is not
+     * declining, and a booking nobody will honour is worse than an unbooked
+     * slot. The reservation is dropped and the worker is added to the
+     * assignment's rejected set, so the next sweep cannot hand it straight
+     * back to them.
+     */
+    async handBackBooking(assignmentId: string, userId: string, reason?: string): Promise<SlotBooking | null> {
+        await this.readyPromise;
+        const booking = await this.getSlotBooking(assignmentId);
+        if (!booking) return null;
+        if (booking.userId !== userId) {
+            throw new Error(`Assignment ${assignmentId} is not booked to ${userId}`);
+        }
+        await this.redisClient.sAdd(this.keys.userRejected(userId), assignmentId);
+        return this.releaseSlotBooking(assignmentId, 'hand-back', reason);
+    }
+
+    /**
+     * Bookings overlapping a window — the calendar read.
+     *
+     * Half-open on both sides: a booking that ends exactly at `from` or starts
+     * exactly at `to` is outside the window, matching the overlap rule so a
+     * day view and the clash probe cannot disagree about what "that day"
+     * contains.
+     */
+    async getBookings(query: { from: number; to: number; userId?: string }): Promise<SlotBooking[]> {
+        await this.readyPromise;
+        const { from, to, userId } = query;
+
+        let ids: string[];
+        if (userId) {
+            // Reach back a full slot span: a booking that started before the
+            // window can still be running inside it.
+            ids = await this.redisClient.zRangeByScore(
+                this.keys.userBookings(userId),
+                Math.max(0, from - this.maxSlotSpanMs),
+                `(${to}` as unknown as number,
+            );
+        } else {
+            ids = await this.redisClient.hKeys(this.slotBookingsKey);
+        }
+        if (ids.length === 0) return [];
+
+        const records = await this.redisClient.hmGet(this.slotBookingsKey, ids);
+        const bookings: SlotBooking[] = [];
+        for (const json of records) {
+            if (!json) continue;
+            try {
+                const booking = JSON.parse(json) as SlotBooking;
+                if (booking.startAt < to && booking.endAt > from) bookings.push(booking);
+            } catch {
+                // A corrupt row is not worth failing a calendar read over.
+            }
+        }
+        bookings.sort((a, b) => a.startAt - b.startAt);
+        return bookings;
+    }
+
+    /** Availability for a set of workers, as one batched call into the host. */
+    private async loadSlotAvailability(
+        userIds: string[],
+        from: number,
+        to: number,
+    ): Promise<Map<string, SlotAvailability>> {
+        const byUser = new Map<string, SlotAvailability>();
+        if (!this.slotAvailability || userIds.length === 0) return byUser;
+        // The host's availability source being down is not a reason to book
+        // over somebody's leave: an error here propagates, the sweep restores
+        // its index entry and books nobody this pass.
+        for (const row of await this.slotAvailability(userIds, from, to)) byUser.set(row.userId, row);
+        return byUser;
+    }
+
+    /**
+     * Drop any reservation a task still carries as it reaches a terminal
+     * state. Complete and fail do not go through `removeAssignment`, so
+     * without this the worker's calendar keeps an appointment for work that
+     * is over, and the hour stays blocked against anything else.
+     */
+    private async clearBookingOnTerminal(assignmentId: string): Promise<void> {
+        const booking = AssignmentMatcher.parseBooking(await this.redisClient.hGet(this.slotBookingsKey, assignmentId));
+        if (!booking) return;
+        await this.redisClient
+            .multi()
+            .hDel(this.slotBookingsKey, assignmentId)
+            .hDel(this.bookingSpansKey, assignmentId)
+            .zRem(this.slotBookingDueAtKey, assignmentId)
+            .zRem(this.keys.userBookings(booking.userId), assignmentId)
+            .exec();
+        this.emitAssignmentLifecycle({
+            kind: 'slotBookingReleased',
+            taskId: assignmentId,
+            workerId: booking.userId,
+            reason: 'terminal',
+            at: Date.now(),
+        });
+    }
+
+    private static parseBooking(json: string | null | undefined): SlotBooking | null {
+        if (!json) return null;
+        try {
+            return JSON.parse(json) as SlotBooking;
+        } catch {
+            return null;
+        }
+    }
+
+    private static coversSlot(
+        intervals: { from: number; to: number; reason: string }[] | undefined,
+        startAt: number,
+        endAt: number,
+    ): { from: number; to: number; reason: string }[] {
+        if (!intervals) return [];
+        return intervals.filter((interval) => interval.from < endAt && interval.to > startAt);
+    }
+
+    /**
+     * Who could take this appointment, best first.
+     *
+     * Ranking goes through the same `evaluateCandidateForAssignment` that
+     * `explainMatch` uses, so routing weights, wildcards, zero-weight vetoes,
+     * skill thresholds, CIDR and geo all apply. A second, smaller copy of the
+     * judgement is how a booking and an explain start disagreeing.
+     *
+     * Two deliberate departures from live matching: backlog is not counted,
+     * because a reservation takes no backlog place and somebody swamped today
+     * may be the right person for next Thursday; and a pause is not counted
+     * either, for the same reason — being away from the queue now says nothing
+     * about a fortnight out.
+     */
+    async rankSlotCandidates(assignmentId: string): Promise<SlotCandidate[]> {
+        await this.readyPromise;
+
+        const held = await this.loadSlottedAssignment(assignmentId);
+        if (!held) throw new Error(`Assignment is not a slotted assignment awaiting its slot: ${assignmentId}`);
+        const { assignment, slot } = held;
+        const startAt = slot.startAt;
+        const endAt = slotEndsAt(slot);
+
+        const all = await this.redisClient.hGetAll(this.usersKey);
+        const users: User[] = Object.values(all).map((json) => JSON.parse(json as string));
+        if (users.length === 0) return [];
+
+        const tagsCsv = assignment.tags.join(',');
+        const basePriority = assignment.priority ?? 0;
+        const modelWeights = this.enableLearning ? await this.learning.getModel() : undefined;
+        const availability = await this.loadSlotAvailability(
+            users.map((user) => user.id),
+            startAt,
+            endAt,
+        );
+
+        const rejected = await Promise.all(
+            users.map((user) => this.redisClient.sIsMember(this.keys.userRejected(user.id), assignmentId)),
+        );
+        const busy = await Promise.all(users.map((user) => this.findSlotClash(user.id, assignmentId, startAt, endAt)));
+
+        const candidates: SlotCandidate[] = [];
+        for (const [index, user] of users.entries()) {
+            const trace = await this.evaluateCandidateForAssignment(user, assignment, tagsCsv, basePriority, modelWeights, {
+                assignmentId,
+                isRejected: Boolean(rejected[index]),
+                backlog: 0,
+                isPaused: false,
+            });
+            const blocked = AssignmentMatcher.coversSlot(availability.get(user.id)?.blocked, startAt, endAt);
+            const warnings = AssignmentMatcher.coversSlot(availability.get(user.id)?.warnings, startAt, endAt);
+            const clashingAssignmentId = busy[index];
+            candidates.push({
+                userId: user.id,
+                score: trace.score,
+                effectivePriority: trace.effectivePriority,
+                bookable: trace.eligible && blocked.length === 0 && clashingAssignmentId === null,
+                reasons: trace.reasons,
+                ...(clashingAssignmentId ? { clashingAssignmentId } : {}),
+                ...(blocked.length > 0 ? { blocked } : {}),
+                ...(warnings.length > 0 ? { warnings } : {}),
+            });
+        }
+        candidates.sort(
+            (a, b) =>
+                Number(b.bookable) - Number(a.bookable) ||
+                b.effectivePriority - a.effectivePriority ||
+                b.score - a.score ||
+                a.userId.localeCompare(b.userId),
+        );
+        return candidates;
+    }
+
+    /**
+     * The id of a booking already on this worker that overlaps the window, or
+     * null. Read-only: the authoritative answer is the Lua script's, this one
+     * exists so the planner sees the clash before trying.
+     */
+    private async findSlotClash(
+        userId: string,
+        assignmentId: string,
+        startAt: number,
+        endAt: number,
+    ): Promise<string | null> {
+        const ids = await this.redisClient.zRangeByScore(
+            this.keys.userBookings(userId),
+            Math.max(0, startAt - this.maxSlotSpanMs),
+            `(${endAt}` as unknown as number,
+        );
+        const others = ids.filter((id) => id !== assignmentId);
+        if (others.length === 0) return null;
+        const spans = await this.redisClient.hmGet(this.bookingSpansKey, others);
+        for (const [index, span] of spans.entries()) {
+            if (!span) continue;
+            const separator = span.indexOf(':');
+            if (separator === -1) continue;
+            const otherEnd = Number(span.slice(separator + 1));
+            if (Number.isFinite(otherEnd) && otherEnd > startAt) return others[index];
+        }
+        return null;
+    }
+
+    /**
+     * Sweep the booking clocks: reserve a worker for every slotted assignment
+     * whose book-ahead window has opened.
+     *
+     * Runs before `processScheduledAssignments()` so a slot booked in this
+     * pass is activated onto its holder in the same pass when its start has
+     * already arrived. Each zset entry fires once — the `zRem` claim makes
+     * concurrent replicas skip entries another sweep already took — and a slot
+     * nobody can take is re-indexed `slotBookingRetryMs` out, so it books
+     * itself once a clashing job moves or an absence is cancelled.
+     *
+     * The sweep commits no learning decision and consumes no learned
+     * re-ranking, for the same reason `assignToUser` does not: nobody was
+     * offered anything and nobody chose.
+     */
+    async processSlotBookings(): Promise<BookingSweepResult> {
+        await this.readyPromise;
+        const now = Date.now();
+        let booked = 0;
+        let unfillable = 0;
+
+        const dueIds = await this.redisClient.zRangeByScore(this.slotBookingDueAtKey, '-inf', now);
+        for (const id of dueIds) {
+            const claimed = await this.redisClient.zRem(this.slotBookingDueAtKey, id);
+            if (!claimed) continue;
+
+            const held = await this.loadSlottedAssignment(id);
+            // Activated, removed or force-assigned since the range read; the
+            // claim above was the whole cleanup.
+            if (!held) continue;
+            if (await this.redisClient.hExists(this.slotBookingsKey, id)) continue;
+
+            let candidates: SlotCandidate[];
+            try {
+                candidates = await this.rankSlotCandidates(id);
+            } catch (err) {
+                // Without restoring the index entry a failed pass strands the
+                // slot unbooked forever — nothing else re-examines it.
+                await this.redisClient.zAdd(this.slotBookingDueAtKey, { score: now, value: id });
+                throw err;
+            }
+
+            let placed = false;
+            for (const candidate of candidates) {
+                if (!candidate.bookable) break;
+                const result = await this.bookSlot(id, candidate.userId, { source: 'sweep' });
+                if (result.booked) {
+                    booked++;
+                    placed = true;
+                    break;
+                }
+                // Lost the race to a concurrent sweep, or this worker was
+                // booked for something else between the rank and the write.
+                if (result.refusal.reason === 'already-booked') {
+                    placed = true;
+                    break;
+                }
+            }
+
+            if (!placed) {
+                unfillable++;
+                await this.redisClient.zAdd(this.slotBookingDueAtKey, {
+                    score: now + this.slotBookingRetryMs,
+                    value: id,
+                });
+                this.emitAssignmentLifecycle({
+                    kind: 'slotUnfillable',
+                    taskId: id,
+                    startAt: held.slot.startAt,
+                    endAt: slotEndsAt(held.slot),
+                    at: now,
+                });
+            }
+        }
+
+        return { booked, unfillable };
     }
 
     /**
@@ -5868,6 +6466,8 @@ export default class AssignmentMatcher implements WorkflowHost {
         let recurrenceMaterializations = 0;
         let recurrenceRetirements = 0;
         let retentionPurged = 0;
+        let slotsBooked = 0;
+        let slotsUnfillable = 0;
 
         // Recurrence before schedule: an occurrence materialized due-now is
         // then activated by the schedule sweep in this same tick.
@@ -5875,6 +6475,14 @@ export default class AssignmentMatcher implements WorkflowHost {
             const result = await this.processRecurringAssignments();
             recurrenceMaterializations = result.materialized;
             recurrenceRetirements = result.retired;
+        }
+        // Bookings before schedule: a slot booked in this pass is handed to
+        // its holder by the activation below in the same tick, rather than
+        // spending one tick in the open pool first.
+        if (opts.slotBookings) {
+            const result = await this.processSlotBookings();
+            slotsBooked = result.booked;
+            slotsUnfillable = result.unfillable;
         }
         // Schedule first: a just-activated assignment's response/SLA clocks
         // then start from this same tick's state.
@@ -5918,6 +6526,8 @@ export default class AssignmentMatcher implements WorkflowHost {
             recurrenceMaterializations,
             recurrenceRetirements,
             retentionPurged,
+            slotsBooked,
+            slotsUnfillable,
             tookMs: Date.now() - startedAt,
         };
     }
@@ -5966,6 +6576,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             completionDeadlines: options?.completionDeadlines ?? true,
             slaExpiries: options?.slaExpiries ?? true,
             scheduled: options?.scheduled ?? true,
+            slotBookings: options?.slotBookings ?? true,
             recurrence: options?.recurrence ?? true,
             workflowStepTimeouts: options?.workflowStepTimeouts ?? this.enableWorkflows,
             idleUsers: options?.idleUsers ?? this.idleUserTimeoutMs !== null,

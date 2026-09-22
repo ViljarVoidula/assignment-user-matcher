@@ -62,8 +62,154 @@ export type Assignment = {
     sla?: SlaPolicy;
     // Optional offer window: hold until notBefore, expire un-accepted work at notAfter. See SchedulePolicy.
     schedule?: SchedulePolicy;
+    // Optional appointment: when the work is performed and for how long. See TimeSlot.
+    slot?: TimeSlot;
     [key: string]: any;
 };
+
+/**
+ * When the work is performed, and for how long.
+ *
+ * `SchedulePolicy` owns the *offer* window — when an assignment may be handed
+ * out. A `TimeSlot` owns the *appointment* — a fixed wall-clock start and a
+ * duration, the thing a calendar entry is made of. A task can have either,
+ * both, or neither.
+ *
+ * A slotted assignment is held out of matching until its slot arrives, exactly
+ * like `schedule.notBefore` (activation is the later of the two). Ahead of
+ * that, the booking sweep reserves a worker for it: the reservation is visible
+ * on their calendar and blocks anything else landing on the same hour, but it
+ * occupies no backlog slot and starts no SLA clock. That is what keeps
+ * `accepted` meaning "I am working on this" — a week of booked appointments
+ * must not fill somebody's backlog cap, and a completion deadline must not run
+ * for six days against work that has not started.
+ *
+ * At `startAt` the assignment activates and is handed to whoever holds the
+ * booking as an ordinary pending offer.
+ *
+ * @example
+ * ```typescript
+ * await matcher.addAssignment({
+ *     id: 'boiler-service-42',
+ *     tags: ['gas-safe', 'region:north'],
+ *     slot: {
+ *         startAt: Date.parse('2026-10-08T14:00:00Z'),
+ *         durationMs: 90 * 60_000,
+ *         bookAheadMs: 14 * 24 * 60 * 60_000, // reserve an engineer a fortnight out
+ *     },
+ * });
+ * matcher.startMaintenance(); // the booking sweep runs on the maintenance tick
+ * ```
+ */
+export interface TimeSlot {
+    /** Epoch milliseconds at which the work is performed. */
+    startAt: number;
+    /**
+     * How long the work takes, in milliseconds. Must be greater than zero —
+     * a zero-length appointment is not an appointment, and the whole slot is
+     * ignored rather than half-applied.
+     */
+    durationMs: number;
+    /**
+     * How far ahead of `startAt` the booking sweep may reserve a worker.
+     * Defaults to seven days. Booking earlier gives people more notice and
+     * gives the planner more time to review; booking later sees a more
+     * accurate picture of who is actually available.
+     */
+    bookAheadMs?: number;
+    /**
+     * What happens if `startAt` arrives with nobody booked.
+     * - `'queue'` (default) — activate into the open pool, matched like any
+     *   other task. The appointment still exists; it is simply being staffed
+     *   late.
+     * - `'park'` — hold it out of rotation for an operator to look at.
+     * - `'drop'` — remove it.
+     */
+    onUnbooked?: 'queue' | 'park' | 'drop';
+}
+
+/**
+ * A worker's availability for booking, supplied by the caller.
+ *
+ * The library owns the *shape* of a booking rule and nothing else: it knows
+ * that two appointments cannot overlap, because it owns every booking. It has
+ * no idea what a leave request or a rostered shift is, and inventing one would
+ * put a second, smaller copy of the caller's own policy inside the engine.
+ *
+ * So availability is typed input. `blocked` refuses a booking that overlaps
+ * it — an approved absence is a fact the caller owns, and booking over it is
+ * simply wrong. `warnings` allow the booking and are recorded on it: a roster
+ * is a plan rather than an authority, a worker's personal calendar is not the
+ * employer's to veto on, and a genuine emergency needs an escape hatch.
+ */
+export interface SlotAvailability {
+    userId: string;
+    /** Intervals that refuse a booking overlapping them. */
+    blocked?: { from: number; to: number; reason: string }[];
+    /** Intervals that allow the booking but record the reason on it. */
+    warnings?: { from: number; to: number; reason: string }[];
+}
+
+/** A reservation of one worker's time for one slotted assignment. */
+export interface SlotBooking {
+    assignmentId: string;
+    userId: string;
+    startAt: number;
+    endAt: number;
+    /** When the reservation was made. */
+    bookedAt: number;
+    /** How it was made: the sweep, or a named operator decision. */
+    source: 'sweep' | 'manual';
+    /**
+     * Soft conflicts recorded at booking time — outside a rostered shift, a
+     * busy personal calendar. Present so the planner reviewing the week can
+     * see why a booking is worth a second look.
+     */
+    warnings?: { from: number; to: number; reason: string }[];
+}
+
+/** Why a booking attempt did not go through. */
+export type SlotBookingRefusal =
+    /** The assignment is already booked; `holderId` says who has it. */
+    | { reason: 'already-booked'; holderId: string }
+    /** The worker has another appointment overlapping this one. */
+    | { reason: 'clash'; clashingAssignmentId: string }
+    /** An availability interval the caller marked `blocked` covers the slot. */
+    | { reason: 'unavailable'; detail: string };
+
+/**
+ * One worker weighed for one appointment.
+ *
+ * `bookable` is the whole judgement in one boolean — eligible under the
+ * ordinary matching rules, free in the hour, and not blocked by the caller's
+ * availability. The detail is there so a planner can see *why* somebody is
+ * not, which is the question they actually ask.
+ */
+export interface SlotCandidate {
+    userId: string;
+    /** Pure match score, as `explainMatch` reports it. */
+    score: number;
+    /** Base priority + score + geo boost + learning boost. */
+    effectivePriority: number;
+    /** Whether a booking for this worker would go through right now. */
+    bookable: boolean;
+    /** Why they are or are not eligible, in `explainMatch`'s vocabulary. */
+    reasons: MatchTraceReason[];
+    /** An appointment already on them that overlaps this one. */
+    clashingAssignmentId?: string;
+    /** Caller-supplied absences covering the slot. Refuses the booking. */
+    blocked?: { from: number; to: number; reason: string }[];
+    /** Caller-supplied soft conflicts. Allows the booking, recorded on it. */
+    warnings?: { from: number; to: number; reason: string }[];
+}
+
+/** What one pass of the booking sweep did. */
+export interface BookingSweepResult {
+    /** Reservations made this pass. */
+    booked: number;
+    /** Slots that came due for booking with no eligible, free worker. */
+    unfillable: number;
+}
 
 /**
  * What should happen when the user an assignment was matched to lets the
@@ -917,6 +1063,42 @@ export type AssignmentLifecycleEvent =
      */
     | { kind: 'scheduleActivated'; taskId: string; at: number }
     /**
+     * A slotted assignment was reserved to a worker ahead of its slot. The
+     * work is not live yet: it occupies no backlog place and no clock is
+     * running. This is the event a calendar entry is made from.
+     */
+    | {
+          kind: 'slotBooked';
+          taskId: string;
+          workerId: string;
+          startAt: number;
+          endAt: number;
+          source: 'sweep' | 'manual';
+          /** Soft conflicts the booking was made over. See `SlotAvailability`. */
+          warnings?: { from: number; to: number; reason: string }[];
+          at: number;
+      }
+    /**
+     * A reservation was given up. `'hand-back'` is the worker raising a
+     * problem — they cannot decline a booking, but saying "not me" is not
+     * declining — `'operator'` is a planner rebooking, and `'terminal'` is the
+     * task reaching a terminal state with its slot still on the books.
+     */
+    | {
+          kind: 'slotBookingReleased';
+          taskId: string;
+          workerId: string;
+          reason: 'hand-back' | 'operator' | 'terminal';
+          detail?: string;
+          at: number;
+      }
+    /**
+     * A slot came due for booking and nobody eligible was free for it. The
+     * sweep will try again; this fires each time so a slot nobody can staff is
+     * visible before its start rather than at it.
+     */
+    | { kind: 'slotUnfillable'; taskId: string; startAt: number; endAt: number; at: number }
+    /**
      * The offer window (`schedule.notAfter`) elapsed while the assignment
      * was still un-accepted. `state` is where it was caught; `action` is
      * what the policy did about it.
@@ -1025,6 +1207,10 @@ export type MaintenanceReport = {
     recurrenceRetirements: number;
     /** Completed assignments removed by the retention sweep */
     retentionPurged: number;
+    /** Slotted assignments reserved to a worker by the booking sweep */
+    slotsBooked: number;
+    /** Slots that came due for booking with no eligible, free worker */
+    slotsUnfillable: number;
     /** Wall-clock duration of the pass */
     tookMs: number;
 };
@@ -1041,6 +1227,8 @@ export type MaintenanceOptions = {
     slaExpiries?: boolean;
     /** Scheduled-assignment activations and offer-window misses. @default true */
     scheduled?: boolean;
+    /** Advance booking of slotted assignments (`Assignment.slot`). @default true */
+    slotBookings?: boolean;
     /** Recurring-assignment materialization. @default true */
     recurrence?: boolean;
     /** Workflow step timeouts. @default true when `enableWorkflows` */
@@ -1242,6 +1430,40 @@ export type MatcherOptions = {
      * schedules pre-expiry reminders and fans out lifecycle notifications.
      */
     onAssignmentLifecycle?: (event: AssignmentLifecycleEvent) => void;
+
+    /**
+     * Where the booking sweep learns that somebody is unavailable.
+     *
+     * The engine knows that two appointments cannot overlap, because it owns
+     * every booking. It has no idea what a leave request or a rostered shift
+     * is — so availability is typed input rather than a lookup the library
+     * invents. Called **once per sweep pass** for the whole candidate set and
+     * the whole horizon, never per candidate: a per-candidate round trip here
+     * would undo the batched shape every other sweep in this class keeps.
+     *
+     * Absent, the only rule is the overlap rule.
+     */
+    slotAvailability?: (userIds: string[], from: number, to: number) => Promise<SlotAvailability[]>;
+
+    /**
+     * The longest appointment the deployment allows, in milliseconds.
+     * Default 24 hours.
+     *
+     * This is what bounds the overlap probe: a booking starting earlier than
+     * `startAt - maxSlotSpanMs` cannot still be running when this one begins,
+     * so the probe reads a bounded window instead of a worker's whole
+     * calendar. Raising it costs a wider range read; setting it below a slot
+     * the caller actually books would let an overlap through, so slots longer
+     * than this are refused at `addAssignment`.
+     */
+    maxSlotSpanMs?: number;
+
+    /**
+     * How long the booking sweep waits before re-examining a slot it could not
+     * fill. Default 15 minutes. The retry is what lets a slot book itself once
+     * somebody's leave is cancelled or a clashing job is moved.
+     */
+    slotBookingRetryMs?: number;
     /** Consumer group name for Redis Streams (defaults to 'orchestrator') */
     streamConsumerGroup?: string;
     /** Consumer name within the group (defaults to random UUID) */
