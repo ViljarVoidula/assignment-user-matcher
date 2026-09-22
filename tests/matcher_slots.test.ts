@@ -500,6 +500,21 @@ describe('Timeslots and advance booking', function () {
             expect(day.map((b) => b.assignmentId)).to.deep.equal(['morning', 'afternoon']);
         });
 
+        it('leaves out another worker booked inside the same window', async function () {
+            // The window alone must not be what separates two people's days:
+            // a read filtered to one worker that answers with somebody else's
+            // appointment is how a planner books over a colleague.
+            await matcher.addAssignment(visit('overlapping', THURSDAY_14 + 30 * MINUTE));
+            await matcher.bookSlot('overlapping', 'u2');
+
+            const day = await matcher.getBookings({
+                from: THURSDAY_14 - 14 * HOUR,
+                to: THURSDAY_14 + 10 * HOUR,
+                userId: 'u1',
+            });
+            expect(day.map((b) => b.assignmentId)).to.deep.equal(['morning', 'afternoon']);
+        });
+
         it('returns the whole team when no worker is named', async function () {
             const all = await matcher.getBookings({ from: THURSDAY_14 - DAY, to: THURSDAY_14 + 2 * DAY });
             expect(all.map((b) => b.assignmentId)).to.deep.equal(['morning', 'afternoon', 'friday']);
