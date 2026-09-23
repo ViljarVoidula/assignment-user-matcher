@@ -973,19 +973,20 @@ export type AssignmentLifecycleEvent =
      * A pending or accepted task was taken back off its holder without them
      * refusing it. `'idle'` is the inactivity sweep, `'operator'` an explicit
      * redistribution, and `'retagged'` an `updateAssignment` whose new routing
-     * tags no longer reach the person holding it — in every case the task goes
-     * straight back to the queue rather than anywhere terminal.
+     * tags no longer reach the person holding it, and `'removed'` a
+     * `removeUser` of the holder — in every case the task goes straight back
+     * to the queue rather than anywhere terminal.
      */
     | {
           kind: 'released';
           taskId: string;
           workerId: string;
           /**
-           * `reassigned` is the only one that can name a worker who had
-           * *accepted* the task: an operator moved work that was already under
-           * way. The others release an unanswered offer.
+           * `reassigned`, `retagged` and `removed` can name a worker who had
+           * *accepted* the task — work already under way moved. `idle` and
+           * `operator` only ever release an unanswered offer.
            */
-          reason: 'idle' | 'operator' | 'retagged' | 'reassigned';
+          reason: 'idle' | 'operator' | 'retagged' | 'reassigned' | 'removed';
           releasedAt: number;
       }
     | { kind: 'accepted'; taskId: string; workerId: string; acceptedAt: number }

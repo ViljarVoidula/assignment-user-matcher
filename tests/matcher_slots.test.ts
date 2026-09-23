@@ -235,6 +235,24 @@ describe('Timeslots and advance booking', function () {
         });
     });
 
+    describe('removing the booked worker', function () {
+        it('drops their bookings so the sweep can book somebody else', async function () {
+            await matcher.addUser({ id: 'u1', tags: ['gas-safe'] });
+            await matcher.addAssignment(visit('a1'));
+            await matcher.bookSlot('a1', 'u1');
+
+            await matcher.removeUser('u1');
+
+            expect(await matcher.getSlotBooking('a1')).to.equal(null);
+            expect(await redisClient.exists(userBookings('u1'))).to.equal(0);
+            // Back on the booking sweep, not dropped: the task is still slotted.
+            expect(await redisClient.zScore(dueAtKey, 'a1')).to.not.equal(null);
+            expect(kinds('slotBookingReleased').map((e) => [e.taskId, e.workerId, e.reason])).to.deep.equal([
+                ['a1', 'u1', 'operator'],
+            ]);
+        });
+    });
+
     describe('availability supplied by the host', function () {
         it('refuses a booking over an absence', async function () {
             await matcher.addUser({ id: 'u1', tags: ['gas-safe'] });

@@ -705,9 +705,13 @@ Live operational snapshot for dashboards:
 - `oldestWaitingMs`: age of the longest-waiting unaccepted assignment, or `null`. The wait clock starts at first enqueue and survives reject/expiry requeues; it stops when a user accepts the assignment or it is removed. Held (scheduled) assignments have no wait clock yet.
 - `perUser`: every user's `backlog` depth, effective `maxBacklogSize` cap, and `paused` state.
 
-### `removeUser(userId: string): Promise<void>`
+### `removeUser(userId: string): Promise<string>`
 
-Removes a user from the system and clears their assignment backlog.
+Removes a user and hands back everything they held: pending offers **and accepted work** go back to the queue (a `released` lifecycle event with `reason: 'removed'`, the acceptance stamps and completion clock cleared, the learning attempt closed as a system fault), and slot bookings are dropped back onto the booking sweep. Earlier versions deleted only the user's own indexes, which left their held tasks stranded under a user who no longer existed.
+
+### `getUserHeldWork(userId: string): Promise<{ pending: string[]; accepted: string[]; booked: string[] }>`
+
+What a user holds right now, as assignment ids — the read an offboarding preview shows before `removeUser`.
 
 ### `removeAssignment(assignmentId: string, tags: string[]): Promise<void>`
 

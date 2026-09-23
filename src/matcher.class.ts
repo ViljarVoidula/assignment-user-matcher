@@ -2246,8 +2246,20 @@ export default class AssignmentMatcher implements WorkflowHost {
         return id;
     }
 
+    /**
+     * Remove a user from the pool, handing back everything they held.
+     *
+     * Pending offers and accepted work go back to the queue (`released` with
+     * `reason: 'removed'`), and slot bookings are dropped back onto the booking
+     * sweep. Deleting only the user's own indexes used to strand all of it:
+     * their offers sat under a person who no longer existed until a response
+     * deadline (if any) ran out, and accepted work never came back at all —
+     * nobody else could complete it, and the one person who could was gone.
+     */
     async removeUser(userId: string): Promise<string> {
         await this.readyPromise;
+
+        await this.handBackHeldWork(userId);
 
         const multi = this.redisClient
             .multi()
@@ -2262,6 +2274,56 @@ export default class AssignmentMatcher implements WorkflowHost {
         await multi.exec();
 
         return userId;
+    }
+
+    /**
+     * What a user holds right now: unanswered offers, accepted work and slot
+     * bookings, as assignment ids. The read an offboarding preview shows
+     * before `removeUser` hands all of it back.
+     */
+    async getUserHeldWork(userId: string): Promise<{ pending: string[]; accepted: string[]; booked: string[] }> {
+        await this.readyPromise;
+        const [pendingMembers, accepted, booked] = await Promise.all([
+            this.redisClient.sMembers(this.keys.userAssignments(userId)),
+            this.redisClient.zRange(this.keys.userAcceptedAssignments(userId), 0, -1),
+            this.redisClient.zRange(this.keys.userBookings(userId), 0, -1),
+        ]);
+        return { pending: pendingMembers.map((member) => member.split(':')[1]).sort(), accepted, booked };
+    }
+
+    /**
+     * Requeue every pending and accepted assignment a departing user holds and
+     * drop their slot bookings. Goes through `reclaimForRematch`, so the store
+     * HDEL is the claim gate (a task completed between the read and the write
+     * is left alone), the acceptance stamps and completion clock are cleared,
+     * and the learning attempt is closed as a system fault — leaving is not
+     * the worker failing the work.
+     */
+    private async handBackHeldWork(userId: string): Promise<void> {
+        const [pendingMembers, acceptedIds, bookedIds] = await Promise.all([
+            this.redisClient.sMembers(this.keys.userAssignments(userId)),
+            this.redisClient.zRange(this.keys.userAcceptedAssignments(userId), 0, -1),
+            this.redisClient.zRange(this.keys.userBookings(userId), 0, -1),
+        ]);
+
+        const held: Array<{ id: string; from: 'pending' | 'accepted' }> = [
+            ...pendingMembers.map((member) => ({ id: member.split(':')[1], from: 'pending' as const })),
+            ...acceptedIds.map((id) => ({ id, from: 'accepted' as const })),
+        ];
+        for (const { id, from } of held) {
+            const store = from === 'pending' ? this.pendingAssignmentsKey : this.acceptedAssignmentsKey;
+            const json = await this.redisClient.hGet(store, id);
+            if (!json) continue;
+            let record: Assignment;
+            try {
+                record = JSON.parse(json);
+            } catch {
+                continue;
+            }
+            await this.reclaimForRematch(id, record, userId, from, 'removed');
+        }
+
+        for (const id of bookedIds) await this.releaseSlotBooking(id, 'operator', 'worker removed');
     }
 
     /**
@@ -3128,6 +3190,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         updated: Assignment,
         ownerId: string,
         from: 'pending' | 'accepted',
+        reason: 'retagged' | 'removed' = 'retagged',
     ): Promise<boolean> {
         const now = Date.now();
         const multi = this.redisClient.multi();
@@ -3162,7 +3225,7 @@ export default class AssignmentMatcher implements WorkflowHost {
             kind: 'released',
             taskId: id,
             workerId: ownerId,
-            reason: 'retagged',
+            reason,
             releasedAt: now,
         });
 
