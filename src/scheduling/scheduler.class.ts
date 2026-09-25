@@ -84,17 +84,20 @@ export class ShiftScheduler {
             evaluatedVariants += outcome.evaluatedVariants;
         }
 
-        return this.assemble(finalState, propagation, startedAt, seed, input, evaluatedVariants);
+        return this.assemble(finalState, propagation, startedAt, seed, input, evaluatedVariants, true);
     }
 
     /**
      * Shape a search state into the public result, running the aggregate rules once.
      *
-     * `final` is false for the `onProgress` callbacks the LNS loop fires on every
-     * new best: the preference report is search-plan-forbidden from running inside
-     * the objective/search path (it costs solve time on every improvement, and it
+     * `final` defaults to `false` — the cheap path, skipping the preference
+     * report — so a new call site must opt in explicitly. The `onProgress`
+     * callbacks the LNS loop fires on every new best rely on that default: the
+     * preference report is search-plan-forbidden from running inside the
+     * objective/search path (it costs solve time on every improvement, and it
      * vacates and restores the shared `best` state that the eventual final
      * assembly reads), so progress payloads never get a `preferences` field.
+     * The final result after `solve()` finishes passes `true` explicitly.
      */
     private assemble(
         state: InternalState,
@@ -103,7 +106,7 @@ export class ShiftScheduler {
         seed: number,
         input: ScheduleInput,
         evaluatedVariants: number,
-        final: boolean = true,
+        final: boolean = false,
     ): ScheduleResult {
         const ctx = state.ctx;
         const minHoursWeight = ctx.constraints.find((c) => c.id === 'hour-budget')?.weight ?? MIN_HOURS_WEIGHT;

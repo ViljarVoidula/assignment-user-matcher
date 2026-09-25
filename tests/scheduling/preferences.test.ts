@@ -1,6 +1,8 @@
 import { expect } from 'chai';
 import { buildModel } from '../../src/scheduling/model';
 import { preferenceScore } from '../../src/scheduling/constraints/availability';
+import { assign, assignedPairs, createState, pairKey } from '../../src/scheduling/engine/state';
+import { preferenceReport } from '../../src/scheduling/preference-report';
 import { checkCompliance, rankCandidates, ScheduleValidationError, solveSchedule } from '../../src/scheduling';
 import type { AvailabilityRule, Employee, ScheduleInput, ShiftTemplate } from '../../src/scheduling';
 
@@ -479,6 +481,54 @@ describe('worker schedule preferences', function () {
             for (const r of progressResults) expect(r).to.not.have.property('preferences');
             expect(result).to.have.property('preferences');
             expect(result.preferences!.length).to.be.greaterThan(0);
+        });
+
+        it('leaves solver state exactly as it found it: assignments, minutes and reasons are untouched by building the report', function () {
+            // Two cases that actually make preferenceReport vacate a holder:
+            // an avoid-missed on a full shift with a second eligible employee
+            // ('a' on 's', with 'c' idle and eligible — a tradeoff, not cover),
+            // and a missed dated preferred whose only occurrence is held by
+            // someone else and the wisher is blocked regardless ('b' wants
+            // 't@TUE' but is unavailable that day, which 'd' holds).
+            const shifts = [cover('s', MON), cover('t', TUE)];
+            const ctx = buildModel(
+                input({
+                    employees: [
+                        emp('a', [{ id: 'r1', kind: 'avoid', fromDate: MON, toDate: MON }]),
+                        emp('b', [
+                            { id: 'want2', kind: 'preferred', fromDate: TUE, toDate: TUE },
+                            { kind: 'unavailable', fromDate: TUE, toDate: TUE },
+                        ]),
+                        emp('c'),
+                        emp('d'),
+                    ],
+                    shifts,
+                }),
+            );
+            const state = createState(ctx);
+            assign(state, 'a', `s@${MON}`, ['note-a']);
+            assign(state, 'd', `t@${TUE}`, ['note-d']);
+
+            const snapshotReasons = () =>
+                assignedPairs(state).map(({ employeeId, instanceId }) => ({
+                    employeeId,
+                    instanceId,
+                    reasons: state.reasons.get(pairKey(employeeId, instanceId)),
+                }));
+            const pairsBefore = assignedPairs(state);
+            const minutesBefore = new Map(state.minutesByEmployee);
+            const reasonsBefore = snapshotReasons();
+
+            const report = preferenceReport(state);
+
+            // Prove the report actually exercised both vacate paths, or the
+            // assertions below would pass vacuously.
+            expect(outcomeOf(report, 'a', 'r1')!.missed).to.deep.equal([{ instanceId: `s@${MON}`, reason: 'tradeoff' }]);
+            expect(outcomeOf(report, 'b', 'want2')!.missed).to.deep.equal([{ instanceId: `t@${TUE}`, reason: 'blocked' }]);
+
+            expect(assignedPairs(state)).to.deep.equal(pairsBefore);
+            expect(state.minutesByEmployee).to.deep.equal(minutesBefore);
+            expect(snapshotReasons()).to.deep.equal(reasonsBefore);
         });
     });
 });
