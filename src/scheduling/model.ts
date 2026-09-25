@@ -599,6 +599,9 @@ function validateEmployee(employee: Employee): void {
         if (rule.to !== undefined) parseTimeOfDay(rule.to, `employee "${employee.id}" availability.to`);
         if (rule.fromDate !== undefined) assertIsoDate(rule.fromDate, `employee "${employee.id}" availability.fromDate`);
         if (rule.toDate !== undefined) assertIsoDate(rule.toDate, `employee "${employee.id}" availability.toDate`);
+        if (rule.weight !== undefined && !Number.isFinite(rule.weight)) {
+            throw new ScheduleValidationError(`employee "${employee.id}" availability.weight must be a finite number`);
+        }
         if (
             rule.shiftTypeTags !== undefined &&
             (!Array.isArray(rule.shiftTypeTags) || rule.shiftTypeTags.some((t) => typeof t !== 'string' || !t))

@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { buildModel } from '../../src/scheduling/model';
 import { preferenceScore } from '../../src/scheduling/constraints/availability';
-import { ScheduleValidationError, solveSchedule } from '../../src/scheduling';
+import { rankCandidates, ScheduleValidationError, solveSchedule } from '../../src/scheduling';
 import type { AvailabilityRule, Employee, ScheduleInput, ShiftTemplate } from '../../src/scheduling';
 
 /** Mon 5 Jan – Sun 11 Jan 2026. */
@@ -71,6 +71,13 @@ describe('worker schedule preferences', function () {
             expect(() =>
                 buildModel(input({ employees: [emp('e1', [{ kind: 'unavailable', priority: 'important' }])] })),
             ).to.throw(ScheduleValidationError, /priority/);
+        });
+
+        it('refuses a non-finite availability weight', function () {
+            expect(() => buildModel(input({ employees: [emp('e1', [{ kind: 'avoid', weight: NaN }])] }))).to.throw(
+                ScheduleValidationError,
+                /availability\.weight/,
+            );
         });
     });
 
@@ -146,23 +153,39 @@ describe('worker schedule preferences', function () {
         });
 
         it('lets a single wish beat one of many in a contested solve', function () {
+            // 'many' avoids day0 harder than any of its other days (weight 3
+            // vs 1), so raw weights alone already prefer sending 'one' — who
+            // only avoids day0 at all — into the contested slot and letting
+            // 'many' absorb an evenly-weighted day elsewhere. Only budget
+            // scaling, which concentrates 'one's single wish onto weight 10
+            // while diluting 'many's five wishes, flips that outcome.
             const contested = shift('contested', '09:00', '17:00', [days[0]], { minEmployees: 1, maxEmployees: 1 });
             const others = days.slice(1).map((d) => shift(`other-${d}`, '09:00', '17:00', [d]));
             const one = emp('one', [{ kind: 'avoid', fromDate: days[0], toDate: days[0] }]);
             const many = emp('many', [
-                { kind: 'avoid', fromDate: days[0], toDate: days[0] },
+                { kind: 'avoid', weight: 3, fromDate: days[0], toDate: days[0] },
                 ...days.slice(1).map((d) => ({ kind: 'avoid' as const, fromDate: d, toDate: d })),
             ]);
-            const result = solveSchedule(
-                input({
-                    employees: [one, many],
-                    shifts: [contested, ...others],
-                    objectives: { preferences: { budget: 10 }, fillToContract: false },
-                    maxIterations: 200,
-                }),
-            );
-            const holder = result.assignments.find((a) => a.shiftInstanceId === `contested@${days[0]}`);
-            expect(holder?.employeeId).to.equal('many');
+
+            const holderFor = (employees: Employee[], preferences?: { budget?: number }) => {
+                const result = solveSchedule(
+                    input({
+                        employees,
+                        shifts: [contested, ...others],
+                        objectives: { fillToContract: false, ...(preferences ? { preferences } : {}) },
+                        maxIterations: 200,
+                    }),
+                );
+                return result.assignments.find((a) => a.shiftInstanceId === `contested@${days[0]}`)?.employeeId;
+            };
+
+            for (const employees of [
+                [one, many],
+                [many, one],
+            ]) {
+                expect(holderFor(employees)).to.equal('one');
+                expect(holderFor(employees, { budget: 10 })).to.equal('many');
+            }
         });
 
         it('feeds rankCandidates from the same resolved weights as the objective', function () {
@@ -172,6 +195,23 @@ describe('worker schedule preferences', function () {
             );
             const inst = ctx.instanceById.get(`day-${days[0]}@${days[0]}`)!;
             expect(preferenceScore(ctx.clock, ctx.preferenceRules.get('e1'), inst)).to.equal(10);
+
+            // Prove rankCandidates itself reads the resolved (budget-scaled)
+            // weight, not the raw employee.availability weight: the only
+            // thing that changes between the two calls below is the
+            // objective, so the rank delta must equal exactly the preference
+            // contribution's change (weight 1 -> 10, times the `* 5` factor
+            // rankCandidates applies).
+            const e1 = emp('e1', rules);
+            const e2 = emp('e2');
+            const instanceId = `day-${days[0]}@${days[0]}`;
+            const rankFor = (objectives?: ScheduleInput['objectives']) =>
+                rankCandidates(input({ employees: [e1, e2], shifts, objectives }), instanceId, []).find(
+                    (c) => c.employeeId === 'e1',
+                )!.rank;
+            const withoutBudget = rankFor();
+            const withBudget = rankFor({ preferences: { budget: 10 } });
+            expect(withBudget - withoutBudget).to.be.closeTo(45, 1e-9);
         });
 
         it('refuses a non-positive budget', function () {
@@ -179,6 +219,29 @@ describe('worker schedule preferences', function () {
                 ScheduleValidationError,
                 /preferences\.budget/,
             );
+        });
+
+        it('refuses a non-positive importantWeight', function () {
+            expect(() => buildModel(input({ objectives: { preferences: { importantWeight: 0 } } }))).to.throw(
+                ScheduleValidationError,
+                /preferences\.importantWeight/,
+            );
+        });
+
+        it('combines important priority with budget scaling', function () {
+            const ctx = buildModel(
+                input({
+                    employees: [
+                        emp('e1', [
+                            { kind: 'avoid', fromDate: days[0], toDate: days[0] },
+                            { kind: 'avoid', priority: 'important', fromDate: days[1], toDate: days[1] },
+                        ]),
+                    ],
+                    shifts,
+                    objectives: { preferences: { importantWeight: 4, budget: 10 } },
+                }),
+            );
+            expect(ctx.preferenceRules.get('e1')!.map((r) => r.weight)).to.deep.equal([2, 8]);
         });
     });
 });
