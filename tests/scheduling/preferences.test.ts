@@ -3,7 +3,13 @@ import { buildModel } from '../../src/scheduling/model';
 import { preferenceScore } from '../../src/scheduling/constraints/availability';
 import { assign, assignedPairs, createState, pairKey } from '../../src/scheduling/engine/state';
 import { preferenceReport } from '../../src/scheduling/preference-report';
-import { checkCompliance, rankCandidates, ScheduleValidationError, solveSchedule } from '../../src/scheduling';
+import {
+    checkCompliance,
+    explainCandidate,
+    rankCandidates,
+    ScheduleValidationError,
+    solveSchedule,
+} from '../../src/scheduling';
 import type { AvailabilityRule, Employee, ScheduleInput, ShiftTemplate } from '../../src/scheduling';
 
 /** Mon 5 Jan – Sun 11 Jan 2026. */
@@ -55,12 +61,50 @@ describe('worker schedule preferences', function () {
             expect(held).to.include('early@2026-01-05');
             expect(held).to.not.include('night@2026-01-05');
         });
+
+        it('scores an avoided shift type positively, and only on that type', function () {
+            const rules: AvailabilityRule[] = [{ kind: 'avoid', shiftTypeTags: ['night'] }];
+            const ctx = buildModel(input({ employees: [emp('e1', rules)], shifts }));
+            expect(
+                preferenceScore(ctx.clock, ctx.preferenceRules.get('e1'), ctx.instanceById.get('night@2026-01-05')!),
+            ).to.equal(1);
+            expect(
+                preferenceScore(ctx.clock, ctx.preferenceRules.get('e1'), ctx.instanceById.get('early@2026-01-05')!),
+            ).to.equal(0);
+        });
+
+        it('confines an available rule to the listed shift type', function () {
+            // Both directions, so neither result can come from the solver
+            // simply preferring one shift (the two are too close for 11h rest).
+            for (const [allowed, other] of [
+                ['early', 'night'],
+                ['night', 'early'],
+            ]) {
+                const result = solveSchedule(
+                    input({
+                        employees: [emp('e1', [{ kind: 'available', shiftTypeTags: [allowed] }])],
+                        shifts: shifts.map((s) => ({ ...s, minEmployees: 1, maxEmployees: 1 })),
+                        maxIterations: 50,
+                        seed: 1,
+                    }),
+                );
+                const held = result.assignments.map((a) => a.shiftInstanceId);
+                expect(held).to.deep.equal([`${allowed}@2026-01-05`]);
+                expect(held).to.not.include(`${other}@2026-01-05`);
+            }
+        });
     });
 
     describe('validation', function () {
         it('refuses an empty shift-type tag', function () {
             expect(() =>
                 buildModel(input({ employees: [emp('e1', [{ kind: 'preferred', shiftTypeTags: [''] }])] })),
+            ).to.throw(ScheduleValidationError, /shiftTypeTags/);
+        });
+
+        it('refuses an empty shift-type list, which would match nothing', function () {
+            expect(() =>
+                buildModel(input({ employees: [emp('e1', [{ kind: 'available', shiftTypeTags: [] }])] })),
             ).to.throw(ScheduleValidationError, /shiftTypeTags/);
         });
 
@@ -105,6 +149,51 @@ describe('worker schedule preferences', function () {
                 }),
             );
             expect(ctx.preferenceRules.get('e1')![0].weight).to.equal(4);
+        });
+
+        it('reports the resolved weight in the avoid verdict, not the stated one', function () {
+            const verdict = explainCandidate(
+                input({
+                    employees: [emp('e1', [{ kind: 'avoid', priority: 'important', fromDate: days[0], toDate: days[0] }])],
+                    shifts,
+                    objectives: { preferences: { importantWeight: 4 } },
+                }),
+                'e1',
+                `day-${days[0]}@${days[0]}`,
+            ).find((v) => v.ruleId === 'availability')!;
+            expect(verdict.pass).to.equal(false);
+            expect(verdict.severity).to.equal('soft');
+            expect(verdict.actual).to.equal(4);
+        });
+
+        it('lets importantWeight decide who works a contested shift', function () {
+            // 'plain' avoids the day at weight 3; 'keen' at weight 1 but marked
+            // important. Unscaled, 'keen' objects less and gets the shift;
+            // importantWeight 4 lifts 'keen' to 4 and sends it to 'plain'.
+            const contested = shift('contested', '09:00', '17:00', [days[0]], { minEmployees: 1, maxEmployees: 1 });
+            const plain = emp('plain', [{ kind: 'avoid', weight: 3, fromDate: days[0], toDate: days[0] }]);
+            const keen = emp('keen', [{ kind: 'avoid', priority: 'important', fromDate: days[0], toDate: days[0] }]);
+            const holderFor = (employees: Employee[], importantWeight?: number) =>
+                solveSchedule(
+                    input({
+                        employees,
+                        shifts: [contested],
+                        objectives: {
+                            fillToContract: false,
+                            ...(importantWeight !== undefined ? { preferences: { importantWeight } } : {}),
+                        },
+                        maxIterations: 200,
+                        seed: 1,
+                    }),
+                ).assignments.find((a) => a.shiftInstanceId === `contested@${days[0]}`)?.employeeId;
+
+            for (const employees of [
+                [plain, keen],
+                [keen, plain],
+            ]) {
+                expect(holderFor(employees)).to.equal('keen');
+                expect(holderFor(employees, 4)).to.equal('plain');
+            }
         });
 
         it('scales every person to the same budget, however many wishes they state', function () {
@@ -244,6 +333,32 @@ describe('worker schedule preferences', function () {
                 }),
             );
             expect(ctx.preferenceRules.get('e1')!.map((r) => r.weight)).to.deep.equal([2, 8]);
+        });
+    });
+
+    describe('backward compatibility', function () {
+        const days = ['2026-01-05', '2026-01-06', '2026-01-07'];
+        const shifts = days.map((d) => shift(`day-${d}`, '09:00', '17:00', [d], { minEmployees: 1, maxEmployees: 1 }));
+        const employees = [
+            emp('a', [{ kind: 'avoid', daysOfWeek: [1] }]),
+            emp('b', [{ kind: 'preferred', weight: 2, daysOfWeek: [2, 3] }]),
+            emp('c'),
+        ];
+
+        it('keeps rulesHash unchanged when preferences is absent or undefined', function () {
+            const hashFor = (objectives: ScheduleInput['objectives']) =>
+                solveSchedule(input({ employees, shifts, objectives, maxIterations: 10, seed: 1 })).provenance!.rulesHash;
+            expect(hashFor({ fillToContract: false, preferences: undefined })).to.equal(hashFor({ fillToContract: false }));
+        });
+
+        it('solves an input without the new fields the same with or without an empty objectives object', function () {
+            const assignmentsFor = (objectives?: ScheduleInput['objectives']) =>
+                solveSchedule(
+                    input({ employees, shifts, ...(objectives ? { objectives } : {}), maxIterations: 200, seed: 7 }),
+                ).assignments.map((a) => `${a.employeeId}:${a.shiftInstanceId}`);
+            const without = assignmentsFor();
+            expect(without).to.have.length(3);
+            expect(assignmentsFor({})).to.deep.equal(without);
         });
     });
 
