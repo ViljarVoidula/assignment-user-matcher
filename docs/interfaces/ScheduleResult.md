@@ -12,6 +12,7 @@ The outcome of a solve. `'optimal'` means "no known improvement", never a proof.
 - [contractHours](ScheduleResult.md#contracthours)
 - [cost](ScheduleResult.md#cost)
 - [ledger](ScheduleResult.md#ledger)
+- [preferences](ScheduleResult.md#preferences)
 - [provenance](ScheduleResult.md#provenance)
 - [stats](ScheduleResult.md#stats)
 - [status](ScheduleResult.md#status)
@@ -25,7 +26,7 @@ The outcome of a solve. `'optimal'` means "no known improvement", never a proof.
 
 #### Defined in
 
-[src/scheduling/types.ts:954](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L954)
+[src/scheduling/types.ts:974](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L974)
 
 ___
 
@@ -37,7 +38,7 @@ Planned against contracted hours, for every employee whose contracted week resol
 
 #### Defined in
 
-[src/scheduling/types.ts:970](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L970)
+[src/scheduling/types.ts:990](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L990)
 
 ___
 
@@ -56,7 +57,7 @@ Per-person cost breakdown when a cost model was supplied.
 
 #### Defined in
 
-[src/scheduling/types.ts:968](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L968)
+[src/scheduling/types.ts:988](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L988)
 
 ___
 
@@ -68,7 +69,19 @@ Deferred obligations the roster created, such as compensatory rest owed.
 
 #### Defined in
 
-[src/scheduling/types.ts:966](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L966)
+[src/scheduling/types.ts:986](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L986)
+
+___
+
+### preferences
+
+• `Optional` **preferences**: `EmployeePreferenceReport`[]
+
+Per person, how each stated preference fared. Present when anyone stated one.
+
+#### Defined in
+
+[src/scheduling/types.ts:992](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L992)
 
 ___
 
@@ -84,7 +97,7 @@ matter (BetrVG §87(1)), not internal tuning.
 
 #### Defined in
 
-[src/scheduling/types.ts:964](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L964)
+[src/scheduling/types.ts:984](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L984)
 
 ___
 
@@ -102,7 +115,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:956](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L956)
+[src/scheduling/types.ts:976](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L976)
 
 ___
 
@@ -112,7 +125,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:953](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L953)
+[src/scheduling/types.ts:973](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L973)
 
 ___
 
@@ -122,4 +135,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:955](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L955)
+[src/scheduling/types.ts:975](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L975)

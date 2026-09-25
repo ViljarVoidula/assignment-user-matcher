@@ -28,7 +28,7 @@ Shrunk P(accept) estimate, per tag and overall
 
 #### Defined in
 
-[src/types/matcher.ts:1821](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1821)
+[src/types/matcher.ts:2044](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2044)
 
 ___
 
@@ -40,7 +40,7 @@ Number of independent attempts backing the per-tag estimates
 
 #### Defined in
 
-[src/types/matcher.ts:1829](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1829)
+[src/types/matcher.ts:2052](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2052)
 
 ___
 
@@ -52,7 +52,7 @@ Current backlog size at decision time
 
 #### Defined in
 
-[src/types/matcher.ts:1831](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1831)
+[src/types/matcher.ts:2054](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2054)
 
 ___
 
@@ -64,7 +64,7 @@ Effective backlog cap for this worker
 
 #### Defined in
 
-[src/types/matcher.ts:1833](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1833)
+[src/types/matcher.ts:2056](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2056)
 
 ___
 
@@ -76,7 +76,7 @@ Mean handling time in ms, per tag; absent when unobserved
 
 #### Defined in
 
-[src/types/matcher.ts:1827](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1827)
+[src/types/matcher.ts:2050](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2050)
 
 ___
 
@@ -86,7 +86,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1822](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1822)
+[src/types/matcher.ts:2045](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2045)
 
 ___
 
@@ -96,7 +96,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:1825](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1825)
+[src/types/matcher.ts:2048](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2048)
 
 ___
 
@@ -108,4 +108,4 @@ Shrunk P(success | accepted) estimate, per tag and overall
 
 #### Defined in
 
-[src/types/matcher.ts:1824](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1824)
+[src/types/matcher.ts:2047](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2047)

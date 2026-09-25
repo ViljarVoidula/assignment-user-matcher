@@ -23,7 +23,7 @@ A physical site, with optional coordinates and an asymmetric travel-time matrix.
 
 #### Defined in
 
-[src/scheduling/types.ts:207](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L207)
+[src/scheduling/types.ts:227](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L227)
 
 ___
 
@@ -33,7 +33,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:208](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L208)
+[src/scheduling/types.ts:228](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L228)
 
 ___
 
@@ -43,7 +43,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:209](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L209)
+[src/scheduling/types.ts:229](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L229)
 
 ___
 
@@ -65,7 +65,7 @@ law, expressed as `Employee.rules`.
 
 #### Defined in
 
-[src/scheduling/types.ts:225](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L225)
+[src/scheduling/types.ts:245](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L245)
 
 ___
 
@@ -85,7 +85,7 @@ roster by zone until the clock is per site.
 
 #### Defined in
 
-[src/scheduling/types.ts:237](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L237)
+[src/scheduling/types.ts:257](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L257)
 
 ___
 
@@ -97,4 +97,4 @@ Travel time from this site to another site, in minutes. Takes precedence over ha
 
 #### Defined in
 
-[src/scheduling/types.ts:211](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L211)
+[src/scheduling/types.ts:231](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L231)

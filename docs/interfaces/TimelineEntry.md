@@ -34,7 +34,7 @@ One occupied span on a person's timeline.
 
 #### Defined in
 
-[src/scheduling/time.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L27)
+[src/scheduling/time.ts:27](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/time.ts#L27)
 
 ___
 
@@ -46,7 +46,7 @@ Historical entries are immutable and never returned by the mutable views.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:43](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L43)
+[src/scheduling/engine/timeline.ts:43](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/engine/timeline.ts#L43)
 
 ___
 
@@ -58,7 +58,7 @@ Shift instance id, or a synthetic id for historical//absence spans.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:35](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L35)
+[src/scheduling/engine/timeline.ts:35](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/engine/timeline.ts#L35)
 
 ___
 
@@ -70,7 +70,7 @@ Site where this span took place; drives cross-site travel-gap rules.
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:41](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L41)
+[src/scheduling/engine/timeline.ts:41](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/engine/timeline.ts#L41)
 
 ___
 
@@ -84,7 +84,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/time.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L26)
+[src/scheduling/time.ts:26](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/time.ts#L26)
 
 ___
 
@@ -96,7 +96,7 @@ Free-form classification tag used by sequence rules (e.g. a shift type).
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:39](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L39)
+[src/scheduling/engine/timeline.ts:39](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/engine/timeline.ts#L39)
 
 ___
 
@@ -108,4 +108,4 @@ Minutes that count as working time — may differ from the span for standby duti
 
 #### Defined in
 
-[src/scheduling/engine/timeline.ts:37](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/engine/timeline.ts#L37)
+[src/scheduling/engine/timeline.ts:37](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/engine/timeline.ts#L37)

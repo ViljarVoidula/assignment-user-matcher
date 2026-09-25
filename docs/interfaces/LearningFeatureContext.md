@@ -22,7 +22,7 @@ Decision timestamp used for all deadline arithmetic in this pass
 
 #### Defined in
 
-[src/types/matcher.ts:1843](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1843)
+[src/types/matcher.ts:2066](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2066)
 
 ___
 
@@ -34,7 +34,7 @@ Aggregates for the worker being scored (absent when unavailable)
 
 #### Defined in
 
-[src/types/matcher.ts:1839](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1839)
+[src/types/matcher.ts:2062](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2062)
 
 ___
 
@@ -54,4 +54,4 @@ Team-wide priors the per-worker estimates are shrunk toward
 
 #### Defined in
 
-[src/types/matcher.ts:1841](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L1841)
+[src/types/matcher.ts:2064](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2064)

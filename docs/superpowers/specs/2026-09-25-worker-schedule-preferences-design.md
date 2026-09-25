@@ -97,7 +97,7 @@ interface PreferenceRuleOutcome {
     matchedInstances: number;        // instances in the period the rule matches
     honoured: number;                // matching instances that went the worker's way
     outcome: 'met' | 'missed' | 'partly' | 'not-applicable';
-    missed: Array<{ instanceId: string; reason: 'cover' | 'tradeoff' }>;
+    missed: Array<{ instanceId: string; reason: 'cover' | 'blocked' | 'tradeoff' }>;
 }
 ```
 
@@ -114,13 +114,23 @@ interface PreferenceRuleOutcome {
   and otherwise `missed`. `missed` stays empty: listing every preferred
   instance they did not get would be noise, since nobody can work all of them.
 - `not-applicable` means the rule matched no instance.
-- `reason: 'cover'` means no other employee was hard-eligible for that
-  instance. The eligibility is the same as `rankCandidates` uses, via
-  `engine/verdicts.ts`. Otherwise the reason is `'tradeoff'`.
+- Every reason asks whether someone could have taken **this person's place**
+  on that occurrence, not merely whether someone else was free: the holder is
+  vacated for the check, so a shift already at `maxEmployees` never reads as
+  cover. Another employee record of the same person (shared `personId`) never
+  counts as "someone else" — two contracts are not mutual cover.
+- `reason: 'cover'` means nobody else could have taken their place. The
+  eligibility is the same as `rankCandidates` uses, via `engine/verdicts.ts`.
+- `reason: 'blocked'` (dated `preferred` rules only) means the person
+  themselves could not legally have taken the shift they wanted — including
+  being blocked by their own other assignments. Otherwise the reason is
+  `'tradeoff'`.
 - `outsideBudget` rules are reported too, so the platform can mark busy-time
   clashes from the same source.
-- The report is assembled once, at result assembly. It never runs in the
-  search loop.
+- The report is assembled once, at final result assembly. It never runs in
+  the search loop or in `onProgress` payloads.
+- `checkCompliance()` returns `preferences` too (always present, unlike
+  `result.preferences`, which is omitted when there is nothing to report).
 
 ### Out of scope
 

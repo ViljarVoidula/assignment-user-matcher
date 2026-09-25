@@ -23,7 +23,7 @@ Optional proficiency; group-composition rules can require a minimum.
 
 #### Defined in
 
-[src/scheduling/types.ts:83](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L83)
+[src/scheduling/types.ts:83](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L83)
 
 ___
 
@@ -35,7 +35,7 @@ Matches `ShiftTemplate.tagRequirements` keys and `requiredTags`.
 
 #### Defined in
 
-[src/scheduling/types.ts:81](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L81)
+[src/scheduling/types.ts:81](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L81)
 
 ___
 
@@ -47,7 +47,7 @@ Inclusive ISO date the qualification becomes valid.
 
 #### Defined in
 
-[src/scheduling/types.ts:85](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L85)
+[src/scheduling/types.ts:85](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L85)
 
 ___
 
@@ -59,4 +59,4 @@ Inclusive ISO date the qualification expires. A shift after this is ineligible.
 
 #### Defined in
 
-[src/scheduling/types.ts:87](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L87)
+[src/scheduling/types.ts:87](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L87)

@@ -34,7 +34,7 @@ Legal source echoed into verdicts and violations.
 
 #### Defined in
 
-[src/scheduling/types.ts:408](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L408)
+[src/scheduling/types.ts:428](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L428)
 
 ___
 
@@ -47,7 +47,7 @@ entry per employee; `'pay'` leaves compensation to the cost model.
 
 #### Defined in
 
-[src/scheduling/types.ts:406](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L406)
+[src/scheduling/types.ts:426](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L426)
 
 ___
 
@@ -61,7 +61,7 @@ baseline (`ordinaryPerWeekMinutes` or per-person contract minutes).
 
 #### Defined in
 
-[src/scheduling/types.ts:396](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L396)
+[src/scheduling/types.ts:416](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L416)
 
 ___
 
@@ -73,7 +73,7 @@ Cap on overtime minutes in any rolling 24h. Requires `ordinaryPerDayMinutes`.
 
 #### Defined in
 
-[src/scheduling/types.ts:390](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L390)
+[src/scheduling/types.ts:410](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L410)
 
 ___
 
@@ -85,7 +85,7 @@ Working minutes per rolling 24h beyond which time is overtime.
 
 #### Defined in
 
-[src/scheduling/types.ts:382](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L382)
+[src/scheduling/types.ts:402](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L402)
 
 ___
 
@@ -99,7 +99,7 @@ overtime starts at their agreed hours, not at full time.
 
 #### Defined in
 
-[src/scheduling/types.ts:388](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L388)
+[src/scheduling/types.ts:408](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L408)
 
 ___
 
@@ -112,4 +112,4 @@ Without recorded consent, any overtime at all is a hard breach.
 
 #### Defined in
 
-[src/scheduling/types.ts:401](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L401)
+[src/scheduling/types.ts:421](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L421)

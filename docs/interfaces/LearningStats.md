@@ -30,7 +30,7 @@ Assignment-addressed feedback rejected as ambiguous between two attempts
 
 #### Defined in
 
-[src/types/matcher.ts:2195](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2195)
+[src/types/matcher.ts:2418](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2418)
 
 ___
 
@@ -42,7 +42,7 @@ totalReward / rewards (0 when no rewards)
 
 #### Defined in
 
-[src/types/matcher.ts:2185](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2185)
+[src/types/matcher.ts:2408](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2408)
 
 ___
 
@@ -54,7 +54,7 @@ Number of recorded match decisions (== committed attempts)
 
 #### Defined in
 
-[src/types/matcher.ts:2179](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2179)
+[src/types/matcher.ts:2402](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2402)
 
 ___
 
@@ -66,7 +66,7 @@ Events rejected as replays of an already-applied event
 
 #### Defined in
 
-[src/types/matcher.ts:2187](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2187)
+[src/types/matcher.ts:2410](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2410)
 
 ___
 
@@ -78,7 +78,7 @@ Current model generation (bumped by resetLearningModel)
 
 #### Defined in
 
-[src/types/matcher.ts:2199](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2199)
+[src/types/matcher.ts:2422](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2422)
 
 ___
 
@@ -90,7 +90,7 @@ Feedback rejected by validation (non-finite, out of range, empty)
 
 #### Defined in
 
-[src/types/matcher.ts:2197](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2197)
+[src/types/matcher.ts:2420](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2420)
 
 ___
 
@@ -102,7 +102,7 @@ Events rejected because no attempt context exists for the assignment
 
 #### Defined in
 
-[src/types/matcher.ts:2191](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2191)
+[src/types/matcher.ts:2414](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2414)
 
 ___
 
@@ -114,7 +114,7 @@ Number of reward updates applied
 
 #### Defined in
 
-[src/types/matcher.ts:2181](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2181)
+[src/types/matcher.ts:2404](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2404)
 
 ___
 
@@ -126,7 +126,7 @@ Events rejected because their attempt context had expired
 
 #### Defined in
 
-[src/types/matcher.ts:2189](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2189)
+[src/types/matcher.ts:2412](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2412)
 
 ___
 
@@ -138,7 +138,7 @@ Events rejected because the attempt belonged to a superseded model generation
 
 #### Defined in
 
-[src/types/matcher.ts:2193](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2193)
+[src/types/matcher.ts:2416](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2416)
 
 ___
 
@@ -150,4 +150,4 @@ Sum of all applied rewards
 
 #### Defined in
 
-[src/types/matcher.ts:2183](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2183)
+[src/types/matcher.ts:2406](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2406)

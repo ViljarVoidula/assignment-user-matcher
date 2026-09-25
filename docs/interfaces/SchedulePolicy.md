@@ -58,7 +58,7 @@ policy is ignored.
 
 #### Defined in
 
-[src/types/matcher.ts:280](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L280)
+[src/types/matcher.ts:426](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L426)
 
 ___
 
@@ -72,7 +72,7 @@ The scheduled sweep enqueues it once the time arrives.
 
 #### Defined in
 
-[src/types/matcher.ts:271](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L271)
+[src/types/matcher.ts:417](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L417)
 
 ___
 
@@ -93,4 +93,4 @@ What happens when `notAfter` elapses un-accepted.
 
 #### Defined in
 
-[src/types/matcher.ts:288](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L288)
+[src/types/matcher.ts:434](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L434)

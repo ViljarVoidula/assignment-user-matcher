@@ -21,7 +21,7 @@
 
 #### Defined in
 
-[src/updates/assignment-update.ts:39](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/updates/assignment-update.ts#L39)
+[src/updates/assignment-update.ts:39](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/updates/assignment-update.ts#L39)
 
 ___
 
@@ -33,7 +33,7 @@ Who held it before the edit, whether or not they kept it.
 
 #### Defined in
 
-[src/updates/assignment-update.ts:47](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/updates/assignment-update.ts#L47)
+[src/updates/assignment-update.ts:47](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/updates/assignment-update.ts#L47)
 
 ___
 
@@ -43,7 +43,7 @@ ___
 
 #### Defined in
 
-[src/updates/assignment-update.ts:43](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/updates/assignment-update.ts#L43)
+[src/updates/assignment-update.ts:43](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/updates/assignment-update.ts#L43)
 
 ___
 
@@ -55,7 +55,7 @@ Whether the edit pulled the task off its owner and put it back in the queue.
 
 #### Defined in
 
-[src/updates/assignment-update.ts:45](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/updates/assignment-update.ts#L45)
+[src/updates/assignment-update.ts:45](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/updates/assignment-update.ts#L45)
 
 ___
 
@@ -67,7 +67,7 @@ Where the task ended up — `queued` when a retag sent it back for rematching.
 
 #### Defined in
 
-[src/updates/assignment-update.ts:41](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/updates/assignment-update.ts#L41)
+[src/updates/assignment-update.ts:41](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/updates/assignment-update.ts#L41)
 
 ___
 
@@ -77,4 +77,4 @@ ___
 
 #### Defined in
 
-[src/updates/assignment-update.ts:42](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/updates/assignment-update.ts#L42)
+[src/updates/assignment-update.ts:42](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/updates/assignment-update.ts#L42)

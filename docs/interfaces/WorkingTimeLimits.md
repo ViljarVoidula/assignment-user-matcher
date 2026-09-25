@@ -25,7 +25,7 @@ Volume limits, including the rolling reference periods that define EU working ti
 
 #### Defined in
 
-[src/scheduling/types.ts:341](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L341)
+[src/scheduling/types.ts:361](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L361)
 
 ___
 
@@ -37,7 +37,7 @@ Extended daily cap permitted when the average over `dayAverageWindowDays` holds.
 
 #### Defined in
 
-[src/scheduling/types.ts:340](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L340)
+[src/scheduling/types.ts:360](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L360)
 
 ___
 
@@ -49,7 +49,7 @@ Ordinary daily cap, e.g. Germany's 8h.
 
 #### Defined in
 
-[src/scheduling/types.ts:338](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L338)
+[src/scheduling/types.ts:358](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L358)
 
 ___
 
@@ -61,7 +61,7 @@ Hard cap over the whole period, in minutes.
 
 #### Defined in
 
-[src/scheduling/types.ts:352](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L352)
+[src/scheduling/types.ts:372](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L372)
 
 ___
 
@@ -71,7 +71,7 @@ ___
 
 #### Defined in
 
-[src/scheduling/types.ts:336](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L336)
+[src/scheduling/types.ts:356](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L356)
 
 ___
 
@@ -83,7 +83,7 @@ Cap no single week may exceed regardless of averaging.
 
 #### Defined in
 
-[src/scheduling/types.ts:343](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L343)
+[src/scheduling/types.ts:363](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L363)
 
 ___
 
@@ -97,7 +97,7 @@ counting them would wrongly depress a worker's average.
 
 #### Defined in
 
-[src/scheduling/types.ts:358](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L358)
+[src/scheduling/types.ts:378](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L378)
 
 ___
 
@@ -112,4 +112,4 @@ window of `windowDays` days". The EU 48h/4-month rule is
 
 #### Defined in
 
-[src/scheduling/types.ts:350](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L350)
+[src/scheduling/types.ts:370](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L370)

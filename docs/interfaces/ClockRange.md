@@ -19,7 +19,7 @@ A wall-clock time-of-day range; `to <= from` means it wraps past midnight (e.g. 
 
 #### Defined in
 
-[src/scheduling/time.ts:32](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L32)
+[src/scheduling/time.ts:32](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/time.ts#L32)
 
 ___
 
@@ -29,4 +29,4 @@ ___
 
 #### Defined in
 
-[src/scheduling/time.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/time.ts#L33)
+[src/scheduling/time.ts:33](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/time.ts#L33)

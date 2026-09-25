@@ -68,7 +68,7 @@ What to do with slots whose time already passed when the sweep runs
 
 #### Defined in
 
-[src/types/matcher.ts:367](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L367)
+[src/types/matcher.ts:513](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L513)
 
 ___
 
@@ -80,7 +80,7 @@ Milliseconds between one occurrence's window opening and the next. Minimum 1000.
 
 #### Defined in
 
-[src/types/matcher.ts:323](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L323)
+[src/types/matcher.ts:469](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L469)
 
 ___
 
@@ -92,7 +92,7 @@ Stop recurring after this many occurrences have been materialized.
 
 #### Defined in
 
-[src/types/matcher.ts:355](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L355)
+[src/types/matcher.ts:501](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L501)
 
 ___
 
@@ -110,7 +110,7 @@ Per-occurrence miss policy (see `SchedulePolicy.onMiss`).
 
 #### Defined in
 
-[src/types/matcher.ts:351](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L351)
+[src/types/matcher.ts:497](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L497)
 
 ___
 
@@ -128,7 +128,7 @@ now — the first sweep materializes an occurrence immediately
 
 #### Defined in
 
-[src/types/matcher.ts:342](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L342)
+[src/types/matcher.ts:488](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L488)
 
 ___
 
@@ -155,7 +155,7 @@ every occurrence, whichever period it falls in.
 
 #### Defined in
 
-[src/types/matcher.ts:337](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L337)
+[src/types/matcher.ts:483](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L483)
 
 ___
 
@@ -167,7 +167,7 @@ Stop recurring: no occurrence opens after this epoch ms; the template retires.
 
 #### Defined in
 
-[src/types/matcher.ts:353](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L353)
+[src/types/matcher.ts:499](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L499)
 
 ___
 
@@ -182,4 +182,4 @@ moment its successor's time arrives).
 
 #### Defined in
 
-[src/types/matcher.ts:349](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L349)
+[src/types/matcher.ts:495](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L495)

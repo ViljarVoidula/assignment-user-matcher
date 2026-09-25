@@ -2154,6 +2154,36 @@ const result = solveSchedule({
 
 Rules cover: daily rest (rolling window, reduction allowances, clock-band containment), weekly rest (two-level floor plus average), rolling working-time averages with absence neutralisation, overtime (ordinary-vs-overtime split, consent, per-day and per-window caps, time-off-in-lieu), duty-type volume quotas, night work (configurable band, per-shift cap, averaging, hazardous absolute cap, volume quotas, prohibited bands), in-shift breaks, consecutive days and nights, forbidden shift successions, minimum start interval, Sunday and holiday rules, minimum engagement, publication and change notice, availability and preferences, date-valid qualifications, group composition, statutory protections, contract limits, and fairness.
 
+**Worker preferences.** `preferred` / `avoid` availability rules are soft wishes, scored at the soft level, so they never outrank cover or a legal limit.
+
+- **Matching.** `shiftTypeTags: ['night']` matches by shift type rather than by clock window.
+- **Priority.** `priority: 'important'` is multiplied by `objectives.preferences.importantWeight`.
+- **Budget.** `objectives.preferences.budget` scales each person's wishes to the same total, so someone who states twenty does not out-pull someone who states one. Rules touching no shift in the period cost nothing. Mark imported facts such as calendar busy time `outsideBudget: true`.
+- **Report.** `result.preferences` (omitted when there is nothing to report) and `checkCompliance(...).preferences` (always present) report per person which wishes were met. Each asks whether someone else could have taken *this person's place* on that occurrence — the holder is vacated for the check, so a full shift never reads as cover, and another contract for the same person is never "someone else". For each miss it gives a reason:
+  - `cover`: nobody else could have taken their place;
+  - `blocked`: the person could not legally have taken the shift they wanted, including being blocked by their own other assignments;
+  - `tradeoff`: the solver balanced it against the team.
+
+```ts
+const result = solveSchedule({
+    period,
+    shifts,
+    employees: [
+        {
+            id: 'ana',
+            tags: [],
+            timeOff: [],
+            availability: [
+                { id: 'nights', kind: 'preferred', shiftTypeTags: ['night'] },
+                { id: 'wedding', kind: 'avoid', priority: 'important', fromDate: '2026-06-13', toDate: '2026-06-13' },
+            ],
+        },
+    ],
+    objectives: { preferences: { budget: 10, importantWeight: 4 } },
+});
+result.preferences; // [{ employeeId: 'ana', rules: [{ ruleId: 'wedding', outcome: 'met', ... }, ...] }]
+```
+
 `Employee.rules` overrides the global set per person — that is how age classes, individual opt-outs and hazardous-work status are expressed. `Employee.personId` aggregates several contracts onto one natural person, which rest and window rules require: overlap (`no-overlap`) and inter-assignment rest (`min-rest`, `dailyRest`) are judged on the person timeline — spanning sibling contracts and supplied `history` — so two contracts cannot double-book a person or dodge a rest floor at the period boundary. Contract hour/day **maxima** are the opposite: per employee record, like the minimum and the `timeOffInLieu` ledger — one contract's cap is never consumed by a sibling's hours. Rolling volume windows (night-shift quotas, weekly-rest averaging) probe true rolling windows anchored on entry boundaries, never a day grid. Declared `available` windows are credited as a **union**: a shift spanning two contiguous windows is inside the declaration.
 
 Break entitlements are checked against shift design: `unpaidBreakMinutes` (deducted from working time) and `paidBreakMinutes` (working time, and the only thing that discharges a `paid: true` break rule). Deadline arithmetic that needs a "now" — notably whether a cancellation of a published assignment fell inside `notice.cancellationDeadlineMinutes` — is anchored by the optional `asOf` input; without it every cancellation is treated as late, the conservative reading.

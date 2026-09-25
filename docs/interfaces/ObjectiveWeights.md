@@ -16,6 +16,7 @@ rather than being internal tuning.
 - [costWeightPerEuro](ObjectiveWeights.md#costweightpereuro)
 - [fillToContract](ObjectiveWeights.md#filltocontract)
 - [homeSiteWeight](ObjectiveWeights.md#homesiteweight)
+- [preferences](ObjectiveWeights.md#preferences)
 
 ## Properties
 
@@ -30,7 +31,7 @@ term off.
 
 #### Defined in
 
-[src/scheduling/types.ts:1021](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L1021)
+[src/scheduling/types.ts:1043](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L1043)
 
 ___
 
@@ -46,7 +47,7 @@ summary still use the cost model either way.
 
 #### Defined in
 
-[src/scheduling/types.ts:1007](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L1007)
+[src/scheduling/types.ts:1029](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L1029)
 
 ___
 
@@ -65,7 +66,7 @@ only *distribute* the demand and never grow it.
 
 #### Defined in
 
-[src/scheduling/types.ts:1032](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L1032)
+[src/scheduling/types.ts:1054](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L1054)
 
 ___
 
@@ -80,4 +81,18 @@ this is declared data, kept outside AI Act Annex III point 4(b).
 
 #### Defined in
 
-[src/scheduling/types.ts:1014](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/scheduling/types.ts#L1014)
+[src/scheduling/types.ts:1036](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L1036)
+
+___
+
+### preferences
+
+• `Optional` **preferences**: `PreferenceObjective`
+
+How stated preferences (`preferred` / `avoid` availability rules) are
+weighted. Unset: every rule counts at its own `weight`, as it always
+has.
+
+#### Defined in
+
+[src/scheduling/types.ts:1060](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/scheduling/types.ts#L1060)

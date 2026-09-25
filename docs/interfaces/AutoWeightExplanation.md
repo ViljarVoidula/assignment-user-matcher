@@ -31,7 +31,7 @@ Independent attempts backing the estimate
 
 #### Defined in
 
-[src/types/matcher.ts:2165](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2165)
+[src/types/matcher.ts:2388](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2388)
 
 ___
 
@@ -43,7 +43,7 @@ Configured decay half-life, if any
 
 #### Defined in
 
-[src/types/matcher.ts:2171](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2171)
+[src/types/matcher.ts:2394](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2394)
 
 ___
 
@@ -55,7 +55,7 @@ What happened, and why
 
 #### Defined in
 
-[src/types/matcher.ts:2156](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2156)
+[src/types/matcher.ts:2379](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2379)
 
 ___
 
@@ -67,7 +67,7 @@ Kish effective sample size after decay
 
 #### Defined in
 
-[src/types/matcher.ts:2167](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2167)
+[src/types/matcher.ts:2390](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2390)
 
 ___
 
@@ -79,7 +79,7 @@ Posterior mean reward estimate
 
 #### Defined in
 
-[src/types/matcher.ts:2158](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2158)
+[src/types/matcher.ts:2381](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2381)
 
 ___
 
@@ -91,7 +91,7 @@ Epoch ms of the most recent observation
 
 #### Defined in
 
-[src/types/matcher.ts:2169](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2169)
+[src/types/matcher.ts:2392](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2392)
 
 ___
 
@@ -103,7 +103,7 @@ Lower/upper credible bounds at the configured z
 
 #### Defined in
 
-[src/types/matcher.ts:2162](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2162)
+[src/types/matcher.ts:2385](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2385)
 
 ___
 
@@ -115,7 +115,7 @@ Epoch ms at which a lapsed veto would be reassessed
 
 #### Defined in
 
-[src/types/matcher.ts:2173](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2173)
+[src/types/matcher.ts:2396](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2396)
 
 ___
 
@@ -125,7 +125,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:2152](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2152)
+[src/types/matcher.ts:2375](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2375)
 
 ___
 
@@ -137,7 +137,7 @@ Posterior standard error of that estimate
 
 #### Defined in
 
-[src/types/matcher.ts:2160](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2160)
+[src/types/matcher.ts:2383](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2383)
 
 ___
 
@@ -147,7 +147,7 @@ ___
 
 #### Defined in
 
-[src/types/matcher.ts:2163](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2163)
+[src/types/matcher.ts:2386](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2386)
 
 ___
 
@@ -159,4 +159,4 @@ The weight this tag was assigned
 
 #### Defined in
 
-[src/types/matcher.ts:2154](https://github.com/ViljarVoidula/assignment-user-matcher/blob/e31fe4af714c62a4dc6fa37196c45b503b1587f3/src/types/matcher.ts#L2154)
+[src/types/matcher.ts:2377](https://github.com/ViljarVoidula/assignment-user-matcher/blob/b634360620cd48da2d30183ba514010ac4bd1bba/src/types/matcher.ts#L2377)
