@@ -63,8 +63,9 @@ outsideBudget?: boolean;
 ```
 
 `shiftTypeTags` applies to every kind (an `unavailable` rule on `night` is a
-valid hard rule), through `availabilityApplies` in `model.ts`, so the hard
-verdict, the soft score and the report all read one predicate.
+valid hard rule), through `availabilityApplies` in `preferences.ts`
+(re-exported from `model.ts`), so the hard verdict, the soft score and the
+report all read one predicate.
 
 ### `objectives.preferences?: { budget?: number; importantWeight?: number }`
 
@@ -114,11 +115,14 @@ interface PreferenceRuleOutcome {
   and otherwise `missed`. `missed` stays empty: listing every preferred
   instance they did not get would be noise, since nobody can work all of them.
 - `not-applicable` means the rule matched no instance.
-- Every reason asks whether someone could have taken **this person's place**
-  on that occurrence, not merely whether someone else was free: the holder is
-  vacated for the check, so a shift already at `maxEmployees` never reads as
-  cover. Another employee record of the same person (shared `personId`) never
-  counts as "someone else" — two contracts are not mutual cover.
+- The question runs in two directions. A missed `avoid` asks whether someone
+  else could have taken **this person's place** on that occurrence; a missed
+  `preferred` asks the reverse, whether this person could have taken **a
+  holder's place** (`blocked` if not, `tradeoff` if so). Either way the
+  occupant is vacated for the check rather than asking whether someone was
+  merely free, so a shift already at `maxEmployees` never reads as cover.
+  Another employee record of the same person (shared `personId`) never counts
+  as "someone else" — two contracts are not mutual cover.
 - `reason: 'cover'` means nobody else could have taken their place. The
   eligibility is the same as `rankCandidates` uses, via `engine/verdicts.ts`.
 - `reason: 'blocked'` (dated `preferred` rules only) means the person
