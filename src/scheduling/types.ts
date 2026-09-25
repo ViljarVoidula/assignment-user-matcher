@@ -1050,6 +1050,25 @@ export interface ObjectiveWeights {
      * only *distribute* the demand and never grow it.
      */
     fillToContract?: boolean;
+    /**
+     * How stated preferences (`preferred` / `avoid` availability rules) are
+     * weighted. Unset: every rule counts at its own `weight`, as it always
+     * has.
+     */
+    preferences?: PreferenceObjective;
+}
+
+/** Weighting of stated preferences. Soft level only. */
+export interface PreferenceObjective {
+    /**
+     * Scale each person's preference weights so they sum to this. The sum
+     * covers rules that touch at least one occurrence in the period and are
+     * not `outsideBudget`. Without it, someone stating twenty wishes pulls
+     * twenty times harder than someone stating one.
+     */
+    budget?: number;
+    /** Multiplier for `priority: 'important'` rules. Defaults to 1. */
+    importantWeight?: number;
 }
 
 /** One person's planned hours set against their contract. */
@@ -1205,6 +1224,12 @@ export interface ModelContext {
     contractHoursWeight: number;
     /** Resolved `objectives.fillToContract`. */
     fillToContract: boolean;
+    /**
+     * Each employee's `preferred` / `avoid` rules with `weight` resolved
+     * (priority multiplier, then budget scaling). Every preference scorer
+     * reads this, never `Employee.availability` weights directly.
+     */
+    preferenceRules: Map<string, AvailabilityRule[]>;
     /** Employee id → the natural person it belongs to (CJEU C-585/19). */
     personIdOf: Map<string, string>;
     /** Person id → the employee records that share it. */

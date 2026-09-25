@@ -152,7 +152,7 @@ export function preferencePenalty(state: SearchState): number {
         const inst = state.ctx.instanceById.get(instanceId);
         if (!inst) continue;
         for (const employeeId of employees) {
-            const rules = state.ctx.employeeById.get(employeeId)?.availability;
+            const rules = state.ctx.preferenceRules.get(employeeId);
             if (rules?.length) penalty += preferenceScore(state.ctx.clock, rules, inst);
         }
     }

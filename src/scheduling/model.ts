@@ -42,6 +42,7 @@ import type {
 } from './types';
 import { ScheduleValidationError } from './types';
 export { availabilityApplies } from './preferences';
+import { resolvePreferenceRules, validatePreferenceObjectives } from './preferences';
 import { createDefaultConstraints } from './constraints/constraint';
 import { scopeEmployeeConstraints } from './constraints/employee-scope';
 import { DEFAULT_MIN_REST_MINUTES } from './constraints/min-rest';
@@ -866,6 +867,9 @@ export function buildModel(input: ScheduleInput): ModelContext {
             : clock.parseDateTime(input.published.publishedAt, 'published.publishedAt');
     const asOfMinute = input.asOf === undefined ? undefined : clock.parseDateTime(input.asOf, 'asOf');
 
+    validatePreferenceObjectives(input.objectives?.preferences);
+    const preferenceRules = resolvePreferenceRules(input.employees, instances, clock, input.objectives?.preferences);
+
     return {
         periodStartDate: input.period.startDate,
         periodDays,
@@ -888,6 +892,7 @@ export function buildModel(input: ScheduleInput): ModelContext {
         contractedPeriodMinutes: contractedPeriod,
         contractHoursWeight,
         fillToContract,
+        preferenceRules,
         personIdOf,
         employeesOfPerson,
         history: buildHistory(input.history, clock, personIdOf),

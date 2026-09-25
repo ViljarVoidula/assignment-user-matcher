@@ -335,7 +335,7 @@ export function rankCandidates(
             rulesFor(ctx, employee.id).engagement,
         );
         const fairnessDebt = meanExtra - (extraLoad.get(employee.id) ?? 0);
-        const preference = preferenceScore(ctx.clock, employee.availability, inst);
+        const preference = preferenceScore(ctx.clock, ctx.preferenceRules.get(employee.id), inst);
         const originSiteId = originSiteFor(state, employee.id, inst);
         const travelMinutes =
             originSiteId !== undefined && inst.siteId !== undefined
