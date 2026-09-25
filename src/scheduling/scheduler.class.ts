@@ -75,7 +75,7 @@ export class ShiftScheduler {
                     maxIterations: input.maxIterations,
                     rand,
                     onImprovement: input.onProgress
-                        ? (best) => input.onProgress!(this.assemble(best, propagation, startedAt, seed, input, 0))
+                        ? (best) => input.onProgress!(this.assemble(best, propagation, startedAt, seed, input, 0, false))
                         : undefined,
                 },
                 () => createState(ctx),
@@ -87,7 +87,15 @@ export class ShiftScheduler {
         return this.assemble(finalState, propagation, startedAt, seed, input, evaluatedVariants);
     }
 
-    /** Shape a search state into the public result, running the aggregate rules once. */
+    /**
+     * Shape a search state into the public result, running the aggregate rules once.
+     *
+     * `final` is false for the `onProgress` callbacks the LNS loop fires on every
+     * new best: the preference report is search-plan-forbidden from running inside
+     * the objective/search path (it costs solve time on every improvement, and it
+     * vacates and restores the shared `best` state that the eventual final
+     * assembly reads), so progress payloads never get a `preferences` field.
+     */
     private assemble(
         state: InternalState,
         propagation: { violations: ConstraintViolation[] },
@@ -95,6 +103,7 @@ export class ShiftScheduler {
         seed: number,
         input: ScheduleInput,
         evaluatedVariants: number,
+        final: boolean = true,
     ): ScheduleResult {
         const ctx = state.ctx;
         const minHoursWeight = ctx.constraints.find((c) => c.id === 'hour-budget')?.weight ?? MIN_HOURS_WEIGHT;
@@ -141,7 +150,7 @@ export class ShiftScheduler {
         ];
         const cost = rosterCost(state);
         const contractHours = contractHoursSummary(state);
-        const preferences = preferenceReport(state);
+        const preferences = final ? preferenceReport(state) : [];
 
         return {
             status,

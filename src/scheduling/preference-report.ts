@@ -43,12 +43,26 @@ function withVacated(state: InternalState, holderId: string, instanceId: string,
     }
 }
 
-/** Whether anyone else could have worked `inst` in `employeeId`'s place. */
+/** Whether two employee records belong to the same person (`ctx.personIdOf` falls back to the id itself). */
+function samePerson(state: InternalState, a: string, b: string): boolean {
+    return state.ctx.personIdOf.get(a) === state.ctx.personIdOf.get(b);
+}
+
+/**
+ * Whether anyone else could have worked `inst` in `employeeId`'s place.
+ *
+ * "Someone else" means someone else's *person*, not just another employee
+ * record: two contracts for the same person are not mutual cover, or a
+ * person with two records would always read as available to relieve
+ * themselves.
+ */
 function someoneElseEligible(state: InternalState, employeeId: string, inst: ShiftInstance): boolean {
     return withVacated(state, employeeId, inst.id, () =>
         state.ctx.employees.some(
             (other) =>
-                other.id !== employeeId && !state.isAssigned(other.id, inst.id) && eligible(state, other.id, inst.id),
+                !samePerson(state, other.id, employeeId) &&
+                !state.isAssigned(other.id, inst.id) &&
+                eligible(state, other.id, inst.id),
         ),
     );
 }
@@ -56,7 +70,7 @@ function someoneElseEligible(state: InternalState, employeeId: string, inst: Shi
 /** Whether `employeeId` could have worked `inst` — beside its holders, or in place of one of them. */
 function couldHaveWorked(state: InternalState, employeeId: string, inst: ShiftInstance): boolean {
     if (eligible(state, employeeId, inst.id)) return true;
-    const holders = [...(state.assignments.get(inst.id) ?? [])];
+    const holders = [...(state.assignments.get(inst.id) ?? [])].filter((holder) => !samePerson(state, holder, employeeId));
     return holders.some((holder) => withVacated(state, holder, inst.id, () => eligible(state, employeeId, inst.id)));
 }
 
@@ -67,6 +81,9 @@ export function preferenceReport(state: InternalState): EmployeePreferenceReport
         const rules = ctx.preferenceRules.get(employee.id);
         if (!rules?.length) continue;
         const outcomes: PreferenceRuleOutcome[] = rules.map((rule) => {
+            // Safe: ctx.preferenceRules is built by resolvePreferenceRules (preferences.ts),
+            // which only ever keeps 'preferred' / 'avoid' rules — hard 'unavailable' rules
+            // never reach this map.
             const kind = rule.kind as 'preferred' | 'avoid';
             const matching = ctx.instances.filter((inst) => ruleMatchesInstance(ctx.clock, rule, inst));
             const assigned = matching.filter((inst) => state.isAssigned(employee.id, inst.id));

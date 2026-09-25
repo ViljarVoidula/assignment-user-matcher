@@ -370,5 +370,115 @@ describe('worker schedule preferences', function () {
             const result = solveSchedule(input({ employees: [emp('a')], shifts: [cover('m', MON)], maxIterations: 20 }));
             expect(result).to.not.have.property('preferences');
         });
+
+        it('reports a weekly avoid missed when every matching occurrence was assigned', function () {
+            const report = checkCompliance(
+                input({
+                    employees: [emp('a', [{ id: 'wk', kind: 'avoid', daysOfWeek: [1, 2] }])],
+                    shifts: [cover('m', MON), cover('t', TUE)],
+                }),
+                [
+                    { employeeId: 'a', shiftInstanceId: `m@${MON}`, date: MON, reasons: [] },
+                    { employeeId: 'a', shiftInstanceId: `t@${TUE}`, date: TUE, reasons: [] },
+                ],
+            );
+            const outcome = outcomeOf(report.preferences, 'a', 'wk')!;
+            expect(outcome).to.include({ outcome: 'missed', matchedInstances: 2, honoured: 0 });
+        });
+
+        it('never reports a hard unavailable rule, even when it carries an id', function () {
+            const report = checkCompliance(
+                input({
+                    employees: [emp('a', [{ id: 'blackout', kind: 'unavailable', fromDate: MON, toDate: MON }])],
+                    shifts: [cover('m', MON)],
+                }),
+                [],
+            );
+            expect(outcomeOf(report.preferences, 'a', 'blackout')).to.be.undefined;
+            const employeeReport = report.preferences.find((r) => r.employeeId === 'a');
+            expect(employeeReport).to.be.undefined;
+        });
+
+        it('two records for one person are not mutual cover: the only "eligible" other record gives cover, not tradeoff', function () {
+            const report = checkCompliance(
+                input({
+                    employees: [
+                        emp('a1', [{ id: 'r1', kind: 'avoid', fromDate: MON, toDate: MON }], { personId: 'p1' }),
+                        emp('a2', undefined, { personId: 'p1' }),
+                    ],
+                    shifts: [cover('s', MON)],
+                }),
+                [{ employeeId: 'a1', shiftInstanceId: `s@${MON}`, date: MON, reasons: [] }],
+            );
+            expect(outcomeOf(report.preferences, 'a1', 'r1')!.missed).to.deep.equal([
+                { instanceId: `s@${MON}`, reason: 'cover' },
+            ]);
+        });
+
+        it("a preferred shift held by the same person's other record is not a tradeoff either", function () {
+            const report = checkCompliance(
+                input({
+                    employees: [
+                        emp('a1', [{ id: 'want', kind: 'preferred', fromDate: MON, toDate: MON }], { personId: 'p1' }),
+                        emp('a2', undefined, { personId: 'p1' }),
+                    ],
+                    shifts: [cover('s', MON)],
+                }),
+                [{ employeeId: 'a2', shiftInstanceId: `s@${MON}`, date: MON, reasons: [] }],
+            );
+            expect(outcomeOf(report.preferences, 'a1', 'want')!.missed).to.deep.equal([
+                { instanceId: `s@${MON}`, reason: 'blocked' },
+            ]);
+        });
+
+        it('adding a preference rule that does not change the roster leaves hard violations and contractHours untouched', function () {
+            const roster = [
+                { employeeId: 'a', shiftInstanceId: `m@${MON}`, date: MON, reasons: [] },
+                { employeeId: 'b', shiftInstanceId: `t@${TUE}`, date: TUE, reasons: [] },
+            ];
+            const shifts = [cover('m', MON), cover('t', TUE)];
+
+            const withoutRule = checkCompliance(input({ employees: [emp('a'), emp('b')], shifts }), roster);
+            const withRule = checkCompliance(
+                input({
+                    employees: [emp('a', [{ id: 'r1', kind: 'avoid', fromDate: MON, toDate: MON }]), emp('b')],
+                    shifts,
+                }),
+                roster,
+            );
+
+            const hardOf = (r: typeof withoutRule) => r.violations.filter((v) => v.severity === 'hard');
+            expect(hardOf(withRule)).to.deep.equal(hardOf(withoutRule));
+            expect(withRule.contractHours).to.deep.equal(withoutRule.contractHours);
+        });
+
+        it('builds the preference report only for the final result, never for onProgress payloads', function () {
+            // A contested solve (mirrors "lets a single wish beat one of many"
+            // above) so the LNS loop actually improves on its first greedy fill
+            // and fires onProgress at least once.
+            const contested = shift('contested', '09:00', '17:00', [MON], { minEmployees: 1, maxEmployees: 1 });
+            const other = shift('other', '09:00', '17:00', [TUE]);
+            const one = emp('one', [{ id: 'r1', kind: 'avoid', fromDate: MON, toDate: MON }]);
+            const many = emp('many', [
+                { kind: 'avoid', weight: 3, fromDate: MON, toDate: MON },
+                { kind: 'avoid', fromDate: TUE, toDate: TUE },
+            ]);
+
+            const progressResults: Array<{ preferences?: unknown }> = [];
+            const result = solveSchedule(
+                input({
+                    employees: [one, many],
+                    shifts: [contested, other],
+                    objectives: { fillToContract: false },
+                    maxIterations: 200,
+                    onProgress: (r) => progressResults.push(r),
+                }),
+            );
+
+            expect(progressResults.length).to.be.greaterThan(0);
+            for (const r of progressResults) expect(r).to.not.have.property('preferences');
+            expect(result).to.have.property('preferences');
+            expect(result.preferences!.length).to.be.greaterThan(0);
+        });
     });
 });
