@@ -36,8 +36,8 @@ export interface ClockRange {
 /**
  * Resolves wall-clock times in one IANA zone to period minutes and back.
  *
- * Construct once per solve and share it: each instance memoizes the per-day UTC
- * offset, so repeated conversions cost a map lookup rather than an `Intl` call.
+ * Construct once per solve and share it: each instance memoizes every wall-clock
+ * instant it resolves, so repeated conversions cost a map lookup rather than an `Intl` call.
  */
 export class PeriodClock {
     readonly startDate: string;
@@ -45,8 +45,8 @@ export class PeriodClock {
     readonly days: number;
 
     private readonly formatter: Intl.DateTimeFormat;
-    /** UTC epoch ms of local midnight, keyed by day index from the period start. */
-    private readonly midnightByDay = new Map<number, number>();
+    /** UTC epoch ms of a wall-clock minute, keyed by `dayIndex * 1441 + minutesIntoDay`. */
+    private readonly instantByDayMinute = new Map<number, number>();
     /** UTC epoch ms of local midnight on the period start — the origin of period minutes. */
     private originMs!: number;
 
@@ -127,10 +127,7 @@ export class PeriodClock {
 
     /** Period minutes for `minutesIntoDay` wall-clock minutes past local midnight on `dayIndex`. */
     private periodMinuteAt(dayIndex: number, minutesIntoDay: number): number {
-        if (minutesIntoDay === 0) {
-            return Math.round((this.utcMidnightMs(dayIndex) - this.originMs) / 60_000);
-        }
-        return Math.round((this.utcInstantMs(this.dateAt(dayIndex), minutesIntoDay) - this.originMs) / 60_000);
+        return Math.round((this.localInstantMs(dayIndex, minutesIntoDay) - this.originMs) / 60_000);
     }
 
     /** The ISO date a period minute falls on. */
@@ -225,12 +222,17 @@ export class PeriodClock {
         return day;
     }
 
-    /** UTC epoch ms of local midnight on the given day index, memoized. */
-    private utcMidnightMs(dayIndex: number): number {
-        const cached = this.midnightByDay.get(dayIndex);
+    /**
+     * UTC epoch ms of `minutesIntoDay` (0..1440) past local midnight on the
+     * given day index, memoized: clock-band arithmetic asks for the same few
+     * wall-clock minutes on every day, and each miss costs two `Intl` calls.
+     */
+    private localInstantMs(dayIndex: number, minutesIntoDay: number): number {
+        const key = dayIndex * 1441 + minutesIntoDay;
+        const cached = this.instantByDayMinute.get(key);
         if (cached !== undefined) return cached;
-        const ms = this.utcInstantMs(this.dateAt(dayIndex), 0);
-        this.midnightByDay.set(dayIndex, ms);
+        const ms = this.utcInstantMs(this.dateAt(dayIndex), minutesIntoDay);
+        this.instantByDayMinute.set(key, ms);
         return ms;
     }
 

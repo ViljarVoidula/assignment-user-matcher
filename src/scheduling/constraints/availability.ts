@@ -17,7 +17,7 @@
  */
 
 import type { AvailabilityRule, RuleVerdict, SchedulingConstraint, SearchState, ShiftInstance } from '../types';
-import { availabilityApplies, ruleOverlapMinutes, type ClockLike } from '../preferences';
+import { availabilityApplies, ruleMatchesInstance, ruleOverlapMinutes, type ClockLike } from '../preferences';
 import { fail, fromVerdict, instanceOf, pass } from './support';
 
 export function availability(): SchedulingConstraint {
@@ -64,10 +64,14 @@ export function availability(): SchedulingConstraint {
                 }
             }
 
-            const avoided = matching.find((r) => r.kind === 'avoid' && ruleOverlapMinutes(clock, range, r) > 0);
+            // Read the resolved rule, not the stated one, so the weight shown
+            // here is the weight the objective scores (priority and budget applied).
+            const avoided = state.ctx.preferenceRules
+                .get(pair.employeeId)
+                ?.find((r) => r.kind === 'avoid' && ruleMatchesInstance(clock, r, inst));
             if (avoided) {
                 return fail('availability', 'soft', `employee "${pair.employeeId}" prefers to avoid "${inst.id}"`, {
-                    actual: avoided.weight ?? 1,
+                    actual: avoided.weight,
                 });
             }
 

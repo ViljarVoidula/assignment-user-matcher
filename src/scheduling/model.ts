@@ -610,6 +610,13 @@ function validateEmployee(employee: Employee): void {
                 `employee "${employee.id}" availability.shiftTypeTags must be non-empty strings`,
             );
         }
+        // An empty list matches no shift type, so on an `available` rule it
+        // would silently make the person unrosterable. Omit the field instead.
+        if (rule.shiftTypeTags?.length === 0) {
+            throw new ScheduleValidationError(
+                `employee "${employee.id}" availability.shiftTypeTags must list at least one shift type (omit it to match every shift)`,
+            );
+        }
         if (rule.priority !== undefined) {
             if (rule.priority !== 'normal' && rule.priority !== 'important') {
                 throw new ScheduleValidationError(
