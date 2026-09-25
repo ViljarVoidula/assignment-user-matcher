@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { buildModel } from '../../src/scheduling/model';
 import { preferenceScore } from '../../src/scheduling/constraints/availability';
-import { rankCandidates, ScheduleValidationError, solveSchedule } from '../../src/scheduling';
+import { checkCompliance, rankCandidates, ScheduleValidationError, solveSchedule } from '../../src/scheduling';
 import type { AvailabilityRule, Employee, ScheduleInput, ShiftTemplate } from '../../src/scheduling';
 
 /** Mon 5 Jan – Sun 11 Jan 2026. */
@@ -242,6 +242,133 @@ describe('worker schedule preferences', function () {
                 }),
             );
             expect(ctx.preferenceRules.get('e1')!.map((r) => r.weight)).to.deep.equal([2, 8]);
+        });
+    });
+
+    describe('preference report', function () {
+        const MON = '2026-01-05';
+        const TUE = '2026-01-06';
+        const cover = (id: string, date: string) =>
+            shift(id, '09:00', '17:00', [date], { minEmployees: 1, maxEmployees: 1 });
+        const outcomeOf = (
+            report: import('../../src/scheduling').EmployeePreferenceReport[] | undefined,
+            emp: string,
+            id: string,
+        ) => report?.find((r) => r.employeeId === emp)?.rules.find((r) => r.ruleId === id);
+
+        it('marks a dated avoid met when the worker is left off that day', function () {
+            const result = solveSchedule(
+                input({
+                    employees: [emp('a', [{ id: 'r1', kind: 'avoid', fromDate: MON, toDate: MON }]), emp('b')],
+                    shifts: [cover('s', MON)],
+                    objectives: { fillToContract: false },
+                    maxIterations: 100,
+                }),
+            );
+            expect(outcomeOf(result.preferences, 'a', 'r1')).to.include({
+                outcome: 'met',
+                matchedInstances: 1,
+                honoured: 1,
+            });
+        });
+
+        it('explains a dated avoid missed for cover when nobody else could work', function () {
+            const result = solveSchedule(
+                input({
+                    employees: [emp('a', [{ id: 'r1', kind: 'avoid', priority: 'important', fromDate: MON, toDate: MON }])],
+                    shifts: [cover('s', MON)],
+                    objectives: { fillToContract: false },
+                    maxIterations: 50,
+                }),
+            );
+            const outcome = outcomeOf(result.preferences, 'a', 'r1')!;
+            expect(outcome).to.include({ outcome: 'missed', priority: 'important', kind: 'avoid' });
+            expect(outcome.missed).to.deep.equal([{ instanceId: `s@${MON}`, reason: 'cover' }]);
+        });
+
+        it('marks a dated preferred missed as blocked when the worker was not eligible', function () {
+            const result = solveSchedule(
+                input({
+                    employees: [
+                        emp('a', [
+                            { id: 'want', kind: 'preferred', fromDate: MON, toDate: MON },
+                            { kind: 'unavailable', fromDate: MON, toDate: MON },
+                        ]),
+                        emp('b'),
+                    ],
+                    shifts: [cover('s', MON)],
+                    objectives: { fillToContract: false },
+                    maxIterations: 50,
+                }),
+            );
+            const outcome = outcomeOf(result.preferences, 'a', 'want')!;
+            expect(outcome.outcome).to.equal('missed');
+            expect(outcome.missed).to.deep.equal([{ instanceId: `s@${MON}`, reason: 'blocked' }]);
+        });
+
+        it('reports a weekly avoid partly met with the assigned occurrence listed', function () {
+            const report = checkCompliance(
+                input({
+                    employees: [emp('a', [{ id: 'wk', kind: 'avoid', daysOfWeek: [1, 2] }]), emp('b')],
+                    shifts: [cover('m', MON), cover('t', TUE)],
+                }),
+                [
+                    { employeeId: 'a', shiftInstanceId: `m@${MON}`, date: MON, reasons: [] },
+                    { employeeId: 'b', shiftInstanceId: `t@${TUE}`, date: TUE, reasons: [] },
+                ],
+            );
+            const outcome = outcomeOf(report.preferences, 'a', 'wk')!;
+            expect(outcome).to.include({ outcome: 'partly', matchedInstances: 2, honoured: 1 });
+            expect(outcome.missed).to.deep.equal([{ instanceId: `m@${MON}`, reason: 'tradeoff' }]);
+        });
+
+        it('reports a weekly preferred met by any matching shift, and lists nothing it missed', function () {
+            const report = checkCompliance(
+                input({
+                    employees: [emp('a', [{ id: 'wk', kind: 'preferred', daysOfWeek: [1, 2] }])],
+                    shifts: [cover('m', MON), cover('t', TUE)],
+                }),
+                [{ employeeId: 'a', shiftInstanceId: `m@${MON}`, date: MON, reasons: [] }],
+            );
+            expect(outcomeOf(report.preferences, 'a', 'wk')).to.deep.include({
+                outcome: 'met',
+                honoured: 1,
+                missed: [],
+            });
+        });
+
+        it('calls a preferred shift somebody else filled a tradeoff, not a block, when the worker could have taken it', function () {
+            // The shift is full (max 1): adding "a" beside "b" breaks the headcount
+            // cap, but "a" could have taken b's place — a choice, not a legal block.
+            const report = checkCompliance(
+                input({
+                    employees: [emp('a', [{ id: 'want', kind: 'preferred', fromDate: MON, toDate: MON }]), emp('b')],
+                    shifts: [cover('s', MON)],
+                }),
+                [{ employeeId: 'b', shiftInstanceId: `s@${MON}`, date: MON, reasons: [] }],
+            );
+            expect(outcomeOf(report.preferences, 'a', 'want')!.missed).to.deep.equal([
+                { instanceId: `s@${MON}`, reason: 'tradeoff' },
+            ]);
+        });
+
+        it('reports a rule that touches no occurrence as not-applicable', function () {
+            const report = checkCompliance(
+                input({
+                    employees: [emp('a', [{ id: 'sat', kind: 'avoid', fromDate: '2026-01-10', toDate: '2026-01-10' }])],
+                    shifts: [cover('m', MON)],
+                }),
+                [],
+            );
+            expect(outcomeOf(report.preferences, 'a', 'sat')).to.include({
+                outcome: 'not-applicable',
+                matchedInstances: 0,
+            });
+        });
+
+        it('omits preferences from the solve result when nobody stated any', function () {
+            const result = solveSchedule(input({ employees: [emp('a')], shifts: [cover('m', MON)], maxIterations: 20 }));
+            expect(result).to.not.have.property('preferences');
         });
     });
 });

@@ -988,6 +988,8 @@ export interface ScheduleResult {
     cost?: { totalCents: number; byEmployee: Record<string, number> };
     /** Planned against contracted hours, for every employee whose contracted week resolves. */
     contractHours?: ContractHoursSummary[];
+    /** Per person, how each stated preference fared. Present when anyone stated one. */
+    preferences?: EmployeePreferenceReport[];
 }
 
 /** Identifying stamp for a solve. */
@@ -1083,6 +1085,36 @@ export interface ContractHoursSummary {
     plannedMinutes: number;
     /** `plannedMinutes − contractedMinutes`; negative is a shortfall. */
     deltaMinutes: number;
+}
+
+/** One person's stated preferences and how the roster answered them. */
+export interface EmployeePreferenceReport {
+    employeeId: string;
+    rules: PreferenceRuleOutcome[];
+}
+
+/**
+ * How one `preferred` / `avoid` rule fared.
+ *
+ * A dated rule (both `fromDate` and `toDate`) is one wish:
+ * - an avoid is missed by any assignment it touches;
+ * - a preferred is missed when the person gets none of its occurrences.
+ *
+ * A weekly rule reports counts:
+ * - an avoid is `partly` met when some of its occurrences were assigned;
+ * - a preferred is met by any one assigned occurrence and never lists what
+ *   it missed, because nobody can work every preferred shift.
+ */
+export interface PreferenceRuleOutcome {
+    ruleId?: string;
+    kind: 'preferred' | 'avoid';
+    priority: 'normal' | 'important';
+    /** Occurrences in the period the rule touches. */
+    matchedInstances: number;
+    /** Occurrences that went the person's way: not assigned (avoid) or assigned (preferred). */
+    honoured: number;
+    outcome: 'met' | 'missed' | 'partly' | 'not-applicable';
+    missed: Array<{ instanceId: string; reason: 'cover' | 'blocked' | 'tradeoff' }>;
 }
 
 /** A dated obligation created by an assignment. */

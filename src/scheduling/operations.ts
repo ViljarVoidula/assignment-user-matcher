@@ -28,6 +28,7 @@ import type {
     ScheduledAssignment,
     SearchState,
     ContractHoursSummary,
+    EmployeePreferenceReport,
 } from './types';
 import { staffingViolations } from './constraints/min-staffing';
 import { minHourViolations } from './constraints/hour-budget';
@@ -41,6 +42,7 @@ import { solveSchedule } from './scheduler.class';
 import { preferenceScore } from './constraints/availability';
 import { marginalCostCents } from './cost';
 import { contractHoursSummary } from './contract-hours';
+import { preferenceReport } from './preference-report';
 import { distanceKmBetween, travelMinutesBetween } from './sites';
 import { compensatoryRestLedger } from './constraints/rest-days';
 import { cancellationLedger } from './constraints/notice';
@@ -75,6 +77,8 @@ export interface ComplianceReport {
     ledger: LedgerEntry[];
     /** Planned against contracted hours — the same summary the solver reports for the same assignments. */
     contractHours: ContractHoursSummary[];
+    /** How each stated preference fared — the same report the solver attaches. */
+    preferences: EmployeePreferenceReport[];
 }
 
 /**
@@ -155,6 +159,7 @@ export function checkCompliance(input: ScheduleInput, roster: ScheduledAssignmen
         verdicts,
         ledger,
         contractHours: contractHoursSummary(state),
+        preferences: preferenceReport(state),
     };
 }
 
