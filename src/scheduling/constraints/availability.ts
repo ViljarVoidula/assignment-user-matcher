@@ -17,7 +17,7 @@
  */
 
 import type { AvailabilityRule, RuleVerdict, SchedulingConstraint, SearchState, ShiftInstance } from '../types';
-import { availabilityApplies } from '../model';
+import { availabilityApplies, ruleOverlapMinutes, type ClockLike } from '../preferences';
 import { fail, fromVerdict, instanceOf, pass } from './support';
 
 export function availability(): SchedulingConstraint {
@@ -37,7 +37,7 @@ export function availability(): SchedulingConstraint {
             const matching = employee.availability.filter((rule) => availabilityApplies(rule, inst));
 
             for (const rule of matching.filter((r) => r.kind === 'unavailable')) {
-                if (overlapsRule(clock, range, rule) > 0) {
+                if (ruleOverlapMinutes(clock, range, rule) > 0) {
                     return fail('availability', 'hard', `employee "${pair.employeeId}" is unavailable during "${inst.id}"`);
                 }
             }
@@ -64,14 +64,14 @@ export function availability(): SchedulingConstraint {
                 }
             }
 
-            const avoided = matching.find((r) => r.kind === 'avoid' && overlapsRule(clock, range, r) > 0);
+            const avoided = matching.find((r) => r.kind === 'avoid' && ruleOverlapMinutes(clock, range, r) > 0);
             if (avoided) {
                 return fail('availability', 'soft', `employee "${pair.employeeId}" prefers to avoid "${inst.id}"`, {
                     actual: avoided.weight ?? 1,
                 });
             }
 
-            const preferred = matching.find((r) => r.kind === 'preferred' && overlapsRule(clock, range, r) > 0);
+            const preferred = matching.find((r) => r.kind === 'preferred' && ruleOverlapMinutes(clock, range, r) > 0);
             return pass('availability', preferred ? `matches a preferred window` : 'no availability objection');
         },
     });
@@ -110,7 +110,7 @@ export function availability(): SchedulingConstraint {
 /**
  * Minutes of `range` covered by the union of the given windows. A window with
  * no `from`/`to` covers the whole range; timed windows are projected onto the
- * range via the clock (same per-day band semantics as `overlapsRule`) and
+ * range via the clock (same per-day band semantics as `ruleOverlapMinutes`) and
  * merged, so contiguous or overlapping declarations never undercount.
  */
 function unionCoveredMinutes(
@@ -139,15 +139,6 @@ function unionCoveredMinutes(
     return covered;
 }
 
-function overlapsRule(
-    clock: { minutesInClockRange: (r: { start: number; end: number }, c: { from: string; to: string }) => number },
-    range: { start: number; end: number },
-    rule: AvailabilityRule,
-): number {
-    if (rule.from === undefined || rule.to === undefined) return range.end - range.start;
-    return clock.minutesInClockRange(range, { from: rule.from, to: rule.to });
-}
-
 /**
  * Weighted preference term over the whole roster, for the soft objective:
  * every assigned pair contributes its `avoid` weights and is credited its
@@ -169,17 +160,13 @@ export function preferencePenalty(state: SearchState): number {
 }
 
 /** Soft preference score for a pair: negative is better. Used by candidate ranking. */
-export function preferenceScore(
-    clock: Parameters<typeof overlapsRule>[0],
-    rules: AvailabilityRule[] | undefined,
-    inst: ShiftInstance,
-): number {
+export function preferenceScore(clock: ClockLike, rules: AvailabilityRule[] | undefined, inst: ShiftInstance): number {
     if (!rules?.length) return 0;
     const range = { start: inst.startMinute, end: inst.endMinute };
     let score = 0;
     for (const rule of rules) {
         if (!availabilityApplies(rule, inst)) continue;
-        if (overlapsRule(clock, range, rule) <= 0) continue;
+        if (ruleOverlapMinutes(clock, range, rule) <= 0) continue;
         if (rule.kind === 'preferred') score -= rule.weight ?? 1;
         if (rule.kind === 'avoid') score += rule.weight ?? 1;
     }

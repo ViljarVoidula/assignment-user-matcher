@@ -105,6 +105,26 @@ export interface AvailabilityRule {
     kind: 'unavailable' | 'available' | 'preferred' | 'avoid';
     /** Soft-rule strength. Defaults to 1. */
     weight?: number;
+    /**
+     * Match only occurrences whose `shiftTypeTag` is listed. ANDed with the
+     * day, date and clock conditions, so "prefer nights" needs no clock window
+     * and survives a change to when nights start.
+     */
+    shiftTypeTags?: string[];
+    /**
+     * `important` is multiplied by `objectives.preferences.importantWeight`.
+     * Soft kinds only; a wish that cannot be refused is time off, not a
+     * preference.
+     */
+    priority?: 'normal' | 'important';
+    /** Caller's identifier for this rule, echoed in `result.preferences`. */
+    id?: string;
+    /**
+     * Leave this rule out of `objectives.preferences.budget` scaling. For
+     * imported facts such as calendar busy time, which are not wishes and
+     * would otherwise dilute the person's real ones.
+     */
+    outsideBudget?: boolean;
 }
 
 /** Contract shape — hours-based or day-count. */

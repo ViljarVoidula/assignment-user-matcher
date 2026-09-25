@@ -27,7 +27,6 @@
 
 import type {
     ShiftDemandOverride,
-    AvailabilityRule,
     ConstraintOptions,
     Employee,
     HistoricalAssignment,
@@ -42,6 +41,7 @@ import type {
     WorkingTimeRules,
 } from './types';
 import { ScheduleValidationError } from './types';
+export { availabilityApplies } from './preferences';
 import { createDefaultConstraints } from './constraints/constraint';
 import { scopeEmployeeConstraints } from './constraints/employee-scope';
 import { DEFAULT_MIN_REST_MINUTES } from './constraints/min-rest';
@@ -598,6 +598,26 @@ function validateEmployee(employee: Employee): void {
         if (rule.to !== undefined) parseTimeOfDay(rule.to, `employee "${employee.id}" availability.to`);
         if (rule.fromDate !== undefined) assertIsoDate(rule.fromDate, `employee "${employee.id}" availability.fromDate`);
         if (rule.toDate !== undefined) assertIsoDate(rule.toDate, `employee "${employee.id}" availability.toDate`);
+        if (
+            rule.shiftTypeTags !== undefined &&
+            (!Array.isArray(rule.shiftTypeTags) || rule.shiftTypeTags.some((t) => typeof t !== 'string' || !t))
+        ) {
+            throw new ScheduleValidationError(
+                `employee "${employee.id}" availability.shiftTypeTags must be non-empty strings`,
+            );
+        }
+        if (rule.priority !== undefined) {
+            if (rule.priority !== 'normal' && rule.priority !== 'important') {
+                throw new ScheduleValidationError(
+                    `employee "${employee.id}" availability.priority must be normal or important`,
+                );
+            }
+            if (rule.kind !== 'preferred' && rule.kind !== 'avoid') {
+                throw new ScheduleValidationError(
+                    `employee "${employee.id}" availability.priority applies only to preferred and avoid rules`,
+                );
+            }
+        }
     }
     for (const q of employee.qualifications ?? []) {
         if (q.validFrom !== undefined) assertIsoDate(q.validFrom, `employee "${employee.id}" qualifications.validFrom`);
@@ -878,14 +898,6 @@ export function buildModel(input: ScheduleInput): ModelContext {
         publishedPairs,
         asOfMinute,
     };
-}
-
-/** Whether an availability rule applies to a shift instance. */
-export function availabilityApplies(rule: AvailabilityRule, inst: ShiftInstance): boolean {
-    if (rule.daysOfWeek && !rule.daysOfWeek.includes(inst.weekday)) return false;
-    if (rule.fromDate && inst.date < rule.fromDate) return false;
-    if (rule.toDate && inst.date > rule.toDate) return false;
-    return true;
 }
 
 export { MINUTES_PER_DAY };
