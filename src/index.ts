@@ -147,6 +147,9 @@ export {
     explainCandidate,
     repairSchedule,
     rankCandidates,
+    // Hand-overs and trades between two workers, judged both ways.
+    rankSwapPartners,
+    checkSwap,
     diagnoseInfeasibility,
     // Rule-authoring arithmetic (weekly-average → rolling-window-total, etc.)
     hours,
@@ -194,6 +197,10 @@ export {
     type Qualification,
     type RepairCandidate,
     type RepairResult,
+    type SwapPartner,
+    type SwapPartnerOptions,
+    type SwapTrade,
+    type SwapCheck,
     type RestDayRule,
     type RollingAverage,
     type RuleVerdict,

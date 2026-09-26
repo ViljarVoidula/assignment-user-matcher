@@ -35,7 +35,7 @@ import { minHourViolations } from './constraints/hour-budget';
 import { MIN_HOURS_WEIGHT } from './engine/objective';
 import { buildModel } from './model';
 import { propagate } from './engine/propagation';
-import { assign, createState } from './engine/state';
+import { assign, createState, unassign, type InternalState } from './engine/state';
 import { hardCompliant } from './engine/construction';
 import { collectAggregateViolations, collectPairViolations, verdictsFor } from './engine/verdicts';
 import { solveSchedule } from './scheduler.class';
@@ -318,12 +318,32 @@ export function rankCandidates(
     }
 
     const excluded = disruption && 'employeeId' in disruption ? disruption.employeeId : undefined;
+    return sortCandidates(
+        ctx,
+        scoreCandidates(state, inst, (employeeId) => employeeId === excluded),
+    );
+}
+
+/**
+ * Score every employee not already on `inst` against the current state.
+ *
+ * Shared by `rankCandidates` and `rankSwapPartners` so the hand-over list a
+ * worker sees and the cover list a supervisor sees are the same judgement —
+ * a second copy of this loop is how the two would start disagreeing.
+ */
+function scoreCandidates(
+    state: InternalState,
+    inst: import('./types').ShiftInstance,
+    skip: (employeeId: string) => boolean,
+): RepairCandidate[] {
+    const ctx = state.ctx;
+    const shiftInstanceId = inst.id;
     const extraLoad = extraShiftCounts(state);
     const meanExtra = average([...extraLoad.values()]);
 
     const candidates: RepairCandidate[] = [];
     for (const employee of ctx.employees) {
-        if (employee.id === excluded) continue;
+        if (skip(employee.id)) continue;
         if (state.isAssigned(employee.id, shiftInstanceId)) continue;
 
         const pair = { employeeId: employee.id, shiftInstanceId };
@@ -396,7 +416,10 @@ export function rankCandidates(
             ),
         });
     }
+    return candidates;
+}
 
+function sortCandidates<T extends RepairCandidate>(ctx: SearchState['ctx'], candidates: T[]): T[] {
     /*
      * Rank, then seniority, then id.
      *
@@ -424,6 +447,181 @@ export function rankCandidates(
             (ctx.employeeById.get(b.employeeId)?.seniority ?? 0) - (ctx.employeeById.get(a.employeeId)?.seniority ?? 0) ||
             (a.employeeId < b.employeeId ? -1 : 1),
     );
+}
+
+/* ------------------------------------------------------------------------- */
+/* Swaps                                                                      */
+/* ------------------------------------------------------------------------- */
+
+/** One of a partner's shifts the proposer could take in return. */
+export interface SwapTrade {
+    shiftInstanceId: string;
+}
+
+/** A colleague who could take a shift, and — when asked — what they could give back. */
+export interface SwapPartner extends RepairCandidate {
+    /**
+     * The partner's own shifts that make a lawful trade: the partner may work
+     * the proposer's shift **and** the proposer may work this one, with both of
+     * them off the shift they are giving up. Present only when requested.
+     */
+    trades?: SwapTrade[];
+}
+
+export interface SwapPartnerOptions {
+    /** Also work out which of each partner's shifts would make a lawful trade. */
+    trades?: boolean;
+    /** Only offer trades dated on or after this ISO date — typically today. */
+    tradesFrom?: string;
+}
+
+/**
+ * Who could take a shift off the person holding it, and what they could swap.
+ *
+ * `rankCandidates` answers "who can fill this gap?" — a gap nobody is in. A
+ * hand-over is asked about a shift somebody *is* in, so the proposer is taken
+ * off it first; asked with them still on it, a full shift reads "no room" for
+ * everybody.
+ *
+ * A trade is judged with **both** people off the shift they are giving up,
+ * in both directions, on one model build. Rules that span a whole shift or
+ * period (tag counts and ratios, aggregates) are not judged here: the host
+ * re-checks the full roster before applying, and this list is the prefilter
+ * that keeps a worker from asking a question whose answer is always no.
+ *
+ * Ordering is `rankCandidates`' own, so it stays inside the same
+ * profiling-free boundary.
+ */
+export function rankSwapPartners(
+    input: ScheduleInput,
+    shiftInstanceId: string,
+    fromEmployeeId: string,
+    roster: ScheduledAssignment[],
+    options: SwapPartnerOptions = {},
+): SwapPartner[] {
+    const ctx = buildModel(input);
+    const inst = ctx.instanceById.get(shiftInstanceId);
+    if (!inst) return [];
+
+    const state = stateFor(ctx, roster);
+    unassign(state, fromEmployeeId, shiftInstanceId);
+
+    const partners: SwapPartner[] = sortCandidates(
+        ctx,
+        scoreCandidates(state, inst, (employeeId) => employeeId === fromEmployeeId),
+    );
+    if (!options.trades) return partners;
+
+    const proposerHolds = new Set(state.byEmployee.get(fromEmployeeId) ?? []);
+    for (const partner of partners) {
+        const held = [...(state.byEmployee.get(partner.employeeId) ?? [])]
+            .map((id) => ctx.instanceById.get(id)!)
+            .filter((theirs) => theirs.id !== shiftInstanceId && !proposerHolds.has(theirs.id))
+            .filter((theirs) => options.tradesFrom === undefined || theirs.date >= options.tradesFrom)
+            .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id < b.id ? -1 : 1));
+        partner.trades = held
+            .filter((theirs) => tradeFits(state, fromEmployeeId, shiftInstanceId, partner.employeeId, theirs.id).fits)
+            .map((theirs) => ({ shiftInstanceId: theirs.id }));
+    }
+    return partners;
+}
+
+/** Whether one proposed swap is lawful for both people, and who it is not lawful for. */
+export interface SwapCheck {
+    fits: boolean;
+    /** Failing hard rules, each naming the person it applies to. */
+    blockers: Array<RuleVerdict & { employeeId: string }>;
+}
+
+/**
+ * Judge one proposed hand-over or trade, the same way `rankSwapPartners`
+ * judges each entry on its list.
+ *
+ * `toShiftInstanceId` null is a give-away. Either person not holding the shift
+ * named is an `input` blocker rather than a pass: a trade of shifts neither
+ * holds is not a trade.
+ */
+export function checkSwap(
+    input: ScheduleInput,
+    swap: { fromEmployeeId: string; fromShiftInstanceId: string; toEmployeeId: string; toShiftInstanceId: string | null },
+    roster: ScheduledAssignment[],
+): SwapCheck {
+    const ctx = buildModel(input);
+    const state = stateFor(ctx, roster);
+    const notHeld = (employeeId: string, shiftInstanceId: string) => ({
+        employeeId,
+        ruleId: 'input',
+        pass: false,
+        severity: 'hard' as const,
+        message: `${employeeId} is not on ${shiftInstanceId}`,
+    });
+    if (!state.isAssigned(swap.fromEmployeeId, swap.fromShiftInstanceId)) {
+        return { fits: false, blockers: [notHeld(swap.fromEmployeeId, swap.fromShiftInstanceId)] };
+    }
+    if (swap.toShiftInstanceId && !state.isAssigned(swap.toEmployeeId, swap.toShiftInstanceId)) {
+        return { fits: false, blockers: [notHeld(swap.toEmployeeId, swap.toShiftInstanceId)] };
+    }
+    return tradeFits(state, swap.fromEmployeeId, swap.fromShiftInstanceId, swap.toEmployeeId, swap.toShiftInstanceId);
+}
+
+function stateFor(ctx: ReturnType<typeof buildModel>, roster: ScheduledAssignment[]) {
+    const state = createState(ctx);
+    for (const entry of roster) {
+        if (ctx.instanceById.has(entry.shiftInstanceId) && ctx.employeeById.has(entry.employeeId)) {
+            assign(state, entry.employeeId, entry.shiftInstanceId, []);
+        }
+    }
+    return state;
+}
+
+/**
+ * Both moves of a swap, judged with both people off what they give up.
+ *
+ * Leaves `state` exactly as it found it: the vacated pairs go back on, so a
+ * caller can judge many trades against one build.
+ */
+function tradeFits(
+    state: ReturnType<typeof createState>,
+    fromEmployeeId: string,
+    fromShiftInstanceId: string,
+    toEmployeeId: string,
+    toShiftInstanceId: string | null,
+): SwapCheck {
+    const ctx = state.ctx;
+    const restore: Array<[string, string]> = [];
+    for (const [employeeId, instanceId] of [
+        [fromEmployeeId, fromShiftInstanceId],
+        ...(toShiftInstanceId ? [[toEmployeeId, toShiftInstanceId]] : []),
+    ] as Array<[string, string]>) {
+        if (state.isAssigned(employeeId, instanceId)) {
+            unassign(state, employeeId, instanceId);
+            restore.push([employeeId, instanceId]);
+        }
+    }
+
+    const blockers: SwapCheck['blockers'] = [];
+    const judge = (employeeId: string, instanceId: string) => {
+        const failing = verdictsFor(state, { employeeId, shiftInstanceId: instanceId }).filter(
+            (v) => !v.pass && v.severity === 'hard',
+        );
+        blockers.push(...failing.map((v) => ({ ...v, employeeId })));
+        // A constraint can refuse without a verdict saying why; the refusal
+        // still stands, under a generic reason.
+        if (failing.length === 0 && !hardCompliant(ctx, state, employeeId, instanceId)) {
+            blockers.push({
+                employeeId,
+                ruleId: 'hard',
+                pass: false,
+                severity: 'hard',
+                message: `${employeeId} cannot work ${instanceId} under the working-time rules`,
+            });
+        }
+    };
+    judge(toEmployeeId, fromShiftInstanceId);
+    if (toShiftInstanceId) judge(fromEmployeeId, toShiftInstanceId);
+
+    for (const [employeeId, instanceId] of restore) assign(state, employeeId, instanceId, []);
+    return { fits: blockers.length === 0, blockers };
 }
 
 function rationaleFor(
