@@ -228,6 +228,12 @@ export interface RepairCandidate {
     distanceKm?: number;
     /** Whether the shift is at this employee's home site. */
     isHomeSite: boolean;
+    /**
+     * Which of the shift's `tagRequirements` this person holds on its date, at
+     * the level asked for — so a list of people can answer "who here is a
+     * first-aider". Declared qualifications only; empty when they hold none.
+     */
+    tagsHeld: string[];
 }
 
 export interface RepairResult {
@@ -394,6 +400,7 @@ function scoreCandidates(
             travelMinutes,
             distanceKm,
             isHomeSite,
+            tagsHeld: tagsHeldOn(ctx, employee.id, inst),
             // Ineligible candidates sort to the bottom but stay visible.
             rank: eligible
                 ? costCents / 100 -
@@ -799,6 +806,38 @@ export interface InfeasibilityReport {
         tag?: string;
         shortfall?: number;
     }>;
+    /**
+     * Per skill the roster asks for: demand against the people who hold it,
+     * day by day. Informational — it never makes a report infeasible on its
+     * own, because a short day is a warning a planner can act on, not proof
+     * that no roster exists.
+     */
+    tagCover: TagCover[];
+}
+
+/** One skill's demand against its holders over the period. */
+export interface TagCover {
+    tag: string;
+    /**
+     * `'mix'` — some of the people on a shift must hold it (`tagRequirements`,
+     * `tagRatios`); `'everyone'` — every person on it must (`requiredTags`).
+     * A tag asked both ways reads as `'everyone'`, the stricter of the two.
+     */
+    kind: 'mix' | 'everyone';
+    /** Shift occurrences asking for it. */
+    shifts: number;
+    /** People-shifts it asks for: the sum of each occurrence's count. */
+    seats: number;
+    /** People holding it on at least one day it is wanted. */
+    holders: number;
+    /**
+     * Days it asks for more holders than are free: holding it that day, not
+     * on time off, inside their contract. One person counts once per day, so
+     * an early and a late both wanting a key-holder need two.
+     */
+    shortDates: Array<{ date: string; needed: number; available: number }>;
+    /** Days with exactly as many free holders as it asks for: one absence from short. */
+    tightDates: string[];
 }
 
 /**
@@ -863,7 +902,87 @@ export function diagnoseInfeasibility(input: ScheduleInput): InfeasibilityReport
         }
     }
 
-    return { feasible: findings.length === 0, findings };
+    return { feasible: findings.length === 0, findings, tagCover: tagCover(ctx) };
+}
+
+/** Which of `inst`'s mix requirements the employee holds on its date, at the level asked for. */
+function tagsHeldOn(
+    ctx: ReturnType<typeof buildModel>,
+    employeeId: string,
+    inst: import('./types').ShiftInstance,
+): string[] {
+    return Object.entries(inst.tagRequirements)
+        .filter(([tag, requirement]) =>
+            requirement.level !== undefined
+                ? ctx.holdsTagAt(employeeId, tag, inst.date, requirement.level)
+                : ctx.holdsTagOn(employeeId, tag, inst.date),
+        )
+        .map(([tag]) => tag);
+}
+
+function tagCover(ctx: ReturnType<typeof buildModel>): TagCover[] {
+    interface Demand {
+        kind: TagCover['kind'];
+        shifts: number;
+        seats: number;
+        /** Per date: seats wanted, and the highest level any of them asks for. */
+        byDate: Map<string, { seats: number; level?: number }>;
+    }
+    const demand = new Map<string, Demand>();
+    const add = (tag: string, kind: TagCover['kind'], seats: number, date: string, level?: number) => {
+        if (seats <= 0) return;
+        const entry = demand.get(tag) ?? { kind, shifts: 0, seats: 0, byDate: new Map() };
+        if (kind === 'everyone') entry.kind = 'everyone';
+        entry.shifts += 1;
+        entry.seats += seats;
+        const day = entry.byDate.get(date) ?? { seats: 0 };
+        day.seats += seats;
+        if (level !== undefined) day.level = Math.max(day.level ?? 0, level);
+        entry.byDate.set(date, day);
+        demand.set(tag, entry);
+    };
+    for (const inst of ctx.instances) {
+        for (const [tag, requirement] of Object.entries(inst.tagRequirements)) {
+            add(tag, 'mix', requirement.min, inst.date, requirement.level);
+        }
+        for (const [tag, ratio] of Object.entries(inst.tagRatios))
+            add(tag, 'mix', Math.ceil(ratio * inst.minEmployees), inst.date);
+        for (const tag of inst.requiredTags) add(tag, 'everyone', inst.minEmployees, inst.date);
+    }
+
+    const offOn = (employee: (typeof ctx.employees)[number], date: string) =>
+        employee.timeOff.some((entry) => entry.date === date && entry.shiftInstanceId === undefined) ||
+        (employee.contract?.startDate !== undefined && date < employee.contract.startDate) ||
+        (employee.contract?.endDate !== undefined && date > employee.contract.endDate);
+    const holds = (employeeId: string, tag: string, date: string, level?: number) =>
+        level !== undefined ? ctx.holdsTagAt(employeeId, tag, date, level) : ctx.holdsTagOn(employeeId, tag, date);
+
+    const out: TagCover[] = [];
+    for (const [tag, entry] of demand) {
+        const holderIds = new Set<string>();
+        const shortDates: TagCover['shortDates'] = [];
+        const tightDates: string[] = [];
+        for (const [date, day] of [...entry.byDate.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+            let available = 0;
+            for (const employee of ctx.employees) {
+                if (!holds(employee.id, tag, date, day.level)) continue;
+                holderIds.add(employee.id);
+                if (!offOn(employee, date)) available += 1;
+            }
+            if (available < day.seats) shortDates.push({ date, needed: day.seats, available });
+            else if (available === day.seats) tightDates.push(date);
+        }
+        out.push({
+            tag,
+            kind: entry.kind,
+            shifts: entry.shifts,
+            seats: entry.seats,
+            holders: holderIds.size,
+            shortDates,
+            tightDates,
+        });
+    }
+    return out.sort((a, b) => a.tag.localeCompare(b.tag));
 }
 
 /** Per tag: how many assignments want it, and on which dates they want it. */

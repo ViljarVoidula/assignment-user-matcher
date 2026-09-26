@@ -183,6 +183,7 @@ export {
     type FairnessRule,
     type HistoricalAssignment,
     type InfeasibilityReport,
+    type TagCover,
     type LedgerEntry,
     type MinuteRange,
     type ModelContext,

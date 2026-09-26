@@ -22,6 +22,7 @@ export {
     type RepairCandidate,
     type RepairResult,
     type InfeasibilityReport,
+    type TagCover,
 } from './operations';
 
 // Time model, exported so hosts can resolve the same wall-clock the engine does.

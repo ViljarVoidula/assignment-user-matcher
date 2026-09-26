@@ -204,6 +204,37 @@ describe('Scheduling operations', function () {
             expect(candidates[candidates.length - 1].employeeId).to.equal('bo');
         });
 
+        it('says which of the shift’s skills each candidate holds on its date', function () {
+            const input = wardInput({
+                employees: [
+                    { id: 'anna', tags: ['nurse', 'first-aid'], timeOff: [] },
+                    { id: 'bo', tags: ['nurse'], timeOff: [] },
+                    // A certificate that lapsed the day before counts for nothing.
+                    {
+                        id: 'cara',
+                        tags: ['nurse'],
+                        timeOff: [],
+                        qualifications: [{ tag: 'first-aid', validUntil: '2026-01-04' }],
+                    },
+                ],
+                shifts: [
+                    {
+                        id: 'day',
+                        name: 'Day',
+                        startTime: '08:00',
+                        endTime: '16:00',
+                        dates: ['2026-01-05'],
+                        minEmployees: 2,
+                        tagRequirements: { 'first-aid': 1 },
+                    },
+                ],
+            });
+            const byId = new Map(rankCandidates(input, 'day@2026-01-05', []).map((c) => [c.employeeId, c]));
+            expect(byId.get('anna')!.tagsHeld).to.deep.equal(['first-aid']);
+            expect(byId.get('bo')!.tagsHeld).to.deep.equal([]);
+            expect(byId.get('cara')!.tagsHeld).to.deep.equal([]);
+        });
+
         it('prefers the cheaper person when both are eligible', function () {
             const input = wardInput({
                 employees: [
@@ -287,6 +318,8 @@ describe('Scheduling operations', function () {
                 'travelMinutes',
                 'distanceKm',
                 'isHomeSite',
+                // Declared qualifications on the shift's date — a fact, not a prediction.
+                'tagsHeld',
             ]);
         });
 
@@ -405,6 +438,81 @@ describe('Scheduling operations', function () {
             const finding = report.findings.find((f) => f.kind === 'tagCapacity');
             expect(finding, 'tag capacity finding').to.exist;
             expect(finding!.message).to.contain('anaesthetist');
+        });
+
+        it('reports, per skill, the days fewer holders are free than the shifts ask for', function () {
+            const week = ['2026-01-05', '2026-01-06', '2026-01-07'];
+            const report = diagnoseInfeasibility(
+                wardInput({
+                    employees: [
+                        { id: 'anna', tags: ['nurse', 'key-holder'], timeOff: [{ date: '2026-01-06' }] },
+                        { id: 'bo', tags: ['nurse', 'key-holder'], timeOff: [] },
+                        { id: 'cara', tags: ['nurse'], timeOff: [] },
+                    ],
+                    shifts: [
+                        {
+                            id: 'early',
+                            name: 'Early',
+                            startTime: '06:00',
+                            endTime: '14:00',
+                            dates: week,
+                            tagRequirements: { 'key-holder': 1 },
+                        },
+                        {
+                            id: 'late',
+                            name: 'Late',
+                            startTime: '14:00',
+                            endTime: '22:00',
+                            dates: week,
+                            tagRequirements: { 'key-holder': 1 },
+                        },
+                    ],
+                }),
+            );
+            const cover = report.tagCover.find((c) => c.tag === 'key-holder')!;
+            expect(cover.kind).to.equal('mix');
+            expect(cover.shifts).to.equal(6);
+            expect(cover.seats).to.equal(6);
+            expect(cover.holders).to.equal(2);
+            // Two seats a day; on the 6th Anna is off, so one holder is free.
+            expect(cover.shortDates).to.deep.equal([{ date: '2026-01-06', needed: 2, available: 1 }]);
+            expect(cover.tightDates).to.deep.equal(['2026-01-05', '2026-01-07']);
+        });
+
+        it('counts a hard gate as every seat on the shift and reads dated certificates by day', function () {
+            const report = diagnoseInfeasibility(
+                wardInput({
+                    employees: [
+                        {
+                            id: 'anna',
+                            tags: [],
+                            timeOff: [],
+                            qualifications: [{ tag: 'sia', validUntil: '2026-01-05' }],
+                        },
+                        { id: 'bo', tags: ['sia'], timeOff: [] },
+                    ],
+                    shifts: [
+                        {
+                            id: 'door',
+                            name: 'Door',
+                            startTime: '18:00',
+                            endTime: '23:00',
+                            dates: ['2026-01-05', '2026-01-06'],
+                            minEmployees: 2,
+                            requiredTags: ['sia'],
+                        },
+                    ],
+                }),
+            );
+            const cover = report.tagCover.find((c) => c.tag === 'sia')!;
+            expect(cover.kind).to.equal('everyone');
+            expect(cover.seats).to.equal(4);
+            expect(cover.holders).to.equal(2);
+            expect(cover.shortDates).to.deep.equal([{ date: '2026-01-06', needed: 2, available: 1 }]);
+        });
+
+        it('has no cover rows for a roster that asks for no skills', function () {
+            expect(diagnoseInfeasibility(wardInput()).tagCover).to.deep.equal([]);
         });
 
         it('reports aggregate capacity shortfalls no single shift reveals', function () {
