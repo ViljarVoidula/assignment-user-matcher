@@ -705,6 +705,19 @@ Live operational snapshot for dashboards:
 - `oldestWaitingMs`: age of the longest-waiting unaccepted assignment, or `null`. The wait clock starts at first enqueue and survives reject/expiry requeues; it stops when a user accepts the assignment or it is removed. Held (scheduled) assignments have no wait clock yet.
 - `perUser`: every user's `backlog` depth, effective `maxBacklogSize` cap, and `paused` state.
 
+### `getLaneStats(options?: LaneStatsOptions): Promise<LaneStatsReport>`
+
+The queue grouped by routing tag, for floors where listing tasks tells nobody anything (hundreds of thousands waiting):
+
+- `lanes`: one entry per tag with queued work, deepest first — `queued` (not yet offered), and `oldestWaitingMs` for the lane's oldest queued assignment. That age is exact (`oldestExact: true`) when the lane's work is among the `oldestSampleSize` oldest waiting assignments (default 2000); otherwise it is an upper bound, flagged rather than presented as exact. `alsoTagged` names the other tags the lane's work carries, most frequent first — a task is a candidate for anyone covering *any* of its tags, so a tag nobody covers is only stuck work when nothing it travels with is covered either.
+- `waits`: the wait-clock distribution over every unaccepted assignment (queued or pending) — `waiting`, `p50Ms`, `p95Ms`, `oldestMs` — read by rank from the wait-clock index, so it is exact rather than sampled.
+
+Cost is one `ZCARD` per known tag plus one tag read per sampled assignment, all pipelined; nothing scales with queue depth. The injected `default` tag is never a lane.
+
+### `getOldestQueuedInLane(tag: string, options?: { limit?: number; scanLimit?: number }): Promise<{ id: string; waitingMs: number }[]>`
+
+The oldest queued assignments carrying `tag`, oldest first — the "waiting longest" list under one lane. It walks the wait-clock index from the oldest end and reads at most `scanLimit` entries (default 5000), so a lane whose work is all younger than that returns fewer.
+
 ### `removeUser(userId: string): Promise<string>`
 
 Removes a user and hands back everything they held: pending offers **and accepted work** go back to the queue (a `released` lifecycle event with `reason: 'removed'`, the acceptance stamps and completion clock cleared, the learning attempt closed as a system fault), and slot bookings are dropped back onto the booking sweep. Earlier versions deleted only the user's own indexes, which left their held tasks stranded under a user who no longer existed.

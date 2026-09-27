@@ -618,6 +618,56 @@ export type QueueStats = {
     perUser: UserLoadInfo[];
 };
 
+/** One routing tag's share of the queue, from `getLaneStats()`. */
+export type LaneStat = {
+    tag: string;
+    /** Queued (not yet offered) assignments carrying this tag */
+    queued: number;
+    /**
+     * Age in ms of the lane's oldest queued assignment. Exact when
+     * `oldestExact`; otherwise an upper bound — none of the lane's work was
+     * among the oldest sampled assignments, so its oldest is younger than the
+     * last one sampled.
+     */
+    oldestWaitingMs: number;
+    oldestExact: boolean;
+    /**
+     * Other tags seen on this lane's work, most frequent first (at most five).
+     * A task is a candidate for anyone covering *any* of its tags, so a tag
+     * nobody covers is only stuck work when nothing it travels with is covered
+     * either — this is what lets a caller tell the two apart.
+     */
+    alsoTagged: string[];
+};
+
+/**
+ * Wait-clock distribution over every not-yet-accepted assignment (queued or
+ * pending), read by rank from the wait-clock index — exact, not sampled.
+ */
+export type WaitDistribution = {
+    waiting: number;
+    p50Ms: number | null;
+    /** One in twenty has waited at least this long */
+    p95Ms: number | null;
+    oldestMs: number | null;
+};
+
+export type LaneStatsOptions = {
+    /**
+     * How many of the oldest waiting assignments to read tags for when
+     * resolving each lane's oldest age. Default 2000; clamped to 1–20000.
+     */
+    oldestSampleSize?: number;
+};
+
+/** Per-tag queue depth and age, from `getLaneStats()`. Lanes are sorted deepest first. */
+export type LaneStatsReport = {
+    lanes: LaneStat[];
+    waits: WaitDistribution;
+    /** True when the sample covered every waiting assignment, so every `oldestExact` is true */
+    sampleComplete: boolean;
+};
+
 export type PendingAssignmentInfo = {
     assignment: Assignment;
     ownerId: string | null;

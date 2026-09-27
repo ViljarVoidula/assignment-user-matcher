@@ -14,6 +14,7 @@ import {
     type PaginationResult,
     type AssignmentCounts,
 } from './queries/pagination';
+import { summarizeLanes, waitDistribution, waitRank, type LaneSampleEntry } from './queries/lane-stats';
 import { getUsersPaginatedFromStore, getUserSummariesBatch, getActiveAssignmentsFromStore } from './queries/users';
 import {
     applyUpdate,
@@ -82,6 +83,8 @@ import type {
     PendingAssignmentInfo,
     QueueStats,
     UserLoadInfo,
+    LaneStatsOptions,
+    LaneStatsReport,
     MatcherOptions,
     WorkflowDefinition,
     WorkflowDefinitionInput,
@@ -168,6 +171,10 @@ export type {
     PendingAssignmentInfo,
     QueueStats,
     UserLoadInfo,
+    LaneStat,
+    LaneStatsOptions,
+    LaneStatsReport,
+    WaitDistribution,
     MatcherOptions,
     options,
     FairnessMode,
@@ -2573,6 +2580,118 @@ export default class AssignmentMatcher implements WorkflowHost {
             oldestWaitingMs: oldestEntries.length > 0 ? Date.now() - Number(oldestEntries[0].score) : null,
             perUser,
         };
+    }
+
+    /**
+     * Per-tag queue depth and age, plus the wait-clock distribution — the
+     * "which skill is backing up" view a floor with hundreds of thousands of
+     * waiting tasks needs, where listing tasks tells nobody anything.
+     *
+     * Cost is O(tags) `ZCARD`s plus one tag read per sampled assignment, all
+     * pipelined; nothing scales with queue depth. A lane's oldest age is exact
+     * when its work appears among the `oldestSampleSize` oldest waiting
+     * assignments, and an upper bound otherwise (`oldestExact: false`).
+     */
+    async getLaneStats(options: LaneStatsOptions = {}): Promise<LaneStatsReport> {
+        await this.readyPromise;
+        const sampleSize = Math.min(20000, Math.max(1, Math.floor(options.oldestSampleSize ?? 2000)));
+        const clockKey = this.keys.assignmentsQueuedAt();
+        const [tags, waiting, sample] = await Promise.all([
+            this.redisClient.zRange(this.keys.allTags(), 0, -1),
+            this.redisClient.zCard(clockKey),
+            this.redisClient.zRangeWithScores(clockKey, 0, sampleSize - 1),
+        ]);
+        const now = Date.now();
+
+        const counts: { tag: string; queued: number }[] = [];
+        for (let start = 0; start < tags.length; start += 500) {
+            const chunk = tags.slice(start, start + 500);
+            const multi = this.redisClient.multi();
+            for (const tag of chunk) multi.zCard(this.keys.tagAssignments(tag));
+            const cards = (await multi.exec()) as unknown as number[];
+            chunk.forEach((tag, i) => counts.push({ tag, queued: Number(cards[i] ?? 0) }));
+        }
+
+        const entries: LaneSampleEntry[] = [];
+        for (let start = 0; start < sample.length; start += 500) {
+            const chunk = sample.slice(start, start + 500);
+            const multi = this.redisClient.multi();
+            for (const item of chunk) multi.hGet(this.keys.assignmentTags(item.value), 'tags');
+            const csvs = (await multi.exec()) as unknown as (string | null)[];
+            chunk.forEach((item, i) => entries.push({ tagsCsv: csvs[i] ?? null, queuedAt: Number(item.score) }));
+        }
+
+        // A lane the oldest-first sample never reached still needs to say what
+        // its work travels with; a few of its own members answer that.
+        const sampled = new Set<string>();
+        for (const entry of entries) for (const tag of (entry.tagsCsv ?? '').split(',')) if (tag) sampled.add(tag);
+        const unseen = counts.filter((c) => c.queued > 0 && !sampled.has(c.tag)).map((c) => c.tag);
+        const extraTagSets: string[] = [];
+        for (let start = 0; start < unseen.length; start += 200) {
+            const chunk = unseen.slice(start, start + 200);
+            const multi = this.redisClient.multi();
+            for (const tag of chunk) multi.zRange(this.keys.tagAssignments(tag), 0, 2);
+            const members = (await multi.exec()) as unknown as string[][];
+            const ids = [...new Set(members.flat())];
+            if (ids.length === 0) continue;
+            const read = this.redisClient.multi();
+            for (const id of ids) read.hGet(this.keys.assignmentTags(id), 'tags');
+            for (const csv of (await read.exec()) as unknown as (string | null)[]) if (csv) extraTagSets.push(csv);
+        }
+
+        const scoreAt = async (rank: number): Promise<number | null> => {
+            if (waiting === 0) return null;
+            if (rank < sample.length) return Number(sample[rank].score);
+            const hit = await this.redisClient.zRangeWithScores(clockKey, rank, rank);
+            return hit.length > 0 ? Number(hit[0].score) : null;
+        };
+        const [p50, p95] = await Promise.all([scoreAt(waitRank(waiting, 0.5)), scoreAt(waitRank(waiting, 0.05))]);
+
+        return {
+            lanes: summarizeLanes({
+                counts,
+                sample: entries,
+                sampleComplete: sample.length >= waiting,
+                now,
+                ignore: this.enableDefaultMatching ? new Set(['default']) : undefined,
+                extraTagSets,
+            }),
+            waits: waitDistribution(waiting, { p50, p95, oldest: sample.length > 0 ? Number(sample[0].score) : null }, now),
+            sampleComplete: sample.length >= waiting,
+        };
+    }
+
+    /**
+     * The oldest queued assignments in one lane (tag), oldest first — what a
+     * lane view lists under "waiting longest". Walks the wait-clock index from
+     * the oldest end and keeps assignments still queued under `tag`, reading
+     * at most `scanLimit` entries so a deep, mixed queue stays bounded; a lane
+     * whose work is all younger than that returns fewer (possibly none).
+     */
+    async getOldestQueuedInLane(
+        tag: string,
+        options: { limit?: number; scanLimit?: number } = {},
+    ): Promise<{ id: string; waitingMs: number }[]> {
+        await this.readyPromise;
+        const limit = Math.min(100, Math.max(1, Math.floor(options.limit ?? 10)));
+        const scanLimit = Math.min(50000, Math.max(limit, Math.floor(options.scanLimit ?? 5000)));
+        const clockKey = this.keys.assignmentsQueuedAt();
+        const now = Date.now();
+        const found: { id: string; waitingMs: number }[] = [];
+        for (let start = 0; start < scanLimit && found.length < limit; start += 500) {
+            const page = await this.redisClient.zRangeWithScores(clockKey, start, Math.min(start + 500, scanLimit) - 1);
+            if (page.length === 0) break;
+            const multi = this.redisClient.multi();
+            for (const item of page) multi.hGet(this.keys.assignmentTags(item.value), 'tags');
+            const csvs = (await multi.exec()) as unknown as (string | null)[];
+            for (let i = 0; i < page.length && found.length < limit; i++) {
+                if (csvs[i] && csvs[i]!.split(',').includes(tag)) {
+                    found.push({ id: page[i].value, waitingMs: Math.max(0, now - Number(page[i].score)) });
+                }
+            }
+            if (page.length < 500) break;
+        }
+        return found;
     }
 
     /**
