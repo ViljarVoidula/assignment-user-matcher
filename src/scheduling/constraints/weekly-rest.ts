@@ -63,7 +63,19 @@ export function weeklyRest(rule: WeeklyRestRule): SchedulingConstraint {
                     // they would have had from each short window.
                     const windows = averagingMinutes / windowMinutes;
                     const required = rule.minMinutes * windows;
-                    const worstAveraged = totalQualifyingRest(t, averagingMinutes, bounds, rule.minMinutes);
+                    // Every averaging window that contains the shift, exactly.
+                    // Probing a sample of window starts let two checks see
+                    // different windows: construction added a shift that broke
+                    // a window it never probed, and the final judgement of an
+                    // earlier shift in that window then reported a breach the
+                    // solve had created itself.
+                    const worstAveraged = worstQualifyingRest(
+                        t,
+                        averagingMinutes,
+                        range.start - averagingMinutes + 1,
+                        range.end - 1,
+                        rule.minMinutes,
+                    );
                     if (worstAveraged < required) {
                         return fail(
                             'weekly-rest',
@@ -85,38 +97,105 @@ export function weeklyRest(rule: WeeklyRestRule): SchedulingConstraint {
 }
 
 /**
- * Total rest, counting only stretches long enough to qualify, in the worst
- * averaging window.
- *
- * Averaging counts *rest periods*, not idle minutes: eight scattered hours are
- * not half a weekly rest. Only unbroken stretches of at least `minPer` count,
- * and each contributes at most one qualifying period's worth.
+ * Rest that counts towards an averaged weekly-rest requirement in the window
+ * `[start, start + averagingMinutes)`: each free stretch contributes whole
+ * multiples of `minPer`, so two 30h gaps are worth nothing against a 48h
+ * requirement and one 100h gap is worth 96h.
  */
-function totalQualifyingRest(
+export function qualifyingRestAt(timeline: PersonTimeline, start: number, averagingMinutes: number, minPer: number): number {
+    let total = 0;
+    for (const gap of timeline.restGapsIn({ start, end: start + averagingMinutes })) {
+        if (gap >= minPer) total += minPer * Math.floor(gap / minPer);
+    }
+    return total;
+}
+
+/**
+ * The least qualifying rest in any window starting at an integer minute in
+ * `[lo, hi]` — exactly, not over a sample of starts.
+ *
+ * The quantity is a step function of the window start, and its minima are
+ * not only where an edge meets a shift boundary: they also sit where the
+ * leading or trailing gap crosses a multiple of `minPer`. So the starts are
+ * split into segments on which the window's structure is fixed — the same
+ * shifts intersect it, and the same edges are free — using every boundary at
+ * which that can change. Inside a segment the value is
+ *
+ *     inner + m·⌊(a − s)/m⌋ [leading gap] + m·⌊(s + A − b)/m⌋ [trailing gap]
+ *
+ * which is falling in `s` with only a leading gap (least at the segment's
+ * end), rising with only a trailing one (least at its start), and with both
+ * dips one step below `m·⌊C/m⌋` exactly where `(a − s) mod m` exceeds
+ * `C mod m`, `C = a + A − b` — the first such start is the only other
+ * candidate. Each candidate is then measured directly.
+ */
+export function worstQualifyingRest(
     timeline: PersonTimeline,
     averagingMinutes: number,
-    bounds: { start: number; end: number },
+    lo: number,
+    hi: number,
     minPer: number,
 ): number {
-    // Window starts anchored on entry boundaries, never a day grid (a grid
-    // silently misses straddling windows — see CLAUDE.md). The worst (least
-    // rest) windows are the ones aligning their edges with work, so probe
-    // every start where a window edge touches an entry boundary.
-    const starts = new Set<number>([bounds.start, bounds.end]);
-    for (const entry of timeline.entriesIn({ start: bounds.start, end: bounds.end + averagingMinutes })) {
-        for (const s of [entry.start, entry.end, entry.start - averagingMinutes + 1, entry.end - averagingMinutes]) {
-            if (s >= bounds.start && s <= bounds.end) starts.add(s);
+    if (hi < lo) return Infinity;
+    const A = averagingMinutes;
+    const entries = timeline.entriesIn({ start: lo, end: hi + A });
+
+    const cuts = new Set<number>([lo, hi + 1]);
+    for (const e of entries) {
+        for (const at of [e.start, e.end, e.start - A + 1, e.end - A + 1]) {
+            if (at > lo && at <= hi) cuts.add(at);
         }
     }
+    const sorted = [...cuts].sort((x, y) => x - y);
 
     let worst = Infinity;
-    for (const start of starts) {
-        const window = { start, end: start + averagingMinutes };
+    // `qualifyingRestAt` over the entries already in hand, without building
+    // the gap list: this runs for every candidate the search judges.
+    const measure = (s: number) => {
+        const end = s + A;
         let total = 0;
-        for (const gap of timeline.restGapsIn(window)) {
+        let cursor = s;
+        for (const e of entries) {
+            if (e.start >= end) break;
+            if (e.end <= s) continue;
+            if (e.start > cursor) {
+                const gap = e.start - cursor;
+                if (gap >= minPer) total += minPer * Math.floor(gap / minPer);
+            }
+            if (e.end > cursor) cursor = e.end;
+        }
+        if (end > cursor) {
+            const gap = end - cursor;
             if (gap >= minPer) total += minPer * Math.floor(gap / minPer);
         }
         if (total < worst) worst = total;
+    };
+    for (let i = 0; i + 1 < sorted.length; i++) {
+        const p = sorted[i];
+        const q = sorted[i + 1] - 1;
+        measure(p);
+        if (q !== p) measure(q);
+        if (q - p < 2 || !(minPer > 0)) continue;
+
+        // Both edges free throughout the segment? Then the dip, if any.
+        let a = Infinity;
+        let b = -Infinity;
+        for (const e of entries) {
+            if (e.start >= p + A) break;
+            if (e.end <= p) continue;
+            if (e.start < a) a = e.start;
+            if (e.end > b) b = e.end;
+        }
+        if (a === Infinity) continue;
+        if (!(a > q && p + A > b)) continue;
+        const C = a + A - b;
+        const r = ((C % minPer) + minPer) % minPer;
+        if (r >= minPer - 1) continue;
+        // u = a − s runs from a − q up to a − p; the first u with residue r + 1.
+        const uLo = a - q;
+        const target = r + 1;
+        const u = uLo + ((((target - uLo) % minPer) + minPer) % minPer);
+        if (u <= a - p) measure(a - u);
     }
-    return worst === Infinity ? 0 : worst;
+    return worst;
 }

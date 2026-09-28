@@ -12,15 +12,11 @@
 
 import type { EmployeePreferenceReport, PreferenceRuleOutcome, ShiftInstance } from './types';
 import { assign, pairKey, unassign, type InternalState } from './engine/state';
-import { hardCompliant } from './engine/construction';
-import { verdictsFor } from './engine/verdicts';
+import { hardBlocked } from './engine/verdicts';
 import { ruleMatchesInstance } from './preferences';
 
 function eligible(state: InternalState, employeeId: string, instanceId: string): boolean {
-    const blocked = verdictsFor(state, { employeeId, shiftInstanceId: instanceId }).some(
-        (v) => !v.pass && v.severity === 'hard',
-    );
-    return !blocked && hardCompliant(state.ctx, state, employeeId, instanceId);
+    return !hardBlocked(state, { employeeId, shiftInstanceId: instanceId });
 }
 
 /**

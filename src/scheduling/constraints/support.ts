@@ -85,6 +85,27 @@ export function h(minutes: number): string {
  * to know a rest gap is 10 minutes short rather than merely "short", or it sits
  * on a plateau with no gradient to follow.
  */
+/**
+ * `delta` functions that are non-zero exactly when their constraint's
+ * `verdict` fails — every `fromVerdict` rule's, and the per-employee scoping
+ * wrapper's over them. Lets a hard-breach check read one verdict instead of
+ * computing it twice. Keyed by the function, not the constraint, so a rule
+ * that replaces its `delta` afterwards (availability keeps soft wishes out of
+ * it) is no longer treated as a mirror.
+ */
+const mirroringDeltas = new WeakSet<SchedulingConstraint['delta']>();
+
+export function markDeltaMirrorsVerdict(constraint: SchedulingConstraint): void {
+    mirroringDeltas.add(constraint.delta);
+}
+
+export function deltaMirrorsVerdict(constraint: SchedulingConstraint): boolean {
+    return constraint.verdict !== undefined && mirroringDeltas.has(constraint.delta);
+}
+
+/** Rules the library registered itself, as opposed to `constraints.custom`. */
+export const builtInConstraints = new WeakSet<SchedulingConstraint>();
+
 export function fromVerdict(
     spec: Omit<SchedulingConstraint, 'delta' | 'explain' | 'verdict'> & {
         verdict(state: SearchState, pair: AssignmentPair): RuleVerdict;
@@ -92,7 +113,7 @@ export function fromVerdict(
     },
 ): SchedulingConstraint {
     const magnitude = spec.magnitude ?? defaultMagnitude;
-    return {
+    const constraint: SchedulingConstraint = {
         ...spec,
         verdict: spec.verdict,
         delta(state, pair) {
@@ -104,6 +125,8 @@ export function fromVerdict(
             return v.pass ? null : v.message;
         },
     };
+    markDeltaMirrorsVerdict(constraint);
+    return constraint;
 }
 
 /** Shortfall or excess against the bound, when both are known; 1 otherwise. */

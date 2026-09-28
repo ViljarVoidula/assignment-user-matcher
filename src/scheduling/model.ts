@@ -45,6 +45,7 @@ export { availabilityApplies } from './preferences';
 import { resolvePreferenceRules, validatePreferenceObjectives } from './preferences';
 import { createDefaultConstraints } from './constraints/constraint';
 import { scopeEmployeeConstraints } from './constraints/employee-scope';
+import { builtInConstraints } from './constraints/support';
 import { DEFAULT_MIN_REST_MINUTES } from './constraints/min-rest';
 import { assertValidOvertimeRule } from './constraints/overtime';
 import { holds } from './constraints/qualification';
@@ -694,6 +695,7 @@ export function resolveConstraints(
         }
         if (o.weight !== undefined) c.weight = o.weight;
     }
+    for (const c of constraints) builtInConstraints.add(c);
     return [...constraints, ...(options?.custom ?? [])];
 }
 

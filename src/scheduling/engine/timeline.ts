@@ -27,7 +27,6 @@
  */
 
 import type { MinuteRange } from '../time';
-import { overlapMinutes } from '../time';
 
 /** One occupied span on a person's timeline. */
 export interface TimelineEntry extends MinuteRange {
@@ -109,14 +108,19 @@ export class PersonTimeline {
      */
     workingMinutesIn(window: MinuteRange): number {
         this.ensureClean();
-        if (window.end <= window.start || this.entries.length === 0) return 0;
+        return this.workingMinutesBetween(window.start, window.end);
+    }
 
-        const first = this.firstOverlapping(window.start);
+    /** `workingMinutesIn` without the window object, for the probes below; assumes a clean index. */
+    private workingMinutesBetween(start: number, end: number): number {
+        if (end <= start || this.entries.length === 0) return 0;
+
+        const first = this.firstOverlapping(start);
         let total = 0;
         for (let i = first; i < this.entries.length; i++) {
             const entry = this.entries[i];
-            if (entry.start >= window.end) break;
-            total += proratedWorkingMinutes(entry, window);
+            if (entry.start >= end) break;
+            total += proratedWorkingMinutesBetween(entry, start, end);
         }
         return total;
     }
@@ -136,10 +140,11 @@ export class PersonTimeline {
         this.ensureClean();
         if (windowMinutes <= 0) return 0;
         let worst = 0;
-        for (const start of this.candidateWindowStarts(windowMinutes, bounds)) {
-            const total = this.workingMinutesIn({ start, end: start + windowMinutes });
+        const probe = (start: number) => {
+            const total = this.workingMinutesBetween(start, start + windowMinutes);
             if (total > worst) worst = total;
-        }
+        };
+        this.forEachCandidateWindowStart(windowMinutes, bounds, probe);
         return worst;
     }
 
@@ -154,10 +159,11 @@ export class PersonTimeline {
         this.ensureClean();
         if (windowMinutes <= 0) return Infinity;
         let worst = Infinity;
-        for (const start of this.candidateWindowStarts(windowMinutes, bounds)) {
-            const rest = this.longestRestIn({ start, end: start + windowMinutes });
+        const probe = (start: number) => {
+            const rest = this.longestRestBetween(start, start + windowMinutes);
             if (rest < worst) worst = rest;
-        }
+        };
+        this.forEachCandidateWindowStart(windowMinutes, bounds, probe);
         return worst;
     }
 
@@ -166,15 +172,23 @@ export class PersonTimeline {
      * window over `bounds`, plus the bounds themselves. Sliding a window until
      * its edge meets a boundary never reduces the extreme being sought, so this
      * finite set contains the answer.
+     *
+     * Visited rather than collected: both callers take a max or a min, which a
+     * repeated edge cannot change, and these probes run for every candidate the
+     * search judges, so the set and array they used to build were pure garbage.
      */
-    private candidateWindowStarts(windowMinutes: number, bounds: MinuteRange): number[] {
-        const starts = new Set<number>([bounds.start, bounds.end - windowMinutes]);
+    private forEachCandidateWindowStart(windowMinutes: number, bounds: MinuteRange, visit: (start: number) => void): void {
+        visit(bounds.start);
+        visit(bounds.end - windowMinutes);
+        const lowest = bounds.start - windowMinutes;
+        const highest = bounds.end + windowMinutes;
         for (const entry of this.entries) {
-            if (entry.end < bounds.start - windowMinutes || entry.start > bounds.end + windowMinutes) continue;
-            starts.add(entry.start);
-            starts.add(entry.end - windowMinutes);
+            // Sorted by start, so nothing after this can qualify either.
+            if (entry.start > highest) break;
+            if (entry.end < lowest) continue;
+            visit(entry.start);
+            visit(entry.end - windowMinutes);
         }
-        return [...starts];
     }
 
     /** Entries intersecting `window`, in order. */
@@ -238,17 +252,26 @@ export class PersonTimeline {
      * window has 7 days of rest, and a weekly-rest rule must see that.
      */
     longestRestIn(window: MinuteRange): number {
-        if (window.end <= window.start) return 0;
-        const busy = this.entriesIn(window);
-        if (busy.length === 0) return window.end - window.start;
+        this.ensureClean();
+        return this.longestRestBetween(window.start, window.end);
+    }
 
+    /** `longestRestIn` without the window object or the intersecting-entries array; assumes a clean index. */
+    private longestRestBetween(start: number, end: number): number {
+        if (end <= start) return 0;
         let longest = 0;
-        let cursor = window.start;
-        for (const entry of busy) {
+        let cursor = start;
+        let any = false;
+        for (let i = this.firstOverlapping(start); i < this.entries.length; i++) {
+            const entry = this.entries[i];
+            if (entry.start >= end) break;
+            if (entry.end <= start) continue;
+            any = true;
             if (entry.start > cursor) longest = Math.max(longest, entry.start - cursor);
             cursor = Math.max(cursor, entry.end);
         }
-        if (window.end > cursor) longest = Math.max(longest, window.end - cursor);
+        if (!any) return end - start;
+        if (end > cursor) longest = Math.max(longest, end - cursor);
         return longest;
     }
 
@@ -450,10 +473,10 @@ function lowerBound(entries: TimelineEntry[], start: number): number {
  * at a fraction, or only for actual call-outs), so a partial overlap is scaled
  * by the same fraction rather than clipped to elapsed time.
  */
-function proratedWorkingMinutes(entry: TimelineEntry, window: MinuteRange): number {
+function proratedWorkingMinutesBetween(entry: TimelineEntry, start: number, end: number): number {
     const span = entry.end - entry.start;
     if (span <= 0) return 0;
-    const inside = overlapMinutes(entry, window);
+    const inside = Math.max(0, Math.min(entry.end, end) - Math.max(entry.start, start));
     if (inside === span) return entry.workingMinutes;
     return (entry.workingMinutes * inside) / span;
 }

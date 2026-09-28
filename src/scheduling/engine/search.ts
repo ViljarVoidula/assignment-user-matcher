@@ -40,6 +40,10 @@ export interface SearchOptions {
     historyLength?: number;
     /** Called whenever a new best is found, for anytime reporting. */
     onImprovement?: (state: InternalState, score: LexScore) => void;
+    /** After every round, with the best state so far and the variants judged. */
+    onRound?: (best: InternalState, evaluatedVariants: number) => void;
+    /** Asked before every round; `true` ends the search with the best so far. */
+    shouldStop?: () => boolean;
 }
 
 export interface SearchOutcome {
@@ -109,7 +113,7 @@ export function improveWithLns(
     const history: LexScore[] = new Array(historyLength).fill(workingScore);
     let iteration = 0;
 
-    while (now() < deadline && iteration < (options.maxIterations ?? Infinity)) {
+    while (now() < deadline && iteration < (options.maxIterations ?? Infinity) && !options.shouldStop?.()) {
         const total = assignedPairs(working).length;
         if (total === 0) break;
 
@@ -163,6 +167,7 @@ export function improveWithLns(
 
         history[iteration % historyLength] = workingScore;
         iteration++;
+        options.onRound?.(best, evaluatedVariants);
     }
 
     return { best, evaluatedVariants };

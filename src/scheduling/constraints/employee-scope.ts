@@ -1,6 +1,7 @@
 import type { AssignmentPair, ModelContext, SchedulingConstraint, SearchState, WorkingTimeRules } from '../types';
 import { createDefaultConstraints, type DefaultConstraintOptions } from './constraint';
 import { stableStringify } from '../provenance';
+import { deltaMirrorsVerdict, markDeltaMirrorsVerdict } from './support';
 
 interface RuleGroup {
     rules: WorkingTimeRules;
@@ -130,7 +131,7 @@ export function scopeEmployeeConstraints(
             const found = byEmployee.get(pair.employeeId);
             return found && { c: found.constraint, state: { ...state, ctx: found.context(state.ctx) } };
         };
-        registry.set(id, {
+        const scoped: SchedulingConstraint = {
             ...prototype,
             delta(state, pair) {
                 const d = delegate(state, pair);
@@ -161,7 +162,14 @@ export function scopeEmployeeConstraints(
             evaluate: delegates.some((d) => d.constraint.evaluate)
                 ? (state) => delegates.flatMap((d) => d.constraint.evaluate?.(d.view(state, true)) ?? [])
                 : undefined,
-        });
+        };
+        // The wrapper mirrors when every delegate does (a delegate without a
+        // verdict has one synthesised from its delta above), and its own
+        // no-delegate answer is (0, pass).
+        if (delegates.every((d) => !d.constraint.verdict || deltaMirrorsVerdict(d.constraint))) {
+            markDeltaMirrorsVerdict(scoped);
+        }
+        registry.set(id, scoped);
     }
     return [...registry.values()];
 }

@@ -12,6 +12,17 @@ import { TimelineIndex } from './timeline';
 export interface InternalState extends SearchState {
     /** Per-pair selection reasons recorded by construction/repair, surfaced in the result. */
     reasons: Map<string, string[]>;
+    /**
+     * A mutation counter per person, bumped by every `assign`/`unassign` of any
+     * of their records: it moves exactly when their timeline, shifts or hours do.
+     */
+    personVersion: Map<string, number>;
+    /**
+     * The person-scoped half of `hardCompliant`'s answer, by instance then
+     * employee, with the person counter it was computed at. The crew-reading
+     * rules are cheap and asked live.
+     */
+    hardCache: Map<string, Map<string, { person: number; ok: boolean }>>;
 }
 
 export function createState(ctx: ModelContext): InternalState {
@@ -32,6 +43,8 @@ export function createState(ctx: ModelContext): InternalState {
         // boundary from the very first evaluation.
         timelines: new TimelineIndex(ctx.history),
         reasons: new Map(),
+        personVersion: new Map(),
+        hardCache: new Map(),
         isAssigned(employeeId: string, instanceId: string) {
             return assignments.get(instanceId)?.has(employeeId) ?? false;
         },
@@ -55,6 +68,7 @@ export function assign(state: InternalState, employeeId: string, instanceId: str
     state.minutesByEmployee.set(employeeId, (state.minutesByEmployee.get(employeeId) ?? 0) + inst.workingMinutes);
 
     const personId = state.ctx.personIdOf.get(employeeId) ?? employeeId;
+    touch(state, personId);
     state.timelines.add(personId, {
         id: timelineEntryId(employeeId, instanceId),
         start: inst.startMinute,
@@ -76,9 +90,14 @@ export function unassign(state: InternalState, employeeId: string, instanceId: s
     state.minutesByEmployee.set(employeeId, (state.minutesByEmployee.get(employeeId) ?? 0) - inst.workingMinutes);
 
     const personId = state.ctx.personIdOf.get(employeeId) ?? employeeId;
+    touch(state, personId);
     state.timelines.remove(personId, timelineEntryId(employeeId, instanceId));
 
     state.reasons.delete(pairKey(employeeId, instanceId));
+}
+
+function touch(state: InternalState, personId: string): void {
+    state.personVersion.set(personId, (state.personVersion.get(personId) ?? 0) + 1);
 }
 
 /**

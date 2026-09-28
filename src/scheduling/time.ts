@@ -47,6 +47,14 @@ export class PeriodClock {
     private readonly formatter: Intl.DateTimeFormat;
     /** UTC epoch ms of a wall-clock minute, keyed by `dayIndex * 1441 + minutesIntoDay`. */
     private readonly instantByDayMinute = new Map<number, number>();
+    /**
+     * ISO date and weekday per day index. Sequence rules ask "which day, which
+     * weekday" of every entry on a timeline for every candidate they judge, and
+     * each uncached answer is a `Date` parse and format.
+     */
+    private readonly dateByDayIndex = new Map<number, string>();
+    private readonly weekdayByDayIndex = new Map<number, number>();
+    private readonly dayIndexByDate = new Map<string, number>();
     /** UTC epoch ms of local midnight on the period start — the origin of period minutes. */
     private originMs!: number;
 
@@ -76,13 +84,25 @@ export class PeriodClock {
 
     /** Day index of an ISO date relative to the period start; negative before it. */
     dayIndexOf(date: string): number {
-        assertIsoDate(date, 'date');
-        return daysBetween(this.startDate, date);
+        let index = this.dayIndexByDate.get(date);
+        if (index === undefined) {
+            // Only a date that passed validation is remembered, so a bad one
+            // throws on every call rather than once.
+            assertIsoDate(date, 'date');
+            index = daysBetween(this.startDate, date);
+            this.dayIndexByDate.set(date, index);
+        }
+        return index;
     }
 
     /** ISO date `offset` days after the period start. */
     dateAt(offset: number): string {
-        return addDays(this.startDate, offset);
+        let date = this.dateByDayIndex.get(offset);
+        if (date === undefined) {
+            date = addDays(this.startDate, offset);
+            this.dateByDayIndex.set(offset, date);
+        }
+        return date;
     }
 
     /**
@@ -137,7 +157,13 @@ export class PeriodClock {
 
     /** ISO weekday of a period minute: 1 (Mon) .. 7 (Sun). */
     weekdayOfMinute(minute: number): number {
-        return isoWeekday(this.dateOfMinute(minute));
+        const dayIndex = this.dayIndexOfMinute(minute);
+        let weekday = this.weekdayByDayIndex.get(dayIndex);
+        if (weekday === undefined) {
+            weekday = isoWeekday(this.dateAt(dayIndex));
+            this.weekdayByDayIndex.set(dayIndex, weekday);
+        }
+        return weekday;
     }
 
     /**

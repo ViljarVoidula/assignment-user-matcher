@@ -25,7 +25,10 @@
  * roster. All aggregate hooks run again during final validation.
  */
 
-import type { FairnessRule, ModelContext, SearchState } from '../types';
+import type { AssignmentPair, FairnessRule, ModelContext, SchedulingConstraint, SearchState } from '../types';
+import type { InternalState } from './state';
+import { builtInConstraints } from '../constraints/support';
+import { readsCrew } from './verdicts';
 import { fairnessPenalty } from '../constraints/fairness';
 import { preferencePenalty } from '../constraints/availability';
 import { contractHoursPenalty } from '../contract-hours';
@@ -132,10 +135,21 @@ export function breachTotals(ctx: ModelContext, state: SearchState): LexScore {
     const scored = ctx.constraints.filter((c) => c.id !== 'min-staffing' && c.id !== 'fairness');
     if (scored.length === 0) return totals;
 
+    // The search scores the whole roster after every move, and most people's
+    // schedules did not move. Where every rule is a built-in and the state
+    // counts mutations per person, a pair's person-scoped deltas are reused
+    // until that person changes; crew-reading rules are always asked. The
+    // sums below run over the same pairs and rules in the same order either
+    // way, so the totals are the same numbers to the last bit.
+    const memo = deltaMemoFor(ctx, state, scored);
+
     for (const [instanceId, employees] of state.assignments) {
         for (const employeeId of employees) {
-            for (const c of scored) {
-                const d = c.delta(state, { employeeId, shiftInstanceId: instanceId });
+            const pair = { employeeId, shiftInstanceId: instanceId };
+            const cached = memo?.lookup(pair);
+            for (let i = 0; i < scored.length; i++) {
+                const c = scored[i];
+                const d = cached && !memo!.crew[i] ? cached[i] : c.delta(state, pair);
                 if (d > 0) totals[c.hardness] += d * (c.weight ?? DEFAULT_SOFT_WEIGHT);
             }
         }
@@ -144,6 +158,44 @@ export function breachTotals(ctx: ModelContext, state: SearchState): LexScore {
 }
 
 /** Backwards-compatible soft-breach total, for callers that want a single figure. */
+interface DeltaMemo {
+    /** Per scored rule: whether it reads the instance's crew, and so is never reused. */
+    crew: boolean[];
+    /** The pair's person-scoped deltas at the person's current counter, computing them on a miss. */
+    lookup(pair: AssignmentPair): number[];
+}
+
+const memos = new WeakMap<SearchState, { scored: SchedulingConstraint[]; memo: DeltaMemo }>();
+
+function deltaMemoFor(ctx: ModelContext, state: SearchState, scored: SchedulingConstraint[]): DeltaMemo | undefined {
+    const versions = (state as Partial<InternalState>).personVersion;
+    if (!versions || state.ctx !== ctx || !ctx.constraints.every((c) => builtInConstraints.has(c))) return undefined;
+    const existing = memos.get(state);
+    if (existing && existing.scored.length === scored.length && existing.scored.every((c, i) => c === scored[i])) {
+        return existing.memo;
+    }
+    const crew = scored.map((c) => readsCrew(c));
+    const byInstance = new Map<string, Map<string, { person: number; deltas: number[] }>>();
+    const memo: DeltaMemo = {
+        crew,
+        lookup(pair) {
+            const person = versions.get(ctx.personIdOf.get(pair.employeeId) ?? pair.employeeId) ?? 0;
+            let byEmployee = byInstance.get(pair.shiftInstanceId);
+            if (!byEmployee) {
+                byEmployee = new Map();
+                byInstance.set(pair.shiftInstanceId, byEmployee);
+            }
+            const hit = byEmployee.get(pair.employeeId);
+            if (hit && hit.person === person) return hit.deltas;
+            const deltas = scored.map((c, i) => (crew[i] ? 0 : c.delta(state, pair)));
+            byEmployee.set(pair.employeeId, { person, deltas });
+            return deltas;
+        },
+    };
+    memos.set(state, { scored, memo });
+    return memo;
+}
+
 export function softBreaches(ctx: ModelContext, state: SearchState): number {
     return breachTotals(ctx, state).soft;
 }

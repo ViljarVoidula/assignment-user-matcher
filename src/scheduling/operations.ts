@@ -37,7 +37,14 @@ import { buildModel } from './model';
 import { propagate } from './engine/propagation';
 import { assign, createState, unassign, type InternalState } from './engine/state';
 import { hardCompliant } from './engine/construction';
-import { collectAggregateViolations, collectPairViolations, verdictsFor } from './engine/verdicts';
+import {
+    anyHardDeltaGiven,
+    hardBlocked,
+    collectAggregateViolations,
+    collectPairVerdicts,
+    pairViolationsFrom,
+    verdictsFor,
+} from './engine/verdicts';
 import { solveSchedule } from './scheduler.class';
 import { preferenceScore } from './constraints/availability';
 import { marginalCostCents } from './cost';
@@ -126,14 +133,10 @@ export function checkCompliance(input: ScheduleInput, roster: ScheduledAssignmen
     }
 
     // The same two passes the solver runs when it assembles its result.
-    const verdicts: ComplianceReport['verdicts'] = [];
-    for (const [instanceId, employees] of state.assignments) {
-        for (const employeeId of employees) {
-            const pair = { employeeId, shiftInstanceId: instanceId };
-            verdicts.push({ pair, verdicts: verdictsFor(state, pair) });
-        }
-    }
-    violations.push(...collectPairViolations(state), ...collectAggregateViolations(state));
+    // Each pair is judged once: the verdicts are reported as they are, and
+    // their failures are the pair-level violations.
+    const verdicts: ComplianceReport['verdicts'] = collectPairVerdicts(state);
+    violations.push(...pairViolationsFrom(verdicts), ...collectAggregateViolations(state));
 
     const staffing = staffingViolations(ctx, state, 'medium');
     violations.push(
@@ -331,6 +334,39 @@ export function rankCandidates(
 }
 
 /**
+ * One person against many shifts: `rankCandidates` turned on its side.
+ *
+ * The question a worker's phone asks of a list of open shifts is "which of
+ * these could *I* take?" Answering it with `rankCandidates` per shift built the
+ * model and scored the whole team once per posting, to read one row of each.
+ * This builds the model once and scores only that person — through the same
+ * `scoreCandidates` judgement, so each answer is exactly the row the
+ * team-wide ranking gives them (a candidate is scored independently of the
+ * others, so leaving the others out changes nothing about theirs).
+ *
+ * Returns candidates in the order `shiftInstanceIds` names them, leaving out
+ * ids that name no shift and shifts the person already holds — the same
+ * people `rankCandidates` leaves out. An unknown employee gets `[]`.
+ */
+export function rankShiftsFor(
+    input: ScheduleInput,
+    employeeId: string,
+    shiftInstanceIds: string[],
+    roster: ScheduledAssignment[],
+): RepairCandidate[] {
+    const ctx = buildModel(input);
+    if (!ctx.employeeById.has(employeeId)) return [];
+    const state = stateFor(ctx, roster);
+    const out: RepairCandidate[] = [];
+    for (const shiftInstanceId of shiftInstanceIds) {
+        const inst = ctx.instanceById.get(shiftInstanceId);
+        if (!inst) continue;
+        out.push(...scoreCandidates(state, inst, (id) => id !== employeeId));
+    }
+    return out;
+}
+
+/**
  * Score every employee not already on `inst` against the current state.
  *
  * Shared by `rankCandidates` and `rankSwapPartners` so the hand-over list a
@@ -355,7 +391,7 @@ function scoreCandidates(
         const pair = { employeeId: employee.id, shiftInstanceId };
         const verdicts = verdictsFor(state, pair);
         const blockers = verdicts.filter((v) => !v.pass && v.severity === 'hard');
-        const eligible = blockers.length === 0 && hardCompliant(ctx, state, employee.id, shiftInstanceId);
+        const eligible = blockers.length === 0 && !anyHardDeltaGiven(state, pair, verdicts);
 
         // Marginal against what this person already holds: the same shift is
         // dearer in the hands of someone past their overtime threshold.
@@ -608,13 +644,13 @@ function tradeFits(
 
     const blockers: SwapCheck['blockers'] = [];
     const judge = (employeeId: string, instanceId: string) => {
-        const failing = verdictsFor(state, { employeeId, shiftInstanceId: instanceId }).filter(
-            (v) => !v.pass && v.severity === 'hard',
-        );
+        const pair = { employeeId, shiftInstanceId: instanceId };
+        const verdicts = verdictsFor(state, pair);
+        const failing = verdicts.filter((v) => !v.pass && v.severity === 'hard');
         blockers.push(...failing.map((v) => ({ ...v, employeeId })));
         // A constraint can refuse without a verdict saying why; the refusal
         // still stands, under a generic reason.
-        if (failing.length === 0 && !hardCompliant(ctx, state, employeeId, instanceId)) {
+        if (failing.length === 0 && anyHardDeltaGiven(state, pair, verdicts)) {
             blockers.push({
                 employeeId,
                 ruleId: 'hard',
@@ -800,11 +836,29 @@ function toPair(key: string): AssignmentPair {
 export interface InfeasibilityReport {
     feasible: boolean;
     findings: Array<{
-        kind: 'noEligibleEmployee' | 'insufficientCapacity' | 'tagCapacity';
+        kind: 'noEligibleEmployee' | 'noLawfulEmployee' | 'insufficientCapacity' | 'tagCapacity';
         message: string;
         shiftInstanceId?: string;
         tag?: string;
         shortfall?: number;
+        /**
+         * `noLawfulEmployee` only: why each person who could otherwise work the
+         * shift may not, by rule — most people first — with one of their
+         * verdicts as the example. A shift that breaks a rule on its own (a
+         * night the clocks go back in, 9 real hours against an 8-hour cap)
+         * names that rule for everybody.
+         */
+        blockers?: Array<{
+            ruleId: string;
+            employees: number;
+            message: string;
+            actual?: number;
+            required?: number;
+            unit?: RuleVerdict['unit'];
+        }>;
+        /** `noLawfulEmployee` only: the occurrence's real length and working time, in minutes. */
+        durationMinutes?: number;
+        workingMinutes?: number;
     }>;
     /**
      * Per skill the roster asks for: demand against the people who hold it,
@@ -853,13 +907,27 @@ export function diagnoseInfeasibility(input: ScheduleInput): InfeasibilityReport
     const propagation = propagate(ctx);
     const findings: InfeasibilityReport['findings'] = [];
 
+    // Judged against an empty roster (history still counts): a rule that
+    // refuses somebody here refuses them whatever else the roster holds.
+    const empty = createState(ctx);
     for (const inst of ctx.instances) {
         const eligible = propagation.eligibleByInstance.get(inst.id) ?? [];
+        const lawless = inst.minEmployees > 0 && eligible.length > 0 ? nobodyLawful(empty, inst, eligible) : null;
         if (inst.minEmployees > 0 && eligible.length === 0) {
             findings.push({
                 kind: 'noEligibleEmployee',
                 shiftInstanceId: inst.id,
                 message: `no employee is eligible for "${inst.id}"`,
+            });
+        } else if (lawless) {
+            const top = lawless[0];
+            findings.push({
+                kind: 'noLawfulEmployee',
+                shiftInstanceId: inst.id,
+                message: `nobody may lawfully work "${inst.id}"${top ? `: ${top.message}` : ''}`,
+                blockers: lawless,
+                durationMinutes: inst.durationMinutes,
+                workingMinutes: inst.workingMinutes,
             });
         } else if (eligible.length < inst.minEmployees) {
             findings.push({
@@ -903,6 +971,48 @@ export function diagnoseInfeasibility(input: ScheduleInput): InfeasibilityReport
     }
 
     return { feasible: findings.length === 0, findings, tagCover: tagCover(ctx) };
+}
+
+/**
+ * `null` when somebody could lawfully take `inst` on `state`; otherwise every
+ * hard blocker among the eligible, grouped by rule, most people first.
+ *
+ * Stops at the first lawful person, so a shift anyone can work costs a
+ * verdict or two. Only a shift nobody can work is judged for everyone — the
+ * rarity that is worth explaining.
+ */
+function nobodyLawful(
+    state: InternalState,
+    inst: import('./types').ShiftInstance,
+    eligible: string[],
+): NonNullable<InfeasibilityReport['findings'][number]['blockers']> | null {
+    for (const employeeId of eligible) {
+        if (!hardBlocked(state, { employeeId, shiftInstanceId: inst.id })) return null;
+    }
+    const byRule = new Map<string, { employees: number; example: RuleVerdict }>();
+    for (const employeeId of eligible) {
+        const pair = { employeeId, shiftInstanceId: inst.id };
+        const verdicts = verdictsFor(state, pair);
+        const failing = verdicts.filter((v) => !v.pass && v.severity === 'hard');
+        const seen = new Set<string>();
+        for (const v of failing) {
+            if (seen.has(v.ruleId)) continue;
+            seen.add(v.ruleId);
+            const entry = byRule.get(v.ruleId);
+            if (entry) entry.employees++;
+            else byRule.set(v.ruleId, { employees: 1, example: v });
+        }
+    }
+    return [...byRule.entries()]
+        .sort((a, b) => b[1].employees - a[1].employees || a[0].localeCompare(b[0]))
+        .map(([ruleId, { employees, example }]) => ({
+            ruleId,
+            employees,
+            message: example.message,
+            ...(example.actual !== undefined ? { actual: example.actual } : {}),
+            ...(example.required !== undefined ? { required: example.required } : {}),
+            ...(example.unit !== undefined ? { unit: example.unit } : {}),
+        }));
 }
 
 /** Which of `inst`'s mix requirements the employee holds on its date, at the level asked for. */

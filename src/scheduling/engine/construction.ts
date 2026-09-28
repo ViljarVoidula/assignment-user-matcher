@@ -19,14 +19,44 @@
 import type { ModelContext } from '../types';
 import type { PropagationResult } from './propagation';
 import { assign, type InternalState } from './state';
-import { rulesFor } from '../constraints/support';
+import { builtInConstraints, rulesFor } from '../constraints/support';
+import { anyHardDelta, anyHardDeltaIn } from './verdicts';
 
 /** Whether assigning the pair keeps every hard constraint satisfied. */
 export function hardCompliant(ctx: ModelContext, state: InternalState, employeeId: string, instanceId: string): boolean {
-    for (const c of ctx.constraints) {
-        if (c.hardness === 'hard' && c.delta(state, { employeeId, shiftInstanceId: instanceId }) > 0) return false;
+    const pair = { employeeId, shiftInstanceId: instanceId };
+    // Rules are asked cheapest first, which cannot change a yes/no over all of them.
+    // A solve with a custom rule judges afresh every time: a custom rule could
+    // read any part of the state, so no counter can say when its answer went stale.
+    if (state.ctx !== ctx || !allBuiltIn(ctx)) return !anyHardDelta(ctx, state, pair);
+
+    // The crew-reading rules are asked live. The rest read only the person's
+    // timeline and records, which move exactly when the person's counter does,
+    // so their answer is remembered until then — a shift nobody can fill is
+    // otherwise re-judged against the whole team on every pass of the search.
+    if (anyHardDeltaIn(ctx, state, pair, 'crew')) return false;
+    const person = state.personVersion.get(ctx.personIdOf.get(employeeId) ?? employeeId) ?? 0;
+    let byEmployee = state.hardCache.get(instanceId);
+    if (!byEmployee) {
+        byEmployee = new Map();
+        state.hardCache.set(instanceId, byEmployee);
     }
-    return true;
+    const cached = byEmployee.get(employeeId);
+    if (cached && cached.person === person) return cached.ok;
+    const ok = !anyHardDeltaIn(ctx, state, pair, 'person');
+    byEmployee.set(employeeId, { person, ok });
+    return ok;
+}
+
+const builtInOnly = new WeakMap<ModelContext, boolean>();
+
+function allBuiltIn(ctx: ModelContext): boolean {
+    let answer = builtInOnly.get(ctx);
+    if (answer === undefined) {
+        answer = ctx.constraints.every((c) => builtInConstraints.has(c));
+        builtInOnly.set(ctx, answer);
+    }
+    return answer;
 }
 
 interface RankedCandidate {

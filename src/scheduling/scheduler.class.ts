@@ -12,7 +12,14 @@
  * a proof of optimality.
  */
 
-import type { ConstraintViolation, LedgerEntry, ScheduleInput, ScheduleResult, ScheduledAssignment } from './types';
+import type {
+    ConstraintViolation,
+    LedgerEntry,
+    ScheduleInput,
+    ScheduleResult,
+    ScheduledAssignment,
+    SearchProgress,
+} from './types';
 import { buildModel } from './model';
 import { propagate } from './engine/propagation';
 import { assign, createState, assignedPairs, type InternalState } from './engine/state';
@@ -58,6 +65,15 @@ export class ShiftScheduler {
             assign(state, employeeId, instanceId, ['pinned by the caller']);
         }
         greedyFill(ctx, state, propagation, objective, rand);
+        const report = (phase: SearchProgress['phase'], from: InternalState, evaluatedVariants: number) =>
+            input.onSearch?.({
+                phase,
+                assigned: [...from.assignments.values()].reduce((sum, set) => sum + set.size, 0),
+                unfilledSlots: unfilledSlots(ctx, from),
+                evaluatedVariants,
+                elapsedMs: Date.now() - startedAt,
+            });
+        report('draft', state, 1);
 
         const minHoursWeight = ctx.constraints.find((c) => c.id === 'hour-budget')?.weight ?? MIN_HOURS_WEIGHT;
         let finalState: InternalState = state;
@@ -77,6 +93,8 @@ export class ShiftScheduler {
                     onImprovement: input.onProgress
                         ? (best) => input.onProgress!(this.assemble(best, propagation, startedAt, seed, input, 0, false))
                         : undefined,
+                    onRound: input.onSearch ? (best, variants) => report('improving', best, 1 + variants) : undefined,
+                    shouldStop: input.shouldStop,
                 },
                 () => createState(ctx),
             );

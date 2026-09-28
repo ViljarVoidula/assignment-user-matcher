@@ -3,7 +3,7 @@ import { buildModel } from '../../src/scheduling/model';
 import { assign, createState } from '../../src/scheduling/engine/state';
 import { PersonTimeline } from '../../src/scheduling/engine/timeline';
 import { cancellationLedger } from '../../src/scheduling/constraints/notice';
-import type { ModelContext, ScheduleInput, ShiftTemplate, WorkingTimeRules } from '../../src/scheduling';
+import type { ModelContext, ScheduleInput, ScheduleResult, ShiftTemplate, WorkingTimeRules } from '../../src/scheduling';
 
 /**
  * Regressions for defects surfaced by the coverage sweep. Each test asserts the
@@ -422,6 +422,58 @@ describe('audit-sweep regressions (scheduling)', function () {
                 v.constraintId === 'group-composition' && v.severity === 'hard',
         );
         expect(hard).to.deep.equal([]);
+    });
+
+    it('never builds an averaged weekly-rest breach it would then report', function () {
+        // A 14-day averaging window can start up to 14 days before a shift and
+        // still contain it. Probing only windows that start within the 7-day
+        // rest window of the new shift let construction fill day 10 into a
+        // window that opened on day 1 — and the final judgement, asked about
+        // day 1, then reported a breach the solve had created itself. Every
+        // first roster under a two-level (Estonian) weekly rest came back with
+        // hundreds of them.
+        const dates = Array.from({ length: 28 }, (_, i) => new Date(Date.UTC(2026, 9, 1 + i)).toISOString().slice(0, 10));
+        const { solveSchedule } = require('../../src/scheduling');
+        const result: ScheduleResult = solveSchedule({
+            period: { startDate: dates[0], endDate: dates[27] },
+            employees: ['e0', 'e1', 'e2'].map((id) => ({ id, tags: [], timeOff: [] })),
+            shifts: [shift('d', '08:00', '16:00', dates, { minEmployees: 2 })],
+            rules: {
+                weeklyRest: { minMinutes: 48 * H, windowDays: 7, absoluteFloorMinutes: 36 * H, averageOverDays: 14 },
+            },
+            timeBudgetMs: 0,
+            seed: 1,
+        });
+
+        const hard = result.violations.filter((v) => v.constraintId === 'weekly-rest' && v.severity === 'hard');
+        expect(hard).to.deep.equal([]);
+        // It staffed what it lawfully could rather than nothing at all.
+        expect(result.assignments.length).to.be.greaterThan(28);
+    });
+
+    it('finds the least averaged weekly rest over every window start, not a sample', function () {
+        // Brute force over every integer start against the segment analysis,
+        // on random timelines with overlaps, nesting and history. Scaled down
+        // (hours become minutes) so the brute force stays cheap; the
+        // arithmetic has no units.
+        const { worstQualifyingRest, qualifyingRestAt } = require('../../src/scheduling/constraints/weekly-rest');
+        let seed = 7;
+        const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+        for (let round = 0; round < 60; round++) {
+            const entries = Array.from({ length: 1 + Math.floor(rand() * 9) }, (_, i) => {
+                const start = Math.floor(rand() * 400) - 60;
+                return { id: `x${i}`, start, end: start + 1 + Math.floor(rand() * 20), workingMinutes: 1 };
+            });
+            const timeline = new PersonTimeline(entries);
+            const A = 50 + Math.floor(rand() * 150);
+            const m = 3 + Math.floor(rand() * 40);
+            const lo = Math.floor(rand() * 200) - 100;
+            const hi = lo + Math.floor(rand() * 300);
+
+            let brute = Infinity;
+            for (let s = lo; s <= hi; s++) brute = Math.min(brute, qualifyingRestAt(timeline, s, A, m));
+            expect(worstQualifyingRest(timeline, A, lo, hi, m), `round ${round}`).to.equal(brute);
+        }
     });
 
     it('credits the union of contiguous availability windows', function () {

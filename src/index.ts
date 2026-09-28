@@ -151,6 +151,7 @@ export {
     explainCandidate,
     repairSchedule,
     rankCandidates,
+    rankShiftsFor,
     // Hand-overs and trades between two workers, judged both ways.
     rankSwapPartners,
     checkSwap,
@@ -212,6 +213,7 @@ export {
     type ScheduleInput,
     type ScheduleProvenance,
     type ScheduleResult,
+    type SearchProgress,
     type ScheduledAssignment,
     type SchedulingConstraint,
     type SearchState,

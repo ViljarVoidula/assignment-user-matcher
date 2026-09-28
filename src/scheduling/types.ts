@@ -892,8 +892,38 @@ export interface ScheduleInput {
     pinned?: AssignmentPair[];
     /** Absences that block assignment and may be neutral in rolling averages. */
     absences?: Array<{ employeeId: string; from: string; to: string; kind?: string }>;
-    /** Called with the best roster so far as the search improves it. */
+    /**
+     * Called with the best roster so far as the search improves it. Each call
+     * builds a full result — every rule judged on every pair — so on a large
+     * roster it costs real search time; `onSearch` is the cheap alternative.
+     */
     onProgress?: (best: ScheduleResult) => void;
+    /**
+     * Counts only, cheap enough to show a live progress bar: called once when
+     * the first complete draft exists (`phase: 'draft'`) and after every
+     * search round (`phase: 'improving'`), always about the best roster so far.
+     */
+    onSearch?: (progress: SearchProgress) => void;
+    /**
+     * Asked between search rounds. Returning `true` ends the search early and
+     * returns the best roster found so far — every search round starts from
+     * a complete roster, so stopping never leaves one half-built. Construction
+     * itself is not interrupted. Lets a caller offer "use the draft now".
+     */
+    shouldStop?: () => boolean;
+}
+
+/** One `onSearch` report. */
+export interface SearchProgress {
+    phase: 'draft' | 'improving';
+    /** Assigned pairs in the best roster so far. */
+    assigned: number;
+    /** Staffing places still short of `minEmployees` in it. */
+    unfilledSlots: number;
+    /** Candidate rosters judged so far, the first draft included. */
+    evaluatedVariants: number;
+    /** Since the solve started. */
+    elapsedMs: number;
 }
 
 /** An assignment from before the period start, treated as immutable context. */
