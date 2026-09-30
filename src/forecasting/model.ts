@@ -6,6 +6,13 @@
  *
  * Fitting reads only history strictly before `asOf`, so a rolling-origin
  * backtest is the same function called with an earlier `asOf`.
+ *
+ * Grains: level, trend, the yearly factor and effects read the daily table's
+ * UTC days (`utcDayShare`, `expectedDay`); what an hour is forecast at reads
+ * local days (`dayShare` and `hourShape` from hourly history), since a UTC day
+ * is up to a day off a local one outside Europe. Shares are pooled ratios, not
+ * medians, so a sparse series keeps its quiet hours; learned effects and
+ * one-year yearly factors are shrunk towards 1 by their evidence.
  */
 import { ForecastCalendar, HOUR_MS } from './calendar';
 import { DAY_MS, dayOf, mondayOfDay, utcDay, weekOfYear, weekdayOf } from './days';
@@ -67,8 +74,13 @@ export interface FittedSeries {
     history: PreparedHistory;
     /** First and last UTC day number of history used (inclusive); null for an empty series. */
     span: { from: number; to: number } | null;
-    /** Share of a week's volume per ISO weekday (index 0 = Monday); sums to 1. */
+    /**
+     * Share of a week's volume per local ISO weekday (index 0 = Monday); sums to 1. Read from hourly
+     * history on local days; a daily-only series falls back to `utcDayShare`. Drives `projectHour`.
+     */
     dayShare: number[];
+    /** Share of a week's volume per UTC weekday of the daily table; drives weekly totals and `expectedDay`. */
+    utcDayShare: number[];
     /** Share of a day's volume per hour of the week; each weekday's 24 values sum to 1. */
     hourShape: number[];
     hasHourlyShape: boolean;
@@ -105,40 +117,71 @@ function spanOf(history: PreparedHistory, asOf: number): FittedSeries['span'] {
     return null;
 }
 
-function fitDayShare(weeks: number[], history: PreparedHistory, special: Set<number>): number[] {
-    const shares: number[][] = Array.from({ length: 7 }, () => []);
-    const at = (d: number) => history.daily[d - history.firstDay] ?? 0;
-    for (const monday of weeks.slice(-SHAPE_WEEKS)) {
-        let clean = true;
-        let total = 0;
-        for (let i = 0; i < 7; i++) {
-            if (special.has(monday + i)) clean = false;
-            total += at(monday + i);
-        }
-        if (!clean || total <= 0) continue;
-        for (let i = 0; i < 7; i++) shares[i].push(at(monday + i) / total);
+/**
+ * Share of a week per weekday as a pooled ratio (Σ weekday ÷ Σ week) over the
+ * last clean weeks. A pooled ratio, not a median of per-week shares: a median
+ * of shares is biased towards 0 wherever a day is empty in most weeks.
+ * Null under two clean weeks.
+ */
+function pooledDayShare(weeks: ReadonlyArray<readonly number[]>): number[] | null {
+    const sums = Array(7).fill(0);
+    let total = 0;
+    let used = 0;
+    for (const days of weeks.slice(-SHAPE_WEEKS)) {
+        const week = days.reduce((a, b) => a + b, 0);
+        if (week <= 0) continue;
+        days.forEach((v, i) => (sums[i] += v));
+        total += week;
+        used += 1;
     }
-    if (shares[0].length < 2) return Array(7).fill(1 / 7);
-    const raw = shares.map((s) => Math.max(0, median(s)));
-    const sum = raw.reduce((a, b) => a + b, 0);
-    return sum > 0 ? raw.map((v) => v / sum) : Array(7).fill(1 / 7);
+    return used < 2 ? null : sums.map((v) => v / total);
 }
 
-function fitHourShape(
+/** Weekday shares of the daily table's UTC days, for weekly totals and in-sample expectations. */
+function fitUtcDayShare(weeks: number[], history: PreparedHistory, special: Set<number>): number[] {
+    const at = (d: number) => history.daily[d - history.firstDay] ?? 0;
+    const clean = weeks.filter((monday) => [0, 1, 2, 3, 4, 5, 6].every((i) => !special.has(monday + i)));
+    return (
+        pooledDayShare(clean.map((monday) => Array.from({ length: 7 }, (_, i) => at(monday + i)))) ?? Array(7).fill(1 / 7)
+    );
+}
+
+/** Tasks' worth of pseudo-count spread evenly over the 24 hours of the pooled shape, so a sparse series keeps every hour. */
+const HOUR_PRIOR = 12;
+/** Tasks a weekday needs before its own hour shape outweighs the pooled one (weight n / (n + HOUR_SHRINK)). */
+const HOUR_SHRINK = 20;
+
+/**
+ * The shapes read from hourly history on local days: the share of a day each
+ * local hour carries per weekday, and the share of a week each local weekday
+ * carries (null without two complete clean local weeks — the UTC table's
+ * shares stand in then; a UTC day is up to a day off a local one outside
+ * Europe, so hourly history is the only honest source for local weekdays).
+ *
+ * Hour shares are pooled ratios (Σ hour ÷ Σ day), shrunk towards the shape of
+ * all weekdays together by how many tasks the weekday saw, and that pooled
+ * shape carries a small even prior: medians of per-day shares collapse to 0
+ * on a sparse series, where most days have no task in a given hour.
+ */
+function fitLocalShapes(
     history: PreparedHistory,
     asOf: number,
     calendar: ForecastCalendar,
     special: Set<number>,
-): { shape: number[]; has: boolean } {
+): { shape: number[]; has: boolean; dayShare: number[] | null } {
+    const none = { shape: Array(168).fill(1 / 24), has: false, dayShare: null };
     const from = asOf - SHAPE_WEEKS * 7 * DAY_MS;
     const points = history.hourlyPoints.filter((p) => p.at >= from && p.at < asOf);
-    if (points.length === 0) return { shape: Array(168).fill(1 / 24), has: false };
+    if (points.length === 0) return none;
     const today = calendar.slot(Math.floor(asOf / HOUR_MS) * HOUR_MS).day;
+    const firstAt = Math.ceil(points[0].at / HOUR_MS) * HOUR_MS;
+    // The first local day is partial (the window or the series starts mid-day).
+    const partial = calendar.slot(firstAt).day;
     const byDay = new Map<number, { weekday: number; hours: number[] }>();
     // Every local day from the first hourly point on counts, busy or not: a missing hour is a zero.
-    for (let at = Math.ceil(points[0].at / HOUR_MS) * HOUR_MS; at < asOf; at += HOUR_MS) {
+    for (let at = firstAt; at < asOf; at += HOUR_MS) {
         const slot = calendar.slot(at);
-        if (slot.day >= today || special.has(slot.day) || byDay.has(slot.day)) continue;
+        if (slot.day === partial || slot.day >= today || special.has(slot.day) || byDay.has(slot.day)) continue;
         byDay.set(slot.day, { weekday: slot.weekday, hours: Array(24).fill(0) });
     }
     for (const p of points) {
@@ -146,26 +189,41 @@ function fitHourShape(
         const day = byDay.get(slot.day);
         if (day) day.hours[slot.hour] += p.value;
     }
-    const perWeekday: number[][][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => []));
-    const pooled: number[][] = Array.from({ length: 24 }, () => []);
-    for (const day of byDay.values()) {
+    const sums: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+    const totals = Array(7).fill(0);
+    const pooled = Array(24).fill(0);
+    let all = 0;
+    const weeks = new Map<number, number[]>();
+    for (const [dayNumber, day] of byDay) {
         const total = day.hours.reduce((a, b) => a + b, 0);
-        if (total <= 0) continue;
+        const monday = dayNumber - (day.weekday - 1);
+        let week = weeks.get(monday);
+        if (!week) weeks.set(monday, (week = Array(7).fill(Number.NaN)));
+        week[day.weekday - 1] = total;
         day.hours.forEach((v, h) => {
-            perWeekday[day.weekday - 1][h].push(v / total);
-            pooled[h].push(v / total);
+            sums[day.weekday - 1][h] += v;
+            pooled[h] += v;
         });
+        totals[day.weekday - 1] += total;
+        all += total;
     }
-    if (pooled[0].length === 0) return { shape: Array(168).fill(1 / 24), has: false };
+    if (all <= 0) return none;
+    const base = pooled.map((v) => (v + HOUR_PRIOR / 24) / (all + HOUR_PRIOR));
     const shape: number[] = [];
     for (let wd = 0; wd < 7; wd++) {
-        const enough = perWeekday[wd][0].length >= 2;
-        const raw = Array.from({ length: 24 }, (_, h) => Math.max(0, median(enough ? perWeekday[wd][h] : pooled[h])));
-        const sum = raw.reduce((a, b) => a + b, 0);
-        shape.push(...raw.map((v) => (sum > 0 ? v / sum : 1 / 24)));
+        const n = totals[wd];
+        const w = n / (n + HOUR_SHRINK);
+        for (let h = 0; h < 24; h++) shape.push(n > 0 ? w * (sums[wd][h] / n) + (1 - w) * base[h] : base[h]);
     }
-    return { shape, has: true };
+    const complete = [...weeks.keys()]
+        .sort((a, b) => a - b)
+        .map((monday) => weeks.get(monday)!)
+        .filter((week) => week.every((v) => Number.isFinite(v)));
+    return { shape, has: true, dayShare: pooledDayShare(complete) };
 }
+
+/** Weight of a week-of-year factor seen in `years` distinct years: 1 year → ½, 2 → ⅔, 3 → ¾. */
+const yearlyWeight = (years: number): number => years / (years + 1);
 
 /**
  * Yearly factor per week of year, once ≥ 56 weeks of weekly totals exist.
@@ -184,6 +242,7 @@ export function fitYearly(weekly: ReadonlyArray<{ monday: number; total: number 
     const years = Math.floor(spanWeeks / 52);
     const window = known.filter((w) => (last - w.monday) / 7 < 52 * years);
     const t = (monday: number) => (monday - last) / 7;
+    const windowStart = t(window[0].monday);
     const mx = window.reduce((s, w) => s + t(w.monday), 0) / window.length;
     const my = window.reduce((s, w) => s + w.total, 0) / window.length;
     let sxy = 0;
@@ -194,8 +253,12 @@ export function fitYearly(weekly: ReadonlyArray<{ monday: number; total: number 
     }
     const slope = sxx > 0 ? sxy / sxx : 0;
     const ratios = new Map<number, number[]>();
+    const yearsSeen = new Map<number, Set<number>>();
     for (const w of known) {
-        const line = my + slope * (t(w.monday) - mx);
+        // Weeks older than the whole-years window read the line at its start: a
+        // slope extrapolated backwards (a recent step makes it steep) would read
+        // an ordinary old week as deep season.
+        const line = my + slope * (Math.max(t(w.monday), windowStart) - mx);
         if (line <= 0) continue;
         const k = weekOfYear(w.monday);
         for (const near of [k - 1, k, k + 1]) {
@@ -203,10 +266,18 @@ export function fitYearly(weekly: ReadonlyArray<{ monday: number; total: number 
             let list = ratios.get(key);
             if (!list) ratios.set(key, (list = []));
             list.push(w.total / line);
+            let seen = yearsSeen.get(key);
+            if (!seen) yearsSeen.set(key, (seen = new Set()));
+            seen.add(Math.floor((last - w.monday) / 364));
         }
     }
     const factors = new Map<number, number>();
-    for (const [k, rs] of ratios) factors.set(k, clamp(median(rs), 0.3, 3));
+    for (const [k, rs] of ratios) {
+        // One year behind a week of the year cannot tell a season from a step
+        // that happened to land there: trust it by `yearlyWeight`.
+        const f = clamp(median(rs), 0.3, 3);
+        factors.set(k, 1 + (f - 1) * yearlyWeight(yearsSeen.get(k)!.size));
+    }
     if (factors.size === 0) return null;
     const avg = [...factors.values()].reduce((a, b) => a + b, 0) / factors.size;
     for (const [k, f] of factors) factors.set(k, f / avg);
@@ -266,13 +337,15 @@ function fitWith(
     for (const day of outliers) special.add(day);
     // History rarely starts at midnight: the first day is partial by construction.
     if (span) special.add(span.from);
-    const { shape: hourShape, has: hasHourlyShape } = fitHourShape(history, asOf, calendar, special);
+    const local = fitLocalShapes(history, asOf, calendar, special);
+    const { shape: hourShape, has: hasHourlyShape } = local;
     const base: FittedSeries = {
         series: history.series,
         asOf,
         history,
         span,
         dayShare: Array(7).fill(1 / 7),
+        utcDayShare: Array(7).fill(1 / 7),
         hourShape,
         hasHourlyShape,
         level: 0,
@@ -291,7 +364,7 @@ function fitWith(
     if (monday < span.from) monday += 7;
     const weeks: number[] = [];
     for (; monday + 6 <= span.to; monday += 7) weeks.push(monday);
-    const dayShare = fitDayShare(weeks, history, special);
+    const utcDayShare = fitUtcDayShare(weeks, history, special);
     const at = (d: number) => history.daily[d - history.firstDay] ?? 0;
     const weekly = weeks.map((m) => {
         let sum = 0;
@@ -299,7 +372,7 @@ function fitWith(
         for (let i = 0; i < 7; i++) {
             if (special.has(m + i)) continue;
             sum += at(m + i);
-            covered += dayShare[i];
+            covered += utcDayShare[i];
         }
         return { monday: m, total: covered >= 0.35 ? sum / covered : Number.NaN };
     });
@@ -346,7 +419,8 @@ function fitWith(
     }
     return withEffects({
         ...base,
-        dayShare,
+        dayShare: local.dayShare ?? utcDayShare,
+        utcDayShare,
         level,
         trend,
         lastWeek: weeks.length > 0 ? weeks[weeks.length - 1] : null,
@@ -392,10 +466,14 @@ export function seasonFor(model: FittedSeries, monday: number): number {
     return model.yearly?.get(weekOfYear(monday)) ?? 1;
 }
 
-/** Baseline volume for a day — level × season × weekday share, no holiday or event. */
+/**
+ * Baseline volume for a UTC day of the daily table — level × season × UTC weekday share, no holiday
+ * or event. It is the in-sample yardstick effects and outliers are judged against, so it reads the
+ * table's own grain; an hour's local forecast is `projectHour`.
+ */
 export function expectedDay(model: FittedSeries, day: number): number {
     const monday = mondayOfDay(day);
-    return levelFor(model, monday) * seasonFor(model, monday) * model.dayShare[weekdayOf(day) - 1];
+    return levelFor(model, monday) * seasonFor(model, monday) * model.utcDayShare[weekdayOf(day) - 1];
 }
 
 export function effectOn(model: FittedSeries, day: number): DayEffect {

@@ -53,52 +53,108 @@ export function specialDays(occurrences: readonly Occ[]): Set<number> {
     return out;
 }
 
+/** Days the baseline expects fewer tasks than this are too noisy to read a ratio from. */
+export const MIN_EXPECTED = 5;
+/**
+ * Evidence, in expected tasks, at which a learned size is trusted halfway: the
+ * size is shrunk towards 1 as `1 + (k̂ − 1) · n / (n + EFFECT_SHRINK)`, n the
+ * expected volume over the occurrences' days. One quiet occurrence cannot
+ * teach a large effect from noise.
+ */
+export const EFFECT_SHRINK = 50;
+/** A knock-on day counts only when it is this many Poisson sigmas off the baseline (as `isOutlier`)… */
+const KNOCK_ON_SIGMAS = 2.5;
+/** …and only inside a run of at least this many such days: one odd day is not a wave. */
+const KNOCK_ON_RUN = 2;
+/** Sigmas either side of a single occurrence's size for its range. */
+const RANGE_SIGMAS = 2;
+
+const shrink = (ratio: number, evidence: number) => 1 + ((ratio - 1) * evidence) / (evidence + EFFECT_SHRINK);
+
 /**
  * Learns one effect per label from past occurrences, judged day by day
  * against `expected` (the baseline with no effects) and `actual`. Days the
- * baseline expects under half a unit are skipped: a ratio of nothing is noise.
+ * baseline expects under `MIN_EXPECTED` tasks are skipped: a ratio of almost
+ * nothing is noise.
+ *
+ * Size is Σ actual ÷ Σ expected over the label's days, shrunk towards 1 by the
+ * evidence (`EFFECT_SHRINK`). A single occurrence's range is its Poisson
+ * uncertainty (± 2 · √actual ÷ expected, widened to cover the unshrunk
+ * estimate); several occurrences range over their own sizes. A knock-on day
+ * is kept only when the pooled actual is `2.5 · √expected` off the baseline
+ * and it sits in a run of at least two such days; its factor is shrunk the
+ * same way as the size.
  */
 export function learnEffects(
     past: readonly Occ[],
     actual: (day: number) => number | null,
     expected: (day: number) => number,
 ): Map<string, LearnedEffect> {
-    const byLabel = new Map<string, { kind: string; sizes: number[]; shape: number[][]; knock: number[][] }>();
+    interface Entry {
+        kind: string;
+        sizes: number[];
+        a: number;
+        e: number;
+        shape: number[][];
+        knockA: number[];
+        knockE: number[];
+    }
+    const byLabel = new Map<string, Entry>();
     for (const occ of past) {
         if (occ.o.closed) continue;
         const ratios: number[] = [];
+        let sa = 0;
+        let se = 0;
         for (let d = occ.from; d <= occ.to; d++) {
             const a = actual(d);
             const e = expected(d);
-            if (a !== null && e >= 0.5) ratios.push(a / e);
+            if (a === null || e < MIN_EXPECTED) continue;
+            ratios.push(a / e);
+            sa += a;
+            se += e;
         }
         if (ratios.length === 0) continue;
-        const size = mean(ratios);
-        const entry = byLabel.get(occ.o.label) ?? { kind: occ.o.kind, sizes: [], shape: [], knock: [] };
+        const size = sa / se;
+        const entry: Entry = byLabel.get(occ.o.label) ?? {
+            kind: occ.o.kind,
+            sizes: [],
+            a: 0,
+            e: 0,
+            shape: [],
+            knockA: [],
+            knockE: [],
+        };
         entry.sizes.push(size);
+        entry.a += sa;
+        entry.e += se;
         ratios.slice(0, MAX_SHAPE_DAYS).forEach((r, i) => {
             (entry.shape[i] ??= []).push(size > 0 ? r / size : 1);
         });
         if (!occ.holiday) {
-            for (let j = 1; j <= KNOCK_ON_DAYS; j++) {
-                const a = actual(occ.to + j);
-                const e = expected(occ.to + j);
-                if (a === null || e < 0.5) continue;
-                (entry.knock[j - 1] ??= []).push(a / e);
+            for (let j = 0; j < KNOCK_ON_DAYS; j++) {
+                const a = actual(occ.to + j + 1);
+                const e = expected(occ.to + j + 1);
+                if (a === null || e < MIN_EXPECTED) continue;
+                entry.knockA[j] = (entry.knockA[j] ?? 0) + a;
+                entry.knockE[j] = (entry.knockE[j] ?? 0) + e;
             }
         }
         byLabel.set(occ.o.label, entry);
     }
     const out = new Map<string, LearnedEffect>();
     for (const [label, entry] of byLabel) {
-        const size = clamp(mean(entry.sizes), 0.05, 20);
-        const low = entry.sizes.length > 1 ? Math.min(...entry.sizes) : size * 0.8;
-        const high = entry.sizes.length > 1 ? Math.max(...entry.sizes) : size * 1.25;
-        const knockOn = Array.from(entry.knock, (values) => {
-            const k = values && values.length > 0 ? mean(values) : 1;
-            return Math.abs(k - 1) < KNOCK_ON_MIN ? 1 : clamp(k, 0.2, 5);
-        });
-        while (knockOn.length > 0 && knockOn[knockOn.length - 1] === 1) knockOn.pop();
+        const raw = entry.a / entry.e;
+        const size = clamp(shrink(raw, entry.e), 0.05, 20);
+        let low: number;
+        let high: number;
+        if (entry.sizes.length > 1) {
+            low = Math.min(...entry.sizes.map((k) => shrink(k, entry.e)));
+            high = Math.max(...entry.sizes.map((k) => shrink(k, entry.e)));
+        } else {
+            const sigma = (RANGE_SIGMAS * Math.sqrt(Math.max(entry.a, 1))) / entry.e;
+            low = Math.max(0, Math.min(size, raw) - sigma);
+            high = Math.max(size, raw) + sigma;
+        }
         out.set(label, {
             label,
             kind: entry.kind,
@@ -108,10 +164,33 @@ export function learnEffects(
             low: Math.min(low, size),
             high: Math.max(high, size),
             shape: entry.shape.map((values) => clamp(mean(values), 0.05, 20)),
-            knockOn,
+            knockOn: knockOnOf(entry.knockA, entry.knockE),
         });
     }
     return out;
+}
+
+/** Knock-on factors per day after an event: significant days in runs of `KNOCK_ON_RUN`, trailing 1s trimmed. */
+function knockOnOf(actuals: readonly number[], expecteds: readonly number[]): number[] {
+    const factors: number[] = [];
+    const significant: boolean[] = [];
+    for (let j = 0; j < KNOCK_ON_DAYS; j++) {
+        const a = actuals[j];
+        const e = expecteds[j];
+        const known = a !== undefined && e !== undefined;
+        const k = known ? clamp(shrink(a / e, e), 0.2, 5) : 1;
+        factors.push(k);
+        significant.push(known && Math.abs(a - e) > KNOCK_ON_SIGMAS * Math.sqrt(e) && Math.abs(k - 1) >= KNOCK_ON_MIN);
+    }
+    const knockOn = factors.map((k, j) => {
+        let from = j;
+        while (from > 0 && significant[from - 1]) from--;
+        let to = j;
+        while (to < KNOCK_ON_DAYS - 1 && significant[to + 1]) to++;
+        return significant[j] && to - from + 1 >= KNOCK_ON_RUN ? k : 1;
+    });
+    while (knockOn.length > 0 && knockOn[knockOn.length - 1] === 1) knockOn.pop();
+    return knockOn;
 }
 
 /**

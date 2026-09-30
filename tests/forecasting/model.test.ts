@@ -234,7 +234,9 @@ describe('forecast model edges', () => {
             [dayOf('2026-02-20'), 30],
             [dayOf('2026-04-06'), 0],
             [dayOf('2026-04-07'), null],
-            [dayOf('2026-04-08'), 15],
+            [dayOf('2026-04-08'), 30],
+            [dayOf('2026-04-09'), 30],
+            [dayOf('2026-04-12'), 30],
         ]);
         const learned = learnEffects(
             occ,
@@ -242,12 +244,22 @@ describe('forecast model edges', () => {
             () => 10,
         );
         expect([...learned.keys()]).to.deep.equal(['twice', 'dead']);
-        expect(learned.get('twice')).to.include({ occurrences: 2, size: 2.5, low: 2, high: 3 });
-        expect(learned.get('twice')!.knockOn).to.deep.equal([]);
+        // Σa/Σe = 50/20 = 2.5 on 20 expected tasks, shrunk: 1 + 1.5 · 20/70; the range spans both occurrences.
+        const twice = learned.get('twice')!;
+        expect(twice).to.include({ occurrences: 2 });
+        expect(twice.size).to.be.closeTo(1 + (1.5 * 20) / 70, 1e-12);
+        expect(twice.low).to.be.closeTo(1 + 20 / 70, 1e-12);
+        expect(twice.high).to.be.closeTo(1 + (2 * 20) / 70, 1e-12);
+        expect(twice.knockOn).to.deep.equal([]);
+        // Nothing on a day expecting 10: shrunk to 1 − 10/60, a Poisson range of ±2·√1/10 around 0…0.83.
         const dead = learned.get('dead')!;
-        expect(dead.size).to.equal(0.05);
+        expect(dead.size).to.be.closeTo(1 - 10 / 60, 1e-12);
+        expect(dead.low).to.equal(0);
+        expect(dead.high).to.be.closeTo(1 - 10 / 60 + 0.2, 1e-12);
         expect(dead.shape).to.deep.equal([1]);
-        expect(dead.knockOn).to.deep.equal([1, 1.5]);
+        // Days 2–3 after are a two-day run 20 tasks (> 2.5·√10) over; day 6 alone is not a wave.
+        const k = 1 + (2 * 10) / 60;
+        expect(dead.knockOn).to.deep.equal([1, k, k]);
     });
 
     it('applies only resolved effects, repeats an empty shape as 1, and skips flat or spent knock-on days', () => {
@@ -329,7 +341,7 @@ describe('forecast model edges', () => {
         expect(model.learned.size).to.equal(0);
     });
 
-    it('falls back to an even week when no weekday has a typical share', () => {
+    it('falls back to an even week without two clean weeks', () => {
         const model = fitSeries(
             prepareHistory({
                 series: 's',
@@ -348,7 +360,7 @@ describe('forecast model edges', () => {
         expect(model.dayShare).to.deep.equal(Array(7).fill(1 / 7));
     });
 
-    it('pools weekdays with too few days, skips empty days, and needs a finished day for a shape', () => {
+    it('shrinks thin weekdays to the pooled shape, skips empty days, and needs a finished day for a shape', () => {
         const hourly: Array<{ at: number; value: number }> = [];
         for (let d = dayOf('2026-09-21'); d <= dayOf('2026-09-30'); d++) {
             const date = new Date(d * DAY_MS).toISOString().slice(0, 10);
@@ -390,5 +402,114 @@ describe('forecast model edges', () => {
         const b = fit(options);
         expect(projectHour(a, cal, at('2026-10-14', 15))).to.deep.equal(projectHour(b, cal, at('2026-10-14', 15)));
         expect([a.level, a.trend, a.dayShare, a.hourShape]).to.deep.equal([b.level, b.trend, b.dayShare, b.hourShape]);
+    });
+});
+
+describe('forecast model: review fixes', () => {
+    const weekWeight = (() => {
+        let w = 0;
+        for (let d = 1; d <= 7; d++) for (let h = 0; h < 24; h++) w += officeShape(d, h);
+        return w;
+    })();
+    const dayTruth = (weekday: number, weeklyTotal: number) => {
+        let s = 0;
+        for (let h = 0; h < 24; h++) s += officeShape(weekday, h);
+        return (weeklyTotal * s) / weekWeight;
+    };
+    const nextWeek = ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11'];
+    const forecastDay = (model: ReturnType<typeof fitSeries>, calendar: ForecastCalendar, date: string) => {
+        const next = new Date((dayOf(date) + 1) * DAY_MS).toISOString().slice(0, 10);
+        let sum = 0;
+        for (let t = calendar.midnight(date); t < calendar.midnight(next); t += HOUR_MS)
+            sum += projectHour(model, calendar, t).likely;
+        return sum;
+    };
+
+    for (const zone of ['America/Los_Angeles', 'Pacific/Auckland']) {
+        it(`reads weekday shares on local days in ${zone}`, () => {
+            const calendar = new ForecastCalendar(zone, NOW - 900 * DAY_MS, NOW + 200 * DAY_MS);
+            const history = syntheticHistory({ now: NOW, weeks: 12, weeklyTotal: 7000, noise: false, timeZone: zone });
+            const model = fitSeries(prepareHistory(history), [], calendar, NOW);
+            nextWeek.forEach((date, i) => {
+                const truthDay = dayTruth(i + 1, 7000);
+                expect(forecastDay(model, calendar, date), `${zone} ${date}`).to.be.closeTo(truthDay, truthDay * 0.05);
+            });
+        });
+    }
+
+    for (const weeklyTotal of [30, 100]) {
+        it(`keeps every busy hour in the shape of a sparse series (${weeklyTotal}/week)`, () => {
+            const model = fit({ now: NOW, weeks: 16, weeklyTotal, seed: 3 });
+            expect(model.hasHourlyShape).to.equal(true);
+            for (const v of model.hourShape) expect(v).to.be.above(0);
+            let office = 0;
+            let all = 0;
+            for (let h = 0; h < 24; h++) {
+                all += officeShape(1, h);
+                if (h >= 8 && h < 18) office += officeShape(1, h);
+            }
+            for (let wd = 0; wd < 7; wd++) {
+                let share = 0;
+                for (let h = 8; h < 18; h++) share += model.hourShape[wd * 24 + h];
+                expect(share, `weekday ${wd + 1}`).to.be.closeTo(office / all, 0.1);
+            }
+        });
+    }
+
+    for (const weeklyTotal of [200, 700]) {
+        it(`does not overfit one noisy occurrence (${weeklyTotal}/week)`, () => {
+            for (const seed of [1, 2, 3]) {
+                const model = fit(
+                    {
+                        now: NOW,
+                        weeks: 16,
+                        weeklyTotal,
+                        seed,
+                        events: [{ from: '2026-08-11', to: '2026-08-13', factor: 1.5 }],
+                    },
+                    [{ label: 'promo', kind: 'sale', from: '2026-08-11', to: '2026-08-13' }],
+                );
+                const effect = model.learned.get('promo')!;
+                expect(effect.knockOn, `seed ${seed}`).to.deep.equal([]);
+                expect(effect.size, `seed ${seed}`).to.be.within(1, 1.6);
+                expect(effect.low).to.be.below(effect.size);
+                expect(effect.high).to.be.above(effect.size);
+            }
+        });
+    }
+
+    const weekAhead = (model: ReturnType<typeof fitSeries>, monday: string) => {
+        let week = 0;
+        for (let d = 0; d < 7; d++)
+            week += forecastDay(model, cal, new Date((dayOf(monday) + d) * DAY_MS).toISOString().slice(0, 10));
+        return week;
+    };
+    const stepped = (weeks: number, from: string) =>
+        fit({ now: NOW, weeks, weeklyTotal: 7000, noise: false, events: [{ from, to: '2030-12-31', factor: 1.3 }] });
+
+    it('does not read a recent step as a yearly season on 60 weeks', () => {
+        // +30 % from eight weeks ago, no season: every week ahead is 9,100.
+        const model = stepped(60, '2026-08-06');
+        expect(model.yearly).to.not.equal(null);
+        for (const monday of ['2026-10-05', '2026-11-02', '2027-01-04'])
+            expect(weekAhead(model, monday), monday).to.be.closeTo(9100, 9100 * 0.03);
+    });
+
+    it('does not extrapolate the yearly trend line past its whole years', () => {
+        // 100 weeks, a +30 % step 20 weeks ago: last January must not read as deep low season.
+        const model = stepped(100, '2026-05-14');
+        for (const monday of ['2026-10-05', '2026-11-02', '2027-01-04'])
+            expect(weekAhead(model, monday), monday).to.be.closeTo(9100, 9100 * 0.03);
+    });
+
+    it('learns nothing where the baseline expects under five tasks a day', () => {
+        const occ = prepareOccurrences([{ label: 'thin', kind: 'sale', from: '2026-01-10', to: '2026-01-11' }]);
+        expect(
+            learnEffects(
+                occ,
+                () => 8,
+                () => 4,
+            ).size,
+        ).to.equal(0);
     });
 });
