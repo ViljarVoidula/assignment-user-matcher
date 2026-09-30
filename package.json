@@ -22,12 +22,20 @@
             "types": "./dist/scheduling/index.d.ts",
             "require": "./dist/scheduling/index.js",
             "import": "./dist/scheduling/index.js"
+        },
+        "./forecasting": {
+            "types": "./dist/forecasting/index.d.ts",
+            "require": "./dist/forecasting/index.js",
+            "import": "./dist/forecasting/index.js"
         }
     },
     "typesVersions": {
         "*": {
             "scheduling": [
                 "dist/scheduling/index.d.ts"
+            ],
+            "forecasting": [
+                "dist/forecasting/index.d.ts"
             ]
         }
     },

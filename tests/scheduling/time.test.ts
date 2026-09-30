@@ -58,6 +58,22 @@ describe('Scheduling time model', function () {
     });
 
     describe('DST — the reason this module exists', function () {
+        it('reads the wall clock at an instant, twice 03:00 on a fall-back night', function () {
+            const clock = new PeriodClock('2026-10-24', 3, 'Europe/Tallinn');
+            expect(clock.localTimeOf(Date.parse('2026-10-25T00:00:00Z'))).to.deep.equal({
+                date: '2026-10-25',
+                minuteOfDay: 180,
+            });
+            expect(clock.localTimeOf(Date.parse('2026-10-25T01:30:00Z'))).to.deep.equal({
+                date: '2026-10-25',
+                minuteOfDay: 210,
+            });
+            expect(clock.localTimeOf(Date.parse('2026-10-24T21:59:00Z'))).to.deep.equal({
+                date: '2026-10-25',
+                minuteOfDay: 59,
+            });
+        });
+
         it('makes a spring-forward night one hour shorter', function () {
             const clock = new PeriodClock(SPRING_FORWARD, 2, 'Europe/Berlin');
             // 22:00 the previous evening is outside the period, so measure the

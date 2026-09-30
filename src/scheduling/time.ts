@@ -178,6 +178,21 @@ export class PeriodClock {
         return this.originMs + periodMinute * 60_000;
     }
 
+    /**
+     * What a clock on the wall shows at an absolute instant: the local date and
+     * the minute of that day. On a fall-back night two instants an hour apart
+     * both read 03:00; on a spring-forward night 03:00 never shows. Costs one
+     * `Intl` call — callers on a hot path use it only on transition days.
+     */
+    localTimeOf(epochMs: number): { date: string; minuteOfDay: number } {
+        const local = epochMs + this.offsetAtMs(epochMs) * 60_000;
+        const day = Math.floor(local / 86_400_000);
+        return {
+            date: new Date(day * 86_400_000).toISOString().slice(0, 10),
+            minuteOfDay: Math.floor((local - day * 86_400_000) / 60_000),
+        };
+    }
+
     /** Period minutes for an absolute UTC epoch instant. */
     fromEpochMs(epochMs: number): number {
         return Math.round((epochMs - this.originMs) / 60_000);
