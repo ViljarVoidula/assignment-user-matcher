@@ -466,13 +466,26 @@ export function assessShiftResilience(
         const need = inst.minEmployees;
         const shortBy = Math.max(0, need - assignedIds.length);
         const expectedDropouts = options.expectedDropouts?.[inst.id] ?? 0;
-        const { tier, reasons } = resilienceTier({
-            shortBy,
-            backups: eligible.length,
-            expectedDropouts,
-            assigned: assignedIds.length,
-            skills,
-        });
+        // Over its maximum, the shift needs no cover: dropouts only bring it
+        // back towards its cap, and one vacated seat still leaves it full, so
+        // `backups` is 0 by construction. Tier it by shortfall alone (cover
+        // judged unlimited); a skill it is still short of is a composition
+        // problem, reported as `short-skill`, never as `no-backups`.
+        const overstaffed = inst.maxEmployees !== undefined && assignedIds.length > inst.maxEmployees;
+        const { tier, reasons } = overstaffed
+            ? resilienceTier({
+                  shortBy,
+                  backups: Infinity,
+                  expectedDropouts: 0,
+                  skills: skills.map((s) => ({ ...s, backups: Infinity })),
+              })
+            : resilienceTier({
+                  shortBy,
+                  backups: eligible.length,
+                  expectedDropouts,
+                  assigned: assignedIds.length,
+                  skills,
+              });
         return {
             shiftInstanceId: inst.id,
             date: inst.date,
@@ -519,6 +532,10 @@ export function assessShiftResilience(
  * vacated pair is restored before the next, as in `tradeFits`, so person
  * caching stays valid and the state leaves as it came.
  *
+ * Cost: one full `scoreCandidates` pass per signature group, so a capped
+ * shift costs (distinct capped/required-tag combinations among its people)
+ * passes instead of one — usually one or two, at most one per rostered person.
+ *
  * Only `group-composition` reads the crew per pair; `hour-budget`, the other
  * crew-listed rule, reads the candidate's own minutes, which vacating somebody
  * else never moves. Rows come from the first representative that finds the
@@ -531,6 +548,12 @@ function backupsFor(
     onShift: Set<string>,
 ): { eligible: RepairCandidate[]; bySkill: (tag: string) => number } {
     const ctx = state.ctx;
+    // A person dropping out is never covered by themselves: another employee
+    // record of anyone rostered (or absent) on the shift is skipped, in both
+    // branches. With their seat vacated that record would otherwise read free.
+    const personOf = (id: string) => ctx.personIdOf.get(id) ?? id;
+    const onShiftPeople = new Set([...onShift].map(personOf));
+    const skip = (id: string) => onShift.has(id) || onShiftPeople.has(personOf(id));
     const holds = (id: string, tag: string) => ctx.holdsTagOn(id, tag, inst.date);
     const cappedTags = Object.entries(inst.tagMaximums)
         .filter(([tag, max]) => assignedIds.filter((id) => holds(id, tag)).length >= max)
@@ -540,7 +563,7 @@ function backupsFor(
     if (assignedIds.length === 0 || (!full && cappedTags.length === 0)) {
         const eligible = sortCandidates(
             ctx,
-            scoreCandidates(state, inst, (id) => onShift.has(id)).filter((c) => c.eligible),
+            scoreCandidates(state, inst, skip).filter((c) => c.eligible),
         );
         return { eligible, bySkill: (tag) => eligible.filter((c) => c.tagsHeld.includes(tag)).length };
     }
@@ -560,7 +583,7 @@ function backupsFor(
     for (const rep of [...reps.values()].sort()) {
         unassign(state, rep, inst.id);
         const found = new Set<string>();
-        for (const c of scoreCandidates(state, inst, (id) => onShift.has(id))) {
+        for (const c of scoreCandidates(state, inst, skip)) {
             if (!c.eligible) continue;
             found.add(c.employeeId);
             if (!rows.has(c.employeeId)) rows.set(c.employeeId, c);

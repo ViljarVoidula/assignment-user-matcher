@@ -250,10 +250,64 @@ describe('assessShiftResilience', () => {
             expect(partners(input, `early@${DAY}`, 'ben', roster)).to.deep.equal([]);
         });
 
-        it('leaves the roster exactly as it found it', () => {
+        it('restores the vacated seat before judging a later shift', () => {
+            // Mid overlaps early. If ben (early's vacated representative) were
+            // not put back, he would read free for mid and become its backup.
             const input = capped(2, 2);
-            const once = assessShiftResilience(input, roster);
-            expect(assessShiftResilience(input, roster)).to.deep.equal(once);
+            input.shifts.push({
+                id: 'mid',
+                name: 'Mid',
+                startTime: '10:00',
+                endTime: '18:00',
+                dates: [DAY],
+                minEmployees: 1,
+            } as ScheduleInput['shifts'][number]);
+            const both = assessShiftResilience(input, roster, { shiftInstanceIds: [`early@${DAY}`, `mid@${DAY}`] });
+            const [alone] = assessShiftResilience(input, roster, { shiftInstanceIds: [`mid@${DAY}`] });
+            expect(both.map((s) => s.shiftInstanceId)).to.deep.equal([`early@${DAY}`, `mid@${DAY}`]);
+            expect(both[1]).to.deep.equal(alone);
+            expect(alone.topBackups.map((c) => c.employeeId)).to.not.include.members(['ann', 'ben']);
+        });
+
+        it('never counts another record of a rostered person as their backup', () => {
+            // ben-b is ben's second contract (same personId). With ben's seat
+            // vacated, that record reads free — but ben dropping out is not
+            // covered by ben.
+            const input = capped(2, 2);
+            input.employees.push({ id: 'ben-b', personId: 'ben', tags: ['picker'], timeOff: [] } as any);
+            const [early] = assessShiftResilience(input, roster, { shiftInstanceIds: [`early@${DAY}`] });
+            expect(early.topBackups.map((c) => c.employeeId)).to.deep.equal(['dan']);
+            // Same below the cap: no branch counts a person against themselves.
+            const [roomy] = assessShiftResilience(
+                (() => {
+                    const i = capped(3, 3);
+                    i.employees.push({ id: 'ben-b', personId: 'ben', tags: ['picker'], timeOff: [] } as any);
+                    return i;
+                })(),
+                roster,
+                { shiftInstanceIds: [`early@${DAY}`] },
+            );
+            expect(roomy.topBackups.map((c) => c.employeeId)).to.not.include('ben-b');
+        });
+
+        it('an overstaffed shift needs no cover and is tiered by shortfall alone', () => {
+            const input = capped(2, 2);
+            input.shifts[0] = { ...input.shifts[0], minEmployees: 1, maxEmployees: 1 } as any;
+            const [early] = assessShiftResilience(input, roster, {
+                shiftInstanceIds: [`early@${DAY}`],
+                expectedDropouts: { [`early@${DAY}`]: 3 },
+            });
+            expect(early.assigned).to.equal(2);
+            expect(early.backups).to.equal(0);
+            expect(early.tier).to.equal('ok');
+            expect(early.reasons).to.deep.equal([]);
+            // A skill it is still short of is reported — as a shortfall, not
+            // as a lack of cover.
+            const [noDriver] = assessShiftResilience(input, [at('ben', `early@${DAY}`), at('cat', `early@${DAY}`)], {
+                shiftInstanceIds: [`early@${DAY}`],
+            });
+            expect(noDriver.tier).to.equal('at-risk');
+            expect(noDriver.reasons).to.deep.equal(['short-skill:forklift']);
         });
     });
 
