@@ -38,11 +38,52 @@ describe('resilienceTier', () => {
             tier: 'critical',
             reasons: ['short-skill:forklift', 'no-backups'],
         });
+        // Held but zero backups for that skill is at-risk, same as the shift-level
+        // zero-backup case — with no `assigned` given, the skill's dropout share
+        // is the unscaled shift-wide expectedDropouts (0.1), and 0 backups < 0.1.
         expect(
             resilienceTier({ shortBy: 0, backups: 5, expectedDropouts: 0.1, skills: [skill('forklift', 0, 0)] }),
         ).to.deep.equal({
-            tier: 'watch',
+            tier: 'at-risk',
             reasons: ['thin-skill:forklift'],
         });
+    });
+    it('scales a skill dropout share by its share of assigned holders', () => {
+        // skillDropouts = expectedDropouts * held / assigned = 0.4 * 1 / 4 = 0.1
+        // backups 1 >= 0.1 (not at-risk) but < 0.1 + 1 = 1.1, so watch.
+        expect(
+            resilienceTier({
+                shortBy: 0,
+                backups: 5,
+                expectedDropouts: 0.4,
+                assigned: 4,
+                skills: [{ tag: 'forklift', required: 1, held: 1, shortBy: 0, backups: 1 }],
+            }),
+        ).to.deep.equal({ tier: 'watch', reasons: ['thin-skill:forklift'] });
+    });
+    it('is ok for a scaled skill dropout share once backups clear it', () => {
+        // Same skillDropouts (0.1); backups 2 >= 0.1 + 1 = 1.1, so no reason fires.
+        expect(
+            resilienceTier({
+                shortBy: 0,
+                backups: 5,
+                expectedDropouts: 0.4,
+                assigned: 4,
+                skills: [{ tag: 'forklift', required: 1, held: 1, shortBy: 0, backups: 2 }],
+            }),
+        ).to.deep.equal({ tier: 'ok', reasons: [] });
+    });
+    it('is at-risk when a scaled skill dropout share exceeds its backups', () => {
+        // skillDropouts = expectedDropouts * held / assigned = 3 * 2 / 4 = 1.5
+        // backups 1 < 1.5, so at-risk.
+        expect(
+            resilienceTier({
+                shortBy: 0,
+                backups: 5,
+                expectedDropouts: 3,
+                assigned: 4,
+                skills: [{ tag: 'forklift', required: 2, held: 2, shortBy: 0, backups: 1 }],
+            }),
+        ).to.deep.equal({ tier: 'at-risk', reasons: ['thin-skill:forklift'] });
     });
 });

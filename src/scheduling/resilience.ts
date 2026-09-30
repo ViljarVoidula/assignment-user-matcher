@@ -44,6 +44,7 @@ export function resilienceTier(input: {
     backups: number;
     expectedDropouts: number;
     skills: SkillResilience[];
+    assigned?: number;
 }): { tier: ResilienceTier; reasons: string[] } {
     let tier: ResilienceTier = 'ok';
     const reasons: string[] = [];
@@ -51,26 +52,31 @@ export function resilienceTier(input: {
         if (RANK[next] > RANK[tier]) tier = next;
         if (!reasons.includes(reason)) reasons.push(reason);
     };
-    // Shift-level: thinness is judged against the aggregate expected-dropout rate.
-    if (input.shortBy > 0) {
-        if (input.backups < input.shortBy) {
-            raise('critical', 'short');
-            raise('critical', 'no-backups');
-        } else raise('at-risk', 'short');
-    } else if (input.backups < input.expectedDropouts) raise('at-risk', 'thin-backups');
-    else if (input.backups < input.expectedDropouts + 1) raise('watch', 'thin-backups');
-
-    // Per-skill: a skill has no aggregate dropout rate of its own, only how many
-    // people are required for it, so thinness is judged against `required`
-    // rather than the shift's `expectedDropouts` (which would over-escalate a
-    // single-skill margin into a shift-wide at-risk).
-    for (const s of input.skills) {
-        if (s.shortBy > 0) {
-            if (s.backups < s.shortBy) {
-                raise('critical', `short-skill:${s.tag}`);
+    // Shared judge: short (shortBy > 0) escalates to critical when there aren't
+    // even enough backups to cover the shortfall, else at-risk; not short, it
+    // escalates to at-risk when backups don't cover the expected dropouts, or
+    // watch when they cover today's expectation but not one more than that.
+    const judge = (shortBy: number, backups: number, dropouts: number, shortReason: string, thinReason: string) => {
+        if (shortBy > 0) {
+            if (backups < shortBy) {
+                raise('critical', shortReason);
                 raise('critical', 'no-backups');
-            } else raise('at-risk', `short-skill:${s.tag}`);
-        } else if (s.backups < s.required) raise('watch', `thin-skill:${s.tag}`);
+            } else raise('at-risk', shortReason);
+        } else if (backups < dropouts) raise('at-risk', thinReason);
+        else if (backups < dropouts + 1) raise('watch', thinReason);
+    };
+    judge(input.shortBy, input.backups, input.expectedDropouts, 'short', 'thin-backups');
+
+    // Per-skill: judged exactly like the shift, against that skill's own share
+    // of the expected dropouts — the fraction of assigned holders this skill
+    // accounts for. Without `assigned` (or an empty shift), fall back to the
+    // shift-wide rate unscaled.
+    for (const s of input.skills) {
+        const skillDropouts =
+            input.assigned && input.assigned > 0
+                ? (input.expectedDropouts * s.held) / input.assigned
+                : input.expectedDropouts;
+        judge(s.shortBy, s.backups, skillDropouts, `short-skill:${s.tag}`, `thin-skill:${s.tag}`);
     }
     return { tier, reasons };
 }
