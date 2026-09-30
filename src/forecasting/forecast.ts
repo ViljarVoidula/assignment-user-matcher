@@ -164,9 +164,9 @@ function forecastOne(
             },
         });
     }
-    // The nowcast needs today's hours: a series with no hourly history today (daily-only, or an hourly
-    // feed that has not reported yet) would read as nothing seen and have its next 72 hours halved.
-    const hours = hasHourlyToday(history, from, current) ? applyNowcast(raw, history.hourlyPoints, now) : raw;
+    // The nowcast reads today's drained hours only; a daily-only series, or an hourly feed more than three
+    // hours behind, gets none.
+    const hours = applyNowcast(raw, history.hourlyPoints, now);
     // What the nowcast added, per local day, so a week row carries the nowcast its hours carry.
     const nowcastLift = new Map<number, number>();
     hours.forEach((h, i) => {
@@ -236,11 +236,4 @@ function forecastOne(
         historyWeeks: model.historyWeeks,
         effects: [...effects.values()],
     };
-}
-
-/** Whether the hourly table has anything for today before the current hour. */
-function hasHourlyToday(history: PreparedHistory, from: number, current: number): boolean {
-    const points = history.hourlyPoints;
-    for (let i = points.length - 1; i >= 0 && points[i].at >= from; i--) if (points[i].at < current) return true;
-    return false;
 }

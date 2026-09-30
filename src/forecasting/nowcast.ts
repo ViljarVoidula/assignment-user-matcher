@@ -16,6 +16,8 @@ export const NOWCAST_HOURS = 72;
  * hundreds of tasks back it.
  */
 export const NOWCAST_PRIOR = 25;
+/** The latest drained hour may start at most this many hours before the current one, or there is no nowcast. */
+export const NOWCAST_MAX_LAG_HOURS = 3;
 
 export function nowcastRatio(actualSoFar: number, expectedSoFar: number): number {
     if (expectedSoFar < 5) return 1;
@@ -28,28 +30,37 @@ export function nowcastRatio(actualSoFar: number, expectedSoFar: number): number
  * them is taken off first, so calling this every few minutes with fresh
  * actuals is safe.
  *
- * `actual` is read as complete: an hour missing from it is an hour in which
- * nothing arrived, so `[]` means zero seen so far today (and pulls the
- * forecast down). A caller with no hourly feed for the series must not call
- * this — `forecastWorkspace` skips it for a series with no hourly history today.
+ * `actual` lags the clock (hours are drained, not streamed), so only hours up
+ * to the latest one present in it are counted: an hour after it has not been
+ * drained yet and is never read as zero, while a missing hour before it is a
+ * zero. With nothing drained, or a latest hour that starts more than
+ * `NOWCAST_MAX_LAG_HOURS` before the current one, there is no nowcast (`[]`
+ * returns the forecast without one).
  */
 export function applyNowcast(hours: readonly HourForecast[], actual: readonly HourlyPoint[], now: number): HourForecast[] {
     const current = Math.floor(now / HOUR_MS) * HOUR_MS;
     const plain = hours.map((h) => {
         const n = h.components.nowcast || 1;
+        if (n === 1) return h.components.nowcast === 1 ? h : { ...h, components: { ...h.components, nowcast: 1 } };
+        // Back to the stored precision, so taking a nowcast off and not putting one back is exact.
         return {
             ...h,
-            likely: h.likely / n,
-            low: h.low / n,
-            high: h.high / n,
+            likely: round(h.likely / n),
+            low: round(h.low / n),
+            high: round(h.high / n),
             components: { ...h.components, nowcast: 1 },
         };
     });
     const start = plain.length > 0 ? plain[0].at : current;
+    let latest = -Infinity;
+    for (const p of actual) if (p.at < current && p.at > latest) latest = p.at;
+    if (latest < current - NOWCAST_MAX_LAG_HOURS * HOUR_MS) return plain;
+    // Completed and drained: from the first stored hour through the latest hour the feed has delivered.
+    const upTo = latest + HOUR_MS;
     let expected = 0;
-    for (const h of plain) if (h.at >= start && h.at < current) expected += h.likely;
+    for (const h of plain) if (h.at >= start && h.at < upTo) expected += h.likely;
     let seen = 0;
-    for (const p of actual) if (p.at >= start && p.at < current) seen += p.value;
+    for (const p of actual) if (p.at >= start && p.at < upTo) seen += p.value;
     const ratio = nowcastRatio(seen, expected);
     if (ratio === 1) return plain;
     return plain.map((h) => {

@@ -5,6 +5,7 @@ import { applyNowcast, nowcastRatio } from '../../src/forecasting/nowcast';
 import type { HourForecast } from '../../src/forecasting/types';
 import { officeShape, syntheticHistory } from './synthetic';
 
+const round4 = (x: number) => Math.round(x * 10_000) / 10_000;
 const hour = (at: number, likely: number): HourForecast => ({
     at,
     likely,
@@ -233,9 +234,9 @@ describe('forecastWorkspace', () => {
         expect(once[6 + 36].components.nowcast).to.equal(1.3529);
         expect(once[6 + 72].likely).to.equal(10);
         expect(applyNowcast(once, actual, now)).to.deep.equal(once);
-        // No actuals means nothing was seen: (0 + 25) / (60 + 25) = 0.29, held at 0.5.
-        expect(applyNowcast(once, [], now)[6].components.nowcast).to.equal(0.5);
-        expect(applyNowcast(once, [], now)[6].likely).to.equal(5);
+        // No actuals is a feed that has not drained yet, not a quiet morning: nothing to rescale by.
+        expect(applyNowcast(once, [], now)[6].components.nowcast).to.equal(1);
+        expect(applyNowcast(once, [], now)[6].likely).to.equal(10);
         expect(nowcastRatio(4, 4.9)).to.equal(1);
         expect(nowcastRatio(100, 10)).to.equal(3);
         expect(nowcastRatio(1, 10)).to.be.closeTo(26 / 35, 1e-9);
@@ -249,6 +250,49 @@ describe('forecastWorkspace', () => {
         expect(applyNowcast(zeroed, actual, now)).to.deep.equal(once);
         // Twelve tasks over six expected is noise, not a doubling.
         expect(nowcastRatio(12, 6)).to.be.closeTo(37 / 31, 1e-9);
+    });
+
+    it('nowcasts only up to the latest hour the feed has drained, and not at all from a stale feed', () => {
+        const start = Date.parse('2026-10-01T00:00:00Z');
+        const hours = Array.from({ length: 100 }, (_, h) => hour(start + h * HOUR_MS, 10));
+        const now = start + 6 * HOUR_MS + 30 * 60_000;
+        const row = (h: number, value: number) => ({ at: start + h * HOUR_MS, value });
+        // Hours 0–3 drained, 4 and 5 not yet: 80 seen over 40 expected, never 80 over 60.
+        const lagging = applyNowcast(
+            hours,
+            [0, 1, 2, 3].map((h) => row(h, 20)),
+            now,
+        );
+        expect(lagging[6].components.nowcast).to.equal(round4(105 / 65));
+        // An hour that drained as zero is a zero: hours 0–5 present, 4 and 5 empty.
+        const quiet = applyNowcast(hours, [...[0, 1, 2, 3].map((h) => row(h, 20)), row(4, 0), row(5, 0)], now);
+        expect(quiet[6].components.nowcast).to.equal(round4(105 / 85));
+        // Latest drained hour 3:00 is exactly three hours before 6:00: still read. 2:00 is too old.
+        expect(
+            applyNowcast(
+                hours,
+                [0, 1, 2].map((h) => row(h, 40)),
+                now,
+            )[6].components.nowcast,
+        ).to.equal(1);
+        expect(
+            applyNowcast(
+                hours,
+                [0, 1, 2].map((h) => row(h, 40)),
+                now,
+            ),
+        ).to.deep.equal(hours);
+    });
+
+    it('does not drag the forecast down when the feed has not drained the last hours', () => {
+        const history = syntheticHistory({ now: NOW, weeks: 12, weeklyTotal: 7000, noise: false });
+        const current = Math.floor(NOW / HOUR_MS) * HOUR_MS;
+        const lagged = { ...history, hourly: history.hourly.filter((p) => p.at < current - 2 * HOUR_MS) };
+        const [f] = forecastWorkspace({ timeZone: ZONE, now: NOW, series: [lagged] }).series;
+        expect(f.hours.find((h) => h.at === current)!.components.nowcast).to.be.closeTo(1, 0.01);
+        const stale = { ...history, hourly: history.hourly.filter((p) => p.at < current - 4 * HOUR_MS) };
+        const [g] = forecastWorkspace({ timeZone: ZONE, now: NOW, series: [stale] }).series;
+        expect(g.hours.every((h) => h.components.nowcast === 1)).to.equal(true);
     });
 
     it('borrows the total series ranges for a series outside the busiest few', () => {
