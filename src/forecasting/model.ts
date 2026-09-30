@@ -294,6 +294,7 @@ export function fitSeries(
     const first = fitWith(history, occurrences, calendar, asOf, new Set());
     const outliers = outlierDays(first);
     if (outliers.size === 0) return first;
+    // Known cost: a genuine step change in the most recent week is flagged as outliers on the first pass and left out here, so the level lags it by a week; the nowcast and "What was this?" spans are where a fresh step shows.
     // One refit with the outliers left out, so an unexplained spike cannot
     // drag the level (and hide itself) before anybody has named it.
     return fitWith(history, occurrences, calendar, asOf, outliers);
@@ -504,6 +505,7 @@ export function projectHour(
     const plain = ahead * share * season * effect.holiday;
     return {
         likely: plain * factor,
+        // Holiday uncertainty is not in low/high (DayEffect.holiday carries a factor only), so a first-time default holiday's wide range is not shown here; the backtest ranges must cover it.
         low: plain * Math.min(low, factor),
         high: plain * Math.max(high, factor),
         components: {

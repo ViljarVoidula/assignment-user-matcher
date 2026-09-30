@@ -502,6 +502,27 @@ describe('forecast model: review fixes', () => {
             expect(weekAhead(model, monday), monday).to.be.closeTo(9100, 9100 * 0.03);
     });
 
+    it('keeps a real knock-on wave through the significance gate on a noisy 700/week series', () => {
+        for (const seed of [2, 3, 4]) {
+            const model = fit(
+                {
+                    now: NOW,
+                    weeks: 16,
+                    weeklyTotal: 700,
+                    seed,
+                    events: [{ from: '2026-08-10', to: '2026-08-12', factor: 1.5, knockOn: { days: 7, factor: 1.3 } }],
+                },
+                [{ label: 'sale', kind: 'sale', from: '2026-08-10', to: '2026-08-12' }],
+            );
+            const { knockOn } = model.learned.get('sale')!;
+            // Weekend days expect too few tasks to clear 2.5σ and read as 1; the weekdays survive, shrunk a little.
+            const wave = knockOn.filter((k) => k !== 1);
+            expect(knockOn.length, `seed ${seed}`).to.be.at.least(3);
+            expect(wave.length, `seed ${seed}`).to.be.at.least(3);
+            for (const k of wave) expect(k, `seed ${seed}`).to.be.within(1.15, 1.45);
+        }
+    });
+
     it('learns nothing where the baseline expects under five tasks a day', () => {
         const occ = prepareOccurrences([{ label: 'thin', kind: 'sale', from: '2026-01-10', to: '2026-01-11' }]);
         expect(
