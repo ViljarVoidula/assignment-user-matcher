@@ -4,6 +4,8 @@
  * staffing it takes under the router's own rules. Pure, Redis-free and
  * deterministic; nothing here predicts anything about a person.
  */
+export { suggestEffect, DEFAULT_EFFECTS, KNOCK_ON_DAYS } from './effects';
+export { YEARLY_MIN_WEEKS, OUTLIER } from './model';
 export { ForecastCalendar, type LocalSlot } from './calendar';
 export { exponentialQuantiles, meanOf, sampleQuantiles, assertDistribution } from './distributions';
 export type {

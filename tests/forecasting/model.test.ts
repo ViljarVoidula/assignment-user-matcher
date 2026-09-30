@@ -1,0 +1,394 @@
+import { expect } from 'chai';
+import { ForecastCalendar, DAY_MS, HOUR_MS } from '../../src/forecasting/calendar';
+import { dayOf } from '../../src/forecasting/days';
+import { dayEffect, learnEffects, prepareOccurrences, suggestEffect } from '../../src/forecasting/effects';
+import {
+    actualOn,
+    expectedDay,
+    fitSeries,
+    fitYearly,
+    isOutlier,
+    levelFor,
+    prepareHistory,
+    projectHour,
+} from '../../src/forecasting/model';
+import type { KnownOccurrence, LearnedEffect } from '../../src/forecasting/types';
+import { officeShape, syntheticHistory } from './synthetic';
+
+const ZONE = 'Europe/Tallinn';
+const NOW = Date.parse('2026-10-01T09:00:00Z');
+const cal = new ForecastCalendar(ZONE, NOW - 900 * DAY_MS, NOW + 200 * DAY_MS);
+const at = (date: string, hour: number) => {
+    const midnight = cal.midnight(date);
+    for (let t = midnight; t < midnight + 26 * HOUR_MS; t += HOUR_MS) {
+        const slot = cal.slot(t);
+        if (slot.date === date && slot.hour === hour) return t;
+    }
+    throw new Error(`no ${date} ${hour}:00`);
+};
+const truth = (weekday: number, hour: number) => {
+    let w = 0;
+    for (let d = 1; d <= 7; d++) for (let h = 0; h < 24; h++) w += officeShape(d, h);
+    return (7000 * officeShape(weekday, hour)) / w;
+};
+const fit = (options: Parameters<typeof syntheticHistory>[0], occurrences: KnownOccurrence[] = []) =>
+    fitSeries(prepareHistory(syntheticHistory(options)), prepareOccurrences(occurrences), cal, NOW);
+
+describe('forecast model', () => {
+    it('fits the weekly level and the hour-of-week shape in local time', () => {
+        const model = fit({ now: NOW, weeks: 12, weeklyTotal: 7000, noise: false });
+        expect(model.level).to.be.closeTo(7000, 7000 * 0.03);
+        expect(model.hasHourlyShape).to.equal(true);
+        expect(projectHour(model, cal, at('2026-10-06', 10)).likely).to.be.closeTo(truth(2, 10), truth(2, 10) * 0.05);
+        expect(projectHour(model, cal, at('2026-10-10', 10)).likely).to.be.closeTo(truth(6, 10), truth(6, 10) * 0.05);
+    });
+
+    it('reads a trend and damps it', () => {
+        const model = fit({ now: NOW, weeks: 16, weeklyTotal: 7000, growthPerWeek: 0.02, noise: false });
+        expect(model.trend).to.be.above(0);
+        const next = projectHour(model, cal, at('2026-10-06', 10)).components.trend;
+        const far = projectHour(model, cal, at('2026-12-01', 10)).components.trend;
+        expect(far).to.be.above(next);
+        // Damped: nine weeks out is well short of nine weeks of compounding.
+        expect(far).to.be.below(Math.pow(1.02, 9));
+    });
+
+    it('learns size, shape and knock-on per label and applies them to the next occurrence', () => {
+        const model = fit(
+            {
+                now: NOW,
+                weeks: 16,
+                weeklyTotal: 7000,
+                noise: false,
+                events: [{ from: '2026-08-10', to: '2026-08-12', factor: 1.8, knockOn: { days: 7, factor: 1.3 } }],
+            },
+            [
+                { label: 'sale', kind: 'sale', from: '2026-08-10', to: '2026-08-12' },
+                { label: 'sale', kind: 'sale', from: '2026-10-05', to: '2026-10-07' },
+            ],
+        );
+        const effect = model.learned.get('sale')!;
+        expect(effect).to.include({ source: 'label', occurrences: 1 });
+        expect(effect.size).to.be.closeTo(1.8, 0.1);
+        expect(effect.shape).to.have.length(3);
+        expect(effect.knockOn[0]).to.be.closeTo(1.3, 0.08);
+        const inside = projectHour(model, cal, at('2026-10-06', 10));
+        expect(inside.components.events[0]).to.include({ label: 'sale' });
+        expect(inside.likely).to.be.closeTo(truth(2, 10) * 1.8, truth(2, 10) * 0.15);
+        const after = projectHour(model, cal, at('2026-10-09', 10));
+        expect(after.likely).to.be.closeTo(truth(5, 10) * 1.3, truth(5, 10) * 0.12);
+    });
+
+    it('keeps event days out of the level', () => {
+        const model = fit(
+            {
+                now: NOW,
+                weeks: 12,
+                weeklyTotal: 7000,
+                noise: false,
+                events: [{ from: '2026-09-14', to: '2026-09-20', factor: 3 }],
+            },
+            [{ label: 'big', kind: 'sale', from: '2026-09-14', to: '2026-09-20' }],
+        );
+        expect(model.level).to.be.closeTo(7000, 7000 * 0.03);
+    });
+
+    it('leaves an unexplained outlier out of the level on the refit', () => {
+        const model = fit({
+            now: NOW,
+            weeks: 12,
+            weeklyTotal: 7000,
+            noise: false,
+            events: [{ from: '2026-09-22', to: '2026-09-24', factor: 2.5 }],
+        });
+        expect(model.level).to.be.closeTo(7000, 7000 * 0.03);
+        expect(isOutlier(1818, 1273)).to.equal(true);
+        expect(isOutlier(1300, 1273)).to.equal(false);
+        expect(isOutlier(3, 0.5)).to.equal(false);
+    });
+
+    it('divides public holidays out and applies the learned holiday factor', () => {
+        const holidays = ['2026-06-23', '2026-06-24', '2026-08-20'].map((date) => ({
+            label: `holiday:${date.slice(5)}`,
+            kind: 'holiday',
+            from: date,
+            to: date,
+        }));
+        const model = fit(
+            {
+                now: NOW,
+                weeks: 16,
+                weeklyTotal: 7000,
+                noise: false,
+                events: holidays.map((h) => ({ from: h.from, to: h.to, factor: 0.3 })),
+            },
+            [...holidays, { label: 'holiday:08-20', kind: 'holiday', from: '2026-10-20', to: '2026-10-20' }],
+        );
+        const day = projectHour(model, cal, at('2026-10-20', 10));
+        expect(day.components.holiday).to.be.closeTo(0.3, 0.05);
+        expect(day.components.events).to.deep.equal([]);
+    });
+
+    it('fits a yearly factor from whole years only', () => {
+        const long = fit({
+            now: NOW,
+            weeks: 120,
+            weeklyTotal: 7000,
+            noise: false,
+            yearly: { amplitude: 0.3, peakDay: 350 },
+        });
+        expect(long.yearly).to.not.equal(null);
+        const dec = expectedDay(long, dayOf('2026-12-16'));
+        const oct = expectedDay(long, dayOf('2026-10-07'));
+        expect(dec / oct).to.be.within(1.12, 1.3);
+        expect(fitYearly([{ monday: dayOf('2026-01-05'), total: 5 }])).to.equal(null);
+        expect(fitYearly([])).to.equal(null);
+    });
+
+    it('fits nothing from nothing, and a few days as a weekly rate', () => {
+        const empty = fitSeries(prepareHistory({ series: 'x', hourly: [], daily: [] }), [], cal, NOW);
+        expect(empty.span).to.equal(null);
+        expect(empty.level).to.equal(0);
+        expect(projectHour(empty, cal, at('2026-10-06', 10)).likely).to.equal(0);
+        const days = fitSeries(
+            prepareHistory({
+                series: 'x',
+                hourly: [],
+                daily: ['2026-09-27', '2026-09-28', '2026-09-29', '2026-09-30'].map((date) => ({ date, value: 10 })),
+            }),
+            [],
+            cal,
+            NOW,
+        );
+        // The first day is partial and left out; three days of 10 read as 70 a week.
+        expect(days.level).to.be.closeTo(70, 1e-9);
+        expect(days.hasHourlyShape).to.equal(false);
+    });
+
+    it('suggests an effect: the label, then the planner, then the kind, then the default', () => {
+        const learned: LearnedEffect[] = [
+            {
+                label: 'bf',
+                kind: 'sale',
+                source: 'label',
+                occurrences: 2,
+                size: 2,
+                low: 1.8,
+                high: 2.2,
+                shape: [1],
+                knockOn: [],
+            },
+            {
+                label: 'spring',
+                kind: 'sale',
+                source: 'label',
+                occurrences: 1,
+                size: 1.4,
+                low: 1.1,
+                high: 1.75,
+                shape: [1],
+                knockOn: [],
+            },
+        ];
+        const at = { from: '2026-11-27', to: '2026-11-27' };
+        expect(suggestEffect({ ...at, label: 'bf', kind: 'sale' }, learned).size).to.equal(2);
+        expect(suggestEffect({ ...at, label: 'new', kind: 'sale', planned: { likely: 20 } }, learned)).to.include({
+            source: 'planned',
+            size: 1.2,
+        });
+        expect(suggestEffect({ ...at, label: 'new', kind: 'sale' }, learned)).to.include({
+            source: 'kind',
+            size: 1.7,
+            low: 1.1,
+            high: 2.2,
+        });
+        expect(suggestEffect({ ...at, label: 'new', kind: 'launch' }, learned)).to.include({
+            source: 'default',
+            size: 1.3,
+        });
+        expect(suggestEffect({ ...at, label: 'x', kind: 'odd' }, [])).to.include({ source: 'default', size: 1.2 });
+        expect(suggestEffect({ ...at, label: 'shut', kind: 'closure', closed: true }, learned)).to.include({ size: 0 });
+    });
+});
+
+describe('forecast model edges', () => {
+    const daysFrom = (from: string, to: string, value: number) => {
+        const out: Array<{ date: string; value: number }> = [];
+        for (let d = dayOf(from); d <= dayOf(to); d++)
+            out.push({ date: new Date(d * DAY_MS).toISOString().slice(0, 10), value });
+        return out;
+    };
+
+    it('learns nothing from closures or unseen days, ranges repeat labels, and reads a knock-on across a gap', () => {
+        const occ = prepareOccurrences([
+            { label: 'shut', kind: 'closure', from: '2026-01-05', to: '2026-01-05', closed: true },
+            { label: 'blind', kind: 'sale', from: '2026-01-10', to: '2026-01-11' },
+            { label: 'twice', kind: 'sale', from: '2026-01-20', to: '2026-01-20' },
+            { label: 'twice', kind: 'sale', from: '2026-02-20', to: '2026-02-20' },
+            { label: 'dead', kind: 'sale', from: '2026-04-06', to: '2026-04-06' },
+        ]);
+        const known = new Map<number, number | null>([
+            [dayOf('2026-01-10'), null],
+            [dayOf('2026-01-11'), null],
+            [dayOf('2026-01-20'), 20],
+            [dayOf('2026-02-20'), 30],
+            [dayOf('2026-04-06'), 0],
+            [dayOf('2026-04-07'), null],
+            [dayOf('2026-04-08'), 15],
+        ]);
+        const learned = learnEffects(
+            occ,
+            (day) => (known.has(day) ? known.get(day)! : 10),
+            () => 10,
+        );
+        expect([...learned.keys()]).to.deep.equal(['twice', 'dead']);
+        expect(learned.get('twice')).to.include({ occurrences: 2, size: 2.5, low: 2, high: 3 });
+        expect(learned.get('twice')!.knockOn).to.deep.equal([]);
+        const dead = learned.get('dead')!;
+        expect(dead.size).to.equal(0.05);
+        expect(dead.shape).to.deep.equal([1]);
+        expect(dead.knockOn).to.deep.equal([1, 1.5]);
+    });
+
+    it('applies only resolved effects, repeats an empty shape as 1, and skips flat or spent knock-on days', () => {
+        const [occ, other] = prepareOccurrences([
+            { label: 'x', kind: 'sale', from: '2026-10-05', to: '2026-10-06' },
+            { label: 'y', kind: 'sale', from: '2026-10-05', to: '2026-10-06' },
+        ]);
+        const effect: LearnedEffect = {
+            label: 'x',
+            kind: 'sale',
+            source: 'label',
+            occurrences: 1,
+            size: 2,
+            low: 1.5,
+            high: 2.5,
+            shape: [],
+            knockOn: [1, 1.5],
+        };
+        const effects = new Map([[occ, effect]]);
+        const on = (date: string) => dayEffect(dayOf(date), [occ, other], effects);
+        expect(on('2026-10-05')).to.deep.equal({ holiday: 1, events: [{ label: 'x', factor: 2, low: 1.5, high: 2.5 }] });
+        expect(on('2026-10-07')).to.deep.equal({ holiday: 1, events: [] });
+        expect(on('2026-10-08')).to.deep.equal({ holiday: 1, events: [{ label: 'x', factor: 1.5, low: 1.5, high: 1.5 }] });
+        expect(on('2026-10-11')).to.deep.equal({ holiday: 1, events: [] });
+    });
+
+    it('prefers the daily table over hourly sums and accepts rows in any order', () => {
+        const hour = Date.parse('2026-09-02T10:00:00Z');
+        const prepared = prepareHistory({
+            series: 's',
+            hourly: [
+                { at: hour, value: 5 },
+                { at: hour, value: 2 },
+                { at: Date.parse('2026-09-03T10:00:00Z'), value: 4 },
+            ],
+            daily: [
+                { date: '2026-09-02', value: 100 },
+                { date: '2026-09-01', value: 50 },
+            ],
+        });
+        expect(prepared.firstDay).to.equal(dayOf('2026-09-01'));
+        expect([...prepared.daily]).to.deep.equal([50, 100, 4]);
+        expect(prepared.hourly.get(hour)).to.equal(7);
+    });
+
+    it('starts at the first non-zero day, ignores today and later, and reads days past the table as zero', () => {
+        const history = [
+            { date: '2026-08-01', value: 0 },
+            ...daysFrom('2026-08-02', '2026-09-30', 10),
+            { date: '2026-10-01', value: 999 },
+            { date: '2026-10-05', value: 999 },
+        ];
+        const model = fitSeries(prepareHistory({ series: 's', hourly: [], daily: history }), [], cal, NOW);
+        expect(model.span).to.deep.equal({ from: dayOf('2026-08-02'), to: dayOf('2026-09-30') });
+        expect(model.level).to.be.closeTo(70, 1e-6);
+
+        const stale = fitSeries(
+            prepareHistory({ series: 's', hourly: [], daily: daysFrom('2026-08-03', '2026-09-20', 10) }),
+            [],
+            cal,
+            NOW,
+        );
+        expect(stale.span).to.deep.equal({ from: dayOf('2026-08-03'), to: dayOf('2026-09-30') });
+        expect(actualOn(stale, dayOf('2026-09-25'))).to.equal(0);
+        expect(actualOn(stale, dayOf('2026-10-02'))).to.equal(null);
+    });
+
+    it('fits no level when every day is special, and reads past weeks at that level', () => {
+        const model = fitSeries(
+            prepareHistory({ series: 's', hourly: [], daily: daysFrom('2026-09-10', '2026-09-30', 10) }),
+            prepareOccurrences([{ label: 'launch', kind: 'launch', from: '2026-09-01', to: '2026-09-30' }]),
+            cal,
+            NOW,
+        );
+        expect(model.lastWeek).to.not.equal(null);
+        expect(model.levels.size).to.equal(0);
+        expect(model.level).to.equal(0);
+        expect(levelFor(model, dayOf('2026-09-14'))).to.equal(0);
+        expect(model.learned.size).to.equal(0);
+    });
+
+    it('falls back to an even week when no weekday has a typical share', () => {
+        const model = fitSeries(
+            prepareHistory({
+                series: 's',
+                hourly: [],
+                daily: [
+                    { date: '2026-09-06', value: 5 },
+                    { date: '2026-09-07', value: 70 },
+                    { date: '2026-09-15', value: 70 },
+                    { date: '2026-09-23', value: 70 },
+                ],
+            }),
+            [],
+            cal,
+            NOW,
+        );
+        expect(model.dayShare).to.deep.equal(Array(7).fill(1 / 7));
+    });
+
+    it('pools weekdays with too few days, skips empty days, and needs a finished day for a shape', () => {
+        const hourly: Array<{ at: number; value: number }> = [];
+        for (let d = dayOf('2026-09-21'); d <= dayOf('2026-09-30'); d++) {
+            const date = new Date(d * DAY_MS).toISOString().slice(0, 10);
+            if (date === '2026-09-25') continue;
+            for (let h = 0; h < 24; h++) hourly.push({ at: cal.midnight(date) + h * HOUR_MS, value: 1 });
+        }
+        const model = fitSeries(prepareHistory({ series: 's', hourly, daily: [] }), [], cal, NOW);
+        expect(model.hasHourlyShape).to.equal(true);
+        for (const v of model.hourShape) expect(v).to.be.closeTo(1 / 24, 1e-12);
+
+        const todayOnly = fitSeries(
+            prepareHistory({
+                series: 's',
+                hourly: [
+                    { at: NOW - 2 * HOUR_MS, value: 3 },
+                    { at: NOW - HOUR_MS, value: 4 },
+                ],
+                daily: [],
+            }),
+            [],
+            cal,
+            NOW,
+        );
+        expect(todayOnly.hasHourlyShape).to.equal(false);
+        expect(todayOnly.span).to.equal(null);
+    });
+
+    it('skips weeks whose trend line is not positive when fitting a yearly factor', () => {
+        const first = dayOf('2024-08-05');
+        const weekly = Array.from({ length: 110 }, (_, i) => ({ monday: first + 7 * i, total: 2 * i - 10 }));
+        const yearly = fitYearly(weekly);
+        expect(yearly).to.not.equal(null);
+        for (const f of yearly!.values()) expect(f).to.be.closeTo(1, 1e-9);
+    });
+
+    it('is deterministic: the same input fits the same numbers', () => {
+        const options = { now: NOW, weeks: 20, weeklyTotal: 5000, growthPerWeek: 0.01, seed: 11 };
+        const a = fit(options);
+        const b = fit(options);
+        expect(projectHour(a, cal, at('2026-10-14', 15))).to.deep.equal(projectHour(b, cal, at('2026-10-14', 15)));
+        expect([a.level, a.trend, a.dayShare, a.hourShape]).to.deep.equal([b.level, b.trend, b.dayShare, b.hourShape]);
+    });
+});
