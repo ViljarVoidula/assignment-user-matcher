@@ -1,19 +1,25 @@
 /**
  * Nowcast (spec §7.1 step 6): the next 72 hours rescaled by how today has gone
- * so far. The ratio is the one the Today lane has always used — completed
- * hours only, ignored under five expected, held to [0.5, 3] — and it fades
- * linearly to nothing over 72 hours, because a busy morning says a lot about
- * this afternoon and little about Thursday.
+ * so far — completed hours only, ignored under five expected, shrunk towards 1
+ * by `NOWCAST_PRIOR` tasks on each side, held to [0.5, 3] — fading linearly to
+ * nothing over 72 hours, because a busy morning says a lot about this
+ * afternoon and little about Thursday.
  */
 import { HOUR_MS } from './calendar';
 import type { HourForecast, HourlyPoint } from './types';
 import { clamp, round } from './stats';
 
 export const NOWCAST_HOURS = 72;
+/**
+ * Pseudo-tasks added to both sides of the ratio: twelve seen over six expected at 7am is Poisson noise, not
+ * a doubling, and must not double the afternoon. Near-neutral early in a quiet day, full strength once
+ * hundreds of tasks back it.
+ */
+export const NOWCAST_PRIOR = 25;
 
 export function nowcastRatio(actualSoFar: number, expectedSoFar: number): number {
     if (expectedSoFar < 5) return 1;
-    return clamp(actualSoFar / expectedSoFar, 0.5, 3);
+    return clamp((actualSoFar + NOWCAST_PRIOR) / (expectedSoFar + NOWCAST_PRIOR), 0.5, 3);
 }
 
 /**
@@ -21,6 +27,11 @@ export function nowcastRatio(actualSoFar: number, expectedSoFar: number): number
  * midnight today (as `forecastWorkspace` writes them); any nowcast already on
  * them is taken off first, so calling this every few minutes with fresh
  * actuals is safe.
+ *
+ * `actual` is read as complete: an hour missing from it is an hour in which
+ * nothing arrived, so `[]` means zero seen so far today (and pulls the
+ * forecast down). A caller with no hourly feed for the series must not call
+ * this — `forecastWorkspace` skips it for a series with no hourly history today.
  */
 export function applyNowcast(hours: readonly HourForecast[], actual: readonly HourlyPoint[], now: number): HourForecast[] {
     const current = Math.floor(now / HOUR_MS) * HOUR_MS;

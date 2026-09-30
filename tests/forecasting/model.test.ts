@@ -10,6 +10,7 @@ import {
     isOutlier,
     levelFor,
     prepareHistory,
+    projectDay,
     projectHour,
 } from '../../src/forecasting/model';
 import type { KnownOccurrence, LearnedEffect } from '../../src/forecasting/types';
@@ -502,25 +503,70 @@ describe('forecast model: review fixes', () => {
             expect(weekAhead(model, monday), monday).to.be.closeTo(9100, 9100 * 0.03);
     });
 
-    it('keeps a real knock-on wave through the significance gate on a noisy 700/week series', () => {
-        for (const seed of [2, 3, 4]) {
-            const model = fit(
-                {
-                    now: NOW,
-                    weeks: 16,
-                    weeklyTotal: 700,
-                    seed,
-                    events: [{ from: '2026-08-10', to: '2026-08-12', factor: 1.5, knockOn: { days: 7, factor: 1.3 } }],
-                },
-                [{ label: 'sale', kind: 'sale', from: '2026-08-10', to: '2026-08-12' }],
+    it('keeps a real knock-on wave through the significance gate at 700/week, and invents none', () => {
+        const occurrences = [{ label: 'sale', kind: 'sale', from: '2026-08-10', to: '2026-08-12' }];
+        const event = { from: '2026-08-10', to: '2026-08-12', factor: 1.5 };
+        const seeds = Array.from({ length: 30 }, (_, i) => i + 1);
+        let found = 0;
+        let invented = 0;
+        const means: number[] = [];
+        for (const seed of seeds) {
+            const withWave = fit(
+                { now: NOW, weeks: 16, weeklyTotal: 700, seed, events: [{ ...event, knockOn: { days: 7, factor: 1.3 } }] },
+                occurrences,
             );
-            const { knockOn } = model.learned.get('sale')!;
-            // Weekend days expect too few tasks to clear 2.5σ and read as 1; the weekdays survive, shrunk a little.
-            const wave = knockOn.filter((k) => k !== 1);
-            expect(knockOn.length, `seed ${seed}`).to.be.at.least(3);
-            expect(wave.length, `seed ${seed}`).to.be.at.least(3);
-            for (const k of wave) expect(k, `seed ${seed}`).to.be.within(1.15, 1.45);
+            const wave = withWave.learned.get('sale')!.knockOn.filter((k) => k !== 1);
+            if (wave.length >= 3) found += 1;
+            if (wave.length > 0) means.push(wave.reduce((a, b) => a + b, 0) / wave.length);
+            const without = fit({ now: NOW, weeks: 16, weeklyTotal: 700, seed, events: [event] }, occurrences);
+            if (without.learned.get('sale')!.knockOn.some((k) => k !== 1)) invented += 1;
         }
+        // Weekend days expect too few tasks to clear 2.5σ, so a found wave is its weekdays.
+        expect(found / seeds.length).to.be.at.least(0.6);
+        means.sort((a, b) => a - b);
+        expect(means[Math.floor(means.length / 2)]).to.be.closeTo(1.3, 0.08);
+        expect(invented).to.be.at.most(2);
+    });
+
+    it('projects a local day as the sum of its local hours, across the clock change', () => {
+        const model = fit({ now: NOW, weeks: 16, weeklyTotal: 7000, seed: 6 }, [
+            { label: 'x', kind: 'sale', from: '2026-10-20', to: '2026-10-21' },
+            { label: 'holiday:y', kind: 'holiday', from: '2026-10-25', to: '2026-10-25' },
+        ]);
+        for (const date of ['2026-10-19', '2026-10-20', '2026-10-24', '2026-10-25', '2026-10-26']) {
+            const next = new Date((dayOf(date) + 1) * DAY_MS).toISOString().slice(0, 10);
+            const sums = { likely: 0, low: 0, high: 0 };
+            for (let t = cal.midnight(date); t < cal.midnight(next); t += HOUR_MS) {
+                const p = projectHour(model, cal, t);
+                sums.likely += p.likely;
+                sums.low += p.low;
+                sums.high += p.high;
+            }
+            const day = projectDay(model, cal, dayOf(date));
+            for (const k of ['likely', 'low', 'high'] as const) expect(day[k], `${date} ${k}`).to.be.closeTo(sums[k], 1e-6);
+        }
+        expect(cal.dayHours(dayOf('2026-10-25')).length).to.equal(25);
+        expect(cal.dayHours(dayOf('2026-03-29')).length).to.equal(23);
+    });
+
+    it('follows a lasting step as a level shift, and still leaves a spike out once it has ended', () => {
+        const stepped = (from: string, factor: number, to = '2030-12-31') =>
+            fit({ now: NOW, weeks: 16, weeklyTotal: 7000, seed: 2, events: [{ from, to, factor }] });
+        // Up or down, a week or three old: the level is the new one and a step is not a trend.
+        for (const [from, factor] of [
+            ['2026-09-24', 2],
+            ['2026-09-17', 2],
+            ['2026-09-10', 2],
+            ['2026-09-17', 0.5],
+            ['2026-09-10', 0.5],
+        ] as const) {
+            const model = stepped(from, factor);
+            expect(model.level, `${from} ×${factor}`).to.be.closeTo(7000 * factor, 7000 * factor * 0.1);
+            expect(model.trend, `${from} ×${factor}`).to.equal(0);
+        }
+        // Six days is a spike, and a ten-day burst that ended two days ago is over: both stay out of the level.
+        expect(stepped('2026-09-25', 2).level).to.be.closeTo(7000, 7000 * 0.05);
+        expect(stepped('2026-09-19', 2, '2026-09-28').level).to.be.closeTo(7000, 7000 * 0.05);
     });
 
     it('learns nothing where the baseline expects under five tasks a day', () => {

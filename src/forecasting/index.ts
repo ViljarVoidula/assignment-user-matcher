@@ -11,7 +11,7 @@ export {
     DEFAULT_BACKTEST_ORIGINS,
     DEFAULT_BACKTEST_SERIES,
 } from './forecast';
-export { applyNowcast, nowcastRatio, NOWCAST_HOURS } from './nowcast';
+export { applyNowcast, nowcastRatio, NOWCAST_HOURS, NOWCAST_PRIOR } from './nowcast';
 export { suggestEffect, DEFAULT_EFFECTS, KNOCK_ON_DAYS } from './effects';
 export { YEARLY_MIN_WEEKS, OUTLIER } from './model';
 export { HIGH_ERROR_WAPE, LEAD_BUCKETS } from './backtest';

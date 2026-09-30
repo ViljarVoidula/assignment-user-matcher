@@ -38,6 +38,7 @@ export class ForecastCalendar {
     private readonly originDay: number;
     private readonly slots = new Map<number, LocalSlot>();
     private readonly dayStarts = new Map<number, number>();
+    private readonly dayHowLists = new Map<number, number[]>();
 
     constructor(timeZone: string, fromMs: number, toMs: number) {
         this.timeZone = timeZone;
@@ -58,6 +59,21 @@ export class ForecastCalendar {
         const slot = { date: dateOf(day), day, hour, weekday, how: (weekday - 1) * 24 + hour };
         this.slots.set(atMs, slot);
         return slot;
+    }
+
+    /**
+     * Hour-of-week of every local hour of a local day (day number), in order: 24 on an ordinary
+     * day, 23 or 25 on a clock change (the repeated hour appears twice). Memoised per day.
+     */
+    dayHours(day: number): readonly number[] {
+        let hows = this.dayHowLists.get(day);
+        if (!hows) {
+            hows = [];
+            const end = this.midnight(dateOf(day + 1));
+            for (let at = this.midnight(dateOf(day)); at < end; at += HOUR_MS) hows.push(this.slot(at).how);
+            this.dayHowLists.set(day, hows);
+        }
+        return hows;
     }
 
     /** Epoch ms of local midnight on a date. */

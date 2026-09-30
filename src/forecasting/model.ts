@@ -146,7 +146,10 @@ function fitUtcDayShare(weeks: number[], history: PreparedHistory, special: Set<
     );
 }
 
-/** Tasks' worth of pseudo-count spread evenly over the 24 hours of the pooled shape, so a sparse series keeps every hour. */
+/**
+ * Tasks' worth of pseudo-count spread evenly over the 24 hours of the pooled shape, so a sparse series
+ * keeps every hour.
+ */
 const HOUR_PRIOR = 12;
 /** Tasks a weekday needs before its own hour shape outweighs the pooled one (weight n / (n + HOUR_SHRINK)). */
 const HOUR_SHRINK = 20;
@@ -284,6 +287,9 @@ export function fitYearly(weekly: ReadonlyArray<{ monday: number; total: number 
     return factors;
 }
 
+/** Days a same-direction outlier run must span to be read as a level shift rather than a spike. */
+export const LEVEL_SHIFT_DAYS = 7;
+
 /** Fits one series as of `asOf`, then once more without its outlier days. */
 export function fitSeries(
     history: PreparedHistory,
@@ -291,13 +297,59 @@ export function fitSeries(
     calendar: ForecastCalendar,
     asOf: number,
 ): FittedSeries {
-    const first = fitWith(history, occurrences, calendar, asOf, new Set());
+    const first = fitWith(history, occurrences, calendar, asOf, new Set(), null);
     const outliers = outlierDays(first);
     if (outliers.size === 0) return first;
-    // Known cost: a genuine step change in the most recent week is flagged as outliers on the first pass and left out here, so the level lags it by a week; the nowcast and "What was this?" spans are where a fresh step shows.
-    // One refit with the outliers left out, so an unexplained spike cannot
-    // drag the level (and hide itself) before anybody has named it.
-    return fitWith(history, occurrences, calendar, asOf, outliers);
+    // One refit with the outliers left out, so an unexplained spike cannot drag the level (and hide itself)
+    // before anybody has named it. A run of at least a week that still holds at the end of history is a
+    // level shift, not a spike: it stays in, and the level is re-anchored on it. Known cost: a genuine step
+    // younger than a week is still left out, so the level lags it until it has lasted a week; the nowcast
+    // and "What was this?" spans are where a fresh step shows.
+    const shiftFrom = levelShiftFrom(first, outliers);
+    const excluded = new Set([...outliers.keys()].filter((day) => shiftFrom === null || day < shiftFrom));
+    return fitWith(history, occurrences, calendar, asOf, excluded, shiftFrom);
+}
+
+/**
+ * First day of a level shift, or null. The latest run of same-direction outlier days (one quiet day in
+ * between does not break it) spanning at least `LEVEL_SHIFT_DAYS` is a shift when volume at the end of
+ * history is still off the level from before the run, the same way: over the last week and over the last
+ * two days, each summed and judged as an outlier. Judged against the level before the run, not the first
+ * fit's, because that fit has half-followed the step by then and its late days no longer read as outliers.
+ * A week-long burst that ended yesterday is read as a shift until a second ordinary day says otherwise.
+ */
+function levelShiftFrom(first: FittedSeries, outliers: ReadonlyMap<number, 1 | -1>): number | null {
+    const days = [...outliers.keys()].sort((a, b) => a - b);
+    interface Run {
+        from: number;
+        to: number;
+        direction: 1 | -1;
+    }
+    let run: Run | null = null;
+    let latest: Run | null = null;
+    for (const day of days) {
+        const direction = outliers.get(day)!;
+        if (run && run.direction === direction && day - run.to <= 2) run.to = day;
+        else run = { from: day, to: day, direction };
+        if (run.to - run.from + 1 >= LEVEL_SHIFT_DAYS) latest = { ...run };
+    }
+    if (!latest || !first.span) return null;
+    const shift: Run = latest;
+    const before = levelFor(first, mondayOfDay(shift.from));
+    const special = specialDays(first.occurrences);
+    const window = (length: number) => {
+        let actual = 0;
+        let expected = 0;
+        let seen = 0;
+        for (let day = first.span!.to; day >= shift.from && seen < length; day--) {
+            if (special.has(day)) continue;
+            actual += actualOn(first, day) ?? 0;
+            expected += before * seasonFor(first, mondayOfDay(day)) * first.utcDayShare[weekdayOf(day) - 1];
+            seen += 1;
+        }
+        return isOutlier(actual, expected) && Math.sign(actual - expected) === shift.direction;
+    };
+    return window(LEVEL_SHIFT_DAYS) && window(2) ? shift.from : null;
 }
 
 /** Whether an actual is far enough from an expectation to be unexplained. */
@@ -315,13 +367,16 @@ export function explainedDay(model: FittedSeries, day: number): number {
     return e;
 }
 
-function outlierDays(model: FittedSeries): Set<number> {
-    const out = new Set<number>();
+/** Outlier days and their direction (1 above the expectation, −1 below). */
+function outlierDays(model: FittedSeries): Map<number, 1 | -1> {
+    const out = new Map<number, 1 | -1>();
     if (!model.span || model.level <= 0) return out;
     const special = specialDays(model.occurrences);
     for (let day = model.span.from + 1; day <= model.span.to; day++) {
         if (special.has(day)) continue;
-        if (isOutlier(actualOn(model, day) ?? 0, explainedDay(model, day))) out.add(day);
+        const actual = actualOn(model, day) ?? 0;
+        const expected = explainedDay(model, day);
+        if (isOutlier(actual, expected)) out.set(day, actual > expected ? 1 : -1);
     }
     return out;
 }
@@ -332,6 +387,7 @@ function fitWith(
     calendar: ForecastCalendar,
     asOf: number,
     outliers: Set<number>,
+    shiftFrom: number | null,
 ): FittedSeries {
     const span = spanOf(history, asOf);
     const special = specialDays(occurrences);
@@ -417,6 +473,19 @@ function fitWith(
         }
         level = n > 0 ? (sum / n) * 7 : 0;
         trend = 0;
+    } else if (shiftFrom !== null) {
+        // A level shift: the level is the shifted days' own weekly rate, and a step is not a trend.
+        let sum = 0;
+        let covered = 0;
+        for (let d = shiftFrom; d <= span.to; d++) {
+            if (special.has(d)) continue;
+            sum += at(d);
+            covered += utcDayShare[weekdayOf(d) - 1] * season(mondayOfDay(d));
+        }
+        if (covered > 0) {
+            level = sum / covered;
+            trend = 0;
+        }
     }
     return withEffects({
         ...base,
@@ -481,19 +550,22 @@ export function effectOn(model: FittedSeries, day: number): DayEffect {
     return dayEffect(day, model.occurrences, model.effects);
 }
 
-/** One hour's expectation with its components (nowcast 1). */
-export function projectHour(
-    model: FittedSeries,
-    calendar: ForecastCalendar,
-    at: number,
-): { likely: number; low: number; high: number; components: HourComponents } {
-    const slot = calendar.slot(at);
-    const monday = mondayOfDay(slot.day);
-    const share = model.dayShare[slot.weekday - 1] * model.hourShape[slot.how];
-    const current = model.level;
-    const ahead = levelFor(model, monday);
-    const season = seasonFor(model, monday);
-    const effect = effectOn(model, slot.day);
+/** What applies to every hour of one local day: the week's level and season, holidays, and events. */
+export interface DayFactors {
+    /** Deseasonalised weekly level for the day's week. */
+    ahead: number;
+    season: number;
+    holiday: number;
+    /** Product of the events' factors, and of their low and high factors. */
+    factor: number;
+    low: number;
+    high: number;
+    events: DayEffect['events'];
+}
+
+export function dayFactors(model: FittedSeries, day: number): DayFactors {
+    const monday = mondayOfDay(day);
+    const effect = effectOn(model, day);
     let factor = 1;
     let low = 1;
     let high = 1;
@@ -502,19 +574,57 @@ export function projectHour(
         low *= e.low;
         high *= e.high;
     }
-    const plain = ahead * share * season * effect.holiday;
     return {
-        likely: plain * factor,
-        // Holiday uncertainty is not in low/high (DayEffect.holiday carries a factor only), so a first-time default holiday's wide range is not shown here; the backtest ranges must cover it.
-        low: plain * Math.min(low, factor),
-        high: plain * Math.max(high, factor),
+        ahead: levelFor(model, monday),
+        season: seasonFor(model, monday),
+        holiday: effect.holiday,
+        factor,
+        low,
+        high,
+        events: effect.events,
+    };
+}
+
+/** One hour's expectation with its components (nowcast 1). */
+export function projectHour(
+    model: FittedSeries,
+    calendar: ForecastCalendar,
+    at: number,
+): { likely: number; low: number; high: number; components: HourComponents } {
+    const slot = calendar.slot(at);
+    const share = model.dayShare[slot.weekday - 1] * model.hourShape[slot.how];
+    const d = dayFactors(model, slot.day);
+    const current = model.level;
+    const plain = d.ahead * share * d.season * d.holiday;
+    return {
+        likely: plain * d.factor,
+        // Holiday uncertainty is not in low/high (DayEffect.holiday carries a factor only), so a first-time
+        // default holiday's wide range is not shown here; the backtest ranges must cover it.
+        low: plain * Math.min(d.low, d.factor),
+        high: plain * Math.max(d.high, d.factor),
         components: {
             base: current * share,
-            trend: current > 0 ? ahead / current : 1,
-            season,
-            holiday: effect.holiday,
-            events: effect.events.map(({ label, factor: f }) => ({ label, factor: f })),
+            trend: current > 0 ? d.ahead / current : 1,
+            season: d.season,
+            holiday: d.holiday,
+            events: d.events.map(({ label, factor: f }) => ({ label, factor: f })),
             nowcast: 1,
         },
     };
+}
+
+/**
+ * One local day's expectation: exactly the sum of `projectHour` over the day's local hours (23, 24 or 25),
+ * in closed form — every hour of a day shares its factors, so only the hour shape is summed.
+ */
+export function projectDay(
+    model: FittedSeries,
+    calendar: ForecastCalendar,
+    day: number,
+): { likely: number; low: number; high: number } {
+    let shape = 0;
+    for (const how of calendar.dayHours(day)) shape += model.hourShape[how];
+    const d = dayFactors(model, day);
+    const plain = d.ahead * model.dayShare[weekdayOf(day) - 1] * shape * d.season * d.holiday;
+    return { likely: plain * d.factor, low: plain * Math.min(d.low, d.factor), high: plain * Math.max(d.high, d.factor) };
 }

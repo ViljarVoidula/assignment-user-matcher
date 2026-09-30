@@ -6,14 +6,29 @@
  * same numbers.
  *
  * Everything shown by local date is a sum of `projectHour` over that date's
- * local hours — a week row is its 167, 168 or 169 hours added up — so the
+ * local hours (`projectDay`, the same sum in closed form) — a week row is its
+ * 167, 168 or 169 hours added up, with the nowcast its hours carry — so the
  * hours and the weeks a planner reads can never disagree.
+ *
+ * Callers should always pass the workspace total (`totalSeries`, default
+ * `'*'`): it is the series spikes are found on, and the one whose backtested
+ * ranges the long tail of series outside the busiest few borrows. Without it
+ * every series pays for its own backtests and there is no "What was this?".
  */
 import { backtest, borrowed, bucketOf, HIGH_ERROR_WAPE, type BacktestResult } from './backtest';
 import { ForecastCalendar, HOUR_MS } from './calendar';
 import { DAY_MS, dateOf, mondayOfDay, utcDay } from './days';
 import { prepareOccurrences } from './effects';
-import { fitSeries, prepareHistory, projectHour, seasonFor, type FittedSeries, type PreparedHistory } from './model';
+import {
+    effectOn,
+    fitSeries,
+    prepareHistory,
+    projectDay,
+    projectHour,
+    seasonFor,
+    type FittedSeries,
+    type PreparedHistory,
+} from './model';
 import { applyNowcast } from './nowcast';
 import { detectSpikes } from './spikes';
 import type { ForecastWorkspaceInput, ForecastWorkspaceResult, HourForecast, SeriesForecast, WeekForecast } from './types';
@@ -125,18 +140,20 @@ function forecastOne(
         return spread;
     };
 
+    // Hourly bands: the event and holiday low/high, widened by a negative binomial p10/p90 whose relative
+    // model error `c` the backtests measured for the hour's lead — never narrower than Poisson noise.
     const raw: HourForecast[] = [];
     for (let h = 0; h < horizonHours; h++) {
         const at = from + h * HOUR_MS;
         const p = projectHour(model, calendar, at);
-        const [lo, hi] = bt.ranges[bucketOf(Math.max(0, (at - current) / HOUR_MS))];
+        const c = bt.dispersion[bucketOf(Math.max(0, (at - current) / HOUR_MS))];
         const [hl, hh] = spreadOn(calendar.slot(at).day);
-        const noise = Z90 * Math.sqrt(p.likely);
+        const band = Z90 * Math.sqrt(p.likely + c * p.likely * p.likely);
         raw.push({
             at,
             likely: round(p.likely),
-            low: round(Math.max(0, Math.min(p.low * hl * lo, p.likely - noise))),
-            high: round(Math.max(p.high * hh * hi, p.likely + noise)),
+            low: round(Math.max(0, Math.min(p.low * hl, p.likely) - band)),
+            high: round(Math.max(p.high * hh, p.likely) + band),
             components: {
                 base: round(p.components.base, 3),
                 trend: round(p.components.trend, 4),
@@ -147,34 +164,49 @@ function forecastOne(
             },
         });
     }
-    const hours = applyNowcast(raw, history.hourlyPoints, now);
+    // The nowcast needs today's hours: a series with no hourly history today (daily-only, or an hourly
+    // feed that has not reported yet) would read as nothing seen and have its next 72 hours halved.
+    const hours = hasHourlyToday(history, from, current) ? applyNowcast(raw, history.hourlyPoints, now) : raw;
+    // What the nowcast added, per local day, so a week row carries the nowcast its hours carry.
+    const nowcastLift = new Map<number, number>();
+    hours.forEach((h, i) => {
+        if (h.components.nowcast === 1) return;
+        const day = calendar.slot(h.at).day;
+        nowcastLift.set(day, (nowcastLift.get(day) ?? 0) + h.likely - raw[i].likely);
+    });
 
     const weeks: WeekForecast[] = [];
     const firstMonday = mondayOfDay(today.day);
     const [lo, hi] = bt.weekRange;
     for (let w = 0; w < horizonWeeks; w++) {
         const monday = firstMonday + 7 * w;
-        // A week row is its local hours added up (167 or 169 across a clock change).
-        const end = calendar.midnight(dateOf(monday + 7));
         let likely = 0;
+        let lift = 0;
         let low = 0;
         let high = 0;
         const labels = new Set<string>();
-        for (let at = calendar.midnight(dateOf(monday)); at < end; at += HOUR_MS) {
-            const p = projectHour(model, calendar, at);
-            const [hl, hh] = spreadOn(calendar.slot(at).day);
+        for (let d = monday; d < monday + 7; d++) {
+            const p = projectDay(model, calendar, d);
+            const [hl, hh] = spreadOn(d);
             likely += p.likely;
             low += p.low * hl;
             high += p.high * hh;
-            for (const e of p.components.events) labels.add(e.label);
+            lift += nowcastLift.get(d) ?? 0;
+            for (const e of effectOn(model, d).events) labels.add(e.label);
         }
-        // The weekly spread from backtests covers weeks 1–4; later weeks widen with √(weeks / 4).
+        const scale = likely > 0 ? (likely + lift) / likely : 1;
+        likely += lift;
+        low *= scale;
+        high *= scale;
+        // The weekly spread from backtests covers weeks 1–4; later weeks widen with √(weeks / 4). The
+        // negative binomial of weekly totals is the floor, as it is for hours.
         const widen = Math.sqrt(Math.max(1, w / 4));
+        const band = Z90 * Math.sqrt(likely + bt.weekDispersion * widen * widen * likely * likely);
         weeks.push({
             weekStart: dateOf(monday),
             likely: round(likely, 1),
-            low: round(Math.max(0, low * (1 - (1 - lo) * widen)), 1),
-            high: round(high * (1 + (hi - 1) * widen), 1),
+            low: round(Math.max(0, Math.min(low * (1 - (1 - lo) * widen), Math.min(low, likely) - band)), 1),
+            high: round(Math.max(high * (1 + (hi - 1) * widen), Math.max(high, likely) + band), 1),
             season: round(seasonFor(model, monday), 4),
             events: [...labels],
         });
@@ -204,4 +236,11 @@ function forecastOne(
         historyWeeks: model.historyWeeks,
         effects: [...effects.values()],
     };
+}
+
+/** Whether the hourly table has anything for today before the current hour. */
+function hasHourlyToday(history: PreparedHistory, from: number, current: number): boolean {
+    const points = history.hourlyPoints;
+    for (let i = points.length - 1; i >= 0 && points[i].at >= from; i--) if (points[i].at < current) return true;
+    return false;
 }

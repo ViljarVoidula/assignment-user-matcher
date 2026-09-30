@@ -104,7 +104,10 @@ export interface WeekForecast {
 export type LeadBucket = '24h' | '72h' | '7d' | '28d';
 
 export interface ForecastAccuracy {
-    /** Weighted absolute percentage error by lead, from rolling-origin backtests; null without enough history. */
+    /**
+     * Weighted absolute percentage error by lead, from rolling-origin backtests, on local-day totals (UTC days
+     * of the daily table for a series without hourly history); null without enough history.
+     */
     wape: Record<LeadBucket, number | null>;
     /** Backtest origins that could be judged (0 when the ranges were borrowed). */
     origins: number;

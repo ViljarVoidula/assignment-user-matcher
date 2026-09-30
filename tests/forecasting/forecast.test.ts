@@ -146,7 +146,8 @@ describe('forecastWorkspace', () => {
         const doubled = history.hourly.map((p) => (p.at >= today ? { ...p, value: p.value * 2 } : p));
         const [f] = forecastWorkspace({ timeZone: ZONE, now: NOW, series: [{ ...history, hourly: doubled }] }).series;
         const next = f.hours.find((h) => h.at === Date.parse('2026-10-01T10:00:00Z'))!;
-        expect(next.components.nowcast).to.be.closeTo(2 - 1 / 72, 0.01);
+        // ~463 expected by noon local, ~926 seen: (926 + 25) / (463 + 25) ≈ 1.949, one hour into the fade.
+        expect(next.components.nowcast).to.be.closeTo(1 + 0.949 * (71 / 72), 0.01);
         const later = f.hours.find((h) => h.at === Date.parse('2026-10-05T10:00:00Z'))!;
         expect(later.components.nowcast).to.equal(1);
     });
@@ -225,17 +226,29 @@ describe('forecastWorkspace', () => {
         const now = start + 6 * HOUR_MS + 30 * 60_000;
         const actual = Array.from({ length: 7 }, (_, h) => ({ at: start + h * HOUR_MS, value: 20 }));
         const once = applyNowcast(hours, actual, now);
-        // Hour 6 is in progress: its 20 is not counted. 120 seen over 60 expected.
-        expect(once[6].components.nowcast).to.equal(2);
-        expect(once[6].likely).to.equal(20);
+        // Hour 6 is in progress: its 20 is not counted. 120 seen over 60 expected, shrunk: 145 / 85.
+        expect(once[6].components.nowcast).to.equal(1.7059);
+        expect(once[6].likely).to.equal(17.06);
         expect(once[5].likely).to.equal(10);
-        expect(once[6 + 36].components.nowcast).to.equal(1.5);
+        expect(once[6 + 36].components.nowcast).to.equal(1.3529);
         expect(once[6 + 72].likely).to.equal(10);
         expect(applyNowcast(once, actual, now)).to.deep.equal(once);
+        // No actuals means nothing was seen: (0 + 25) / (60 + 25) = 0.29, held at 0.5.
+        expect(applyNowcast(once, [], now)[6].components.nowcast).to.equal(0.5);
         expect(applyNowcast(once, [], now)[6].likely).to.equal(5);
         expect(nowcastRatio(4, 4.9)).to.equal(1);
         expect(nowcastRatio(100, 10)).to.equal(3);
-        expect(nowcastRatio(1, 10)).to.equal(0.5);
+        expect(nowcastRatio(1, 10)).to.be.closeTo(26 / 35, 1e-9);
+        expect(nowcastRatio(0, 100)).to.equal(0.5);
+        // Nothing stored is nothing to rescale; actuals from before the stored hours are not today's.
+        expect(applyNowcast([], actual, now)).to.deep.equal([]);
+        const yesterday = actual.map((p) => ({ ...p, at: p.at - 24 * HOUR_MS }));
+        expect(applyNowcast(hours, [...yesterday, ...actual], now)).to.deep.equal(once);
+        // A stored nowcast of 0 (never written by this module) reads as none.
+        const zeroed = hours.map((h) => ({ ...h, components: { ...h.components, nowcast: 0 } }));
+        expect(applyNowcast(zeroed, actual, now)).to.deep.equal(once);
+        // Twelve tasks over six expected is noise, not a doubling.
+        expect(nowcastRatio(12, 6)).to.be.closeTo(37 / 31, 1e-9);
     });
 
     it('borrows the total series ranges for a series outside the busiest few', () => {
@@ -258,10 +271,24 @@ describe('forecastWorkspace: local days and ranges', () => {
     for (const zone of ['Europe/Tallinn', 'America/Los_Angeles', 'Pacific/Auckland']) {
         it(`reports a week as the sum of its local hours (${zone})`, () => {
             const zcal = new ForecastCalendar(zone, NOW - 10 * DAY_MS, NOW + 60 * DAY_MS);
-            const history = syntheticHistory({ now: NOW, weeks: 12, weeklyTotal: 7000, seed: 4, timeZone: zone });
-            const occurrences = [{ label: 'autumn', kind: 'sale', from: '2026-10-07', to: '2026-10-08' }];
+            // An event, its knock-on, a holiday and (in Tallinn) the clock change on 25 October: week 3 is 19–25 October.
+            const past = { label: 'autumn', kind: 'sale', from: '2026-08-10', to: '2026-08-11' };
+            const occurrences = [
+                past,
+                { label: 'autumn', kind: 'sale', from: '2026-10-07', to: '2026-10-08' },
+                { label: 'fresh', kind: 'launch', from: '2026-10-20', to: '2026-10-20' },
+                { label: 'holiday:x', kind: 'holiday', from: '2026-10-22', to: '2026-10-22' },
+            ];
+            const history = syntheticHistory({
+                now: NOW,
+                weeks: 12,
+                weeklyTotal: 7000,
+                seed: 4,
+                timeZone: zone,
+                events: [{ from: past.from, to: past.to, factor: 1.6, knockOn: { days: 5, factor: 1.3 } }],
+            });
             const [f] = forecastWorkspace({ timeZone: zone, now: NOW, series: [history], occurrences }).series;
-            for (const w of [1, 2]) {
+            for (const w of [1, 2, 3]) {
                 const monday = f.weeks[w].weekStart;
                 const next = new Date(Date.parse(`${monday}T00:00:00Z`) + 7 * DAY_MS).toISOString().slice(0, 10);
                 let sum = 0;
@@ -394,5 +421,123 @@ describe('forecastWorkspace: local days and ranges', () => {
         const [f] = forecastWorkspace({ timeZone: ZONE, now: NOW, series: [history] }).series;
         expect(f.accuracy.reasons).to.include('high-error');
         expect(f.accuracy.lowConfidence).to.equal(true);
+    });
+});
+
+describe('forecastWorkspace: review fixes', () => {
+    const weekTruth = 7000;
+    /** Actual volume of a local week in a (later, independent) history. */
+    const weekActual = (actual: Map<number, number>, zcal: ForecastCalendar, monday: string) => {
+        const next = new Date(Date.parse(`${monday}T00:00:00Z`) + 7 * DAY_MS).toISOString().slice(0, 10);
+        let sum = 0;
+        for (let t = zcal.midnight(monday); t < zcal.midnight(next); t += HOUR_MS) sum += actual.get(t) ?? 0;
+        return sum;
+    };
+    /** Multiplies every local day by a seeded log-normal factor: volume that is noisier than Poisson. */
+    const overdispersed = (h: ReturnType<typeof syntheticHistory>, seed: number, sd: number) => {
+        let x = seed * 7919 + 17;
+        const rnd = () => (x = (x * 16807) % 2147483647) / 2147483647;
+        const factors = new Map<string, number>();
+        const factor = (date: string) => {
+            let f = factors.get(date);
+            if (f === undefined) {
+                const z = Math.sqrt(-2 * Math.log(rnd())) * Math.cos(2 * Math.PI * rnd());
+                factors.set(date, (f = Math.exp(sd * z - (sd * sd) / 2)));
+            }
+            return f;
+        };
+        const hourly = h.hourly.map((p) => ({ at: p.at, value: Math.round(p.value * factor(cal.slot(p.at).date)) }));
+        const daily = new Map<string, number>();
+        for (const p of hourly) {
+            const date = new Date(p.at).toISOString().slice(0, 10);
+            daily.set(date, (daily.get(date) ?? 0) + p.value);
+        }
+        const older = h.daily
+            .filter((p) => !daily.has(p.date))
+            .map((p) => ({ ...p, value: Math.round(p.value * factor(p.date)) }));
+        return { ...h, hourly, daily: [...older, ...[...daily].map(([date, value]) => ({ date, value }))] };
+    };
+    const coverage = (sd: number) => {
+        let inside = 0;
+        let judged = 0;
+        let weeksInside = 0;
+        let weeks = 0;
+        for (let seed = 1; seed <= 8; seed++) {
+            let history = syntheticHistory({ now: NOW, weeks: 16, weeklyTotal: weekTruth, seed });
+            let later = syntheticHistory({ now: NOW + 35 * DAY_MS, weeks: 6, weeklyTotal: weekTruth, seed: 1000 + seed });
+            if (sd > 0) {
+                history = overdispersed(history, seed, sd);
+                later = overdispersed(later, 1000 + seed, sd);
+            }
+            const [f] = forecastWorkspace({ timeZone: ZONE, now: NOW, series: [history] }).series;
+            const actual = new Map(later.hourly.map((p) => [p.at, p.value]));
+            for (const h of f.hours) {
+                if (h.at <= NOW || h.likely < 20) continue;
+                const a = actual.get(h.at) ?? 0;
+                judged += 1;
+                if (a >= h.low && a <= h.high) inside += 1;
+            }
+            for (const w of f.weeks.slice(1, 4)) {
+                const a = weekActual(actual, cal, w.weekStart);
+                weeks += 1;
+                if (a >= w.low && a <= w.high) weeksInside += 1;
+            }
+        }
+        return { hours: inside / judged, weeks: weeksInside / weeks };
+    };
+
+    it('does not nowcast a daily-only series (no hourly history today)', () => {
+        const history = syntheticHistory({ now: NOW, weeks: 12, weeklyTotal: 7000, noise: false, dailyOnly: true });
+        const [f] = forecastWorkspace({ timeZone: ZONE, now: NOW, series: [history] }).series;
+        expect(f.hours.every((h) => h.components.nowcast === 1)).to.equal(true);
+    });
+
+    for (const sd of [0, 0.15]) {
+        it(`has p10–p90 bands that hold about 80 % of later hours, not more (day noise ${sd})`, () => {
+            const { hours, weeks } = coverage(sd);
+            expect(hours).to.be.within(0.7, 0.9);
+            expect(weeks).to.be.at.least(0.7);
+        });
+    }
+
+    it('follows a step that has lasted two weeks instead of reading it as a spike', () => {
+        const history = syntheticHistory({
+            now: NOW,
+            weeks: 16,
+            weeklyTotal: 7000,
+            seed: 2,
+            events: [{ from: '2026-09-17', to: '2030-12-31', factor: 2 }],
+        });
+        const [f] = forecastWorkspace({ timeZone: ZONE, now: NOW, series: [history] }).series;
+        const monday = f.hours.find((h) => h.at === localHour('2026-10-05', 10))!;
+        expect(monday.likely).to.be.closeTo(2 * truth(1, 10), 2 * truth(1, 10) * 0.15);
+        expect(f.weeks[2].likely).to.be.closeTo(14000, 14000 * 0.15);
+    });
+
+    it('does not call a well-specified 700/week series high-error', () => {
+        let flagged = 0;
+        for (let seed = 1; seed <= 12; seed++) {
+            const history = syntheticHistory({ now: NOW, weeks: 16, weeklyTotal: 700, seed });
+            const [f] = forecastWorkspace({ timeZone: ZONE, now: NOW, series: [history] }).series;
+            if (f.accuracy.reasons.includes('high-error')) flagged += 1;
+        }
+        expect(flagged).to.be.at.most(2);
+    });
+
+    it('carries the nowcast its hours carry into this week’s total', () => {
+        const history = syntheticHistory({ now: NOW, weeks: 12, weeklyTotal: 7000, noise: false });
+        const today = cal.midnight('2026-10-01');
+        const doubled = history.hourly.map((p) => (p.at >= today ? { ...p, value: p.value * 2 } : p));
+        const [plain] = forecastWorkspace({ timeZone: ZONE, now: NOW, series: [history] }).series;
+        const [busy] = forecastWorkspace({ timeZone: ZONE, now: NOW, series: [{ ...history, hourly: doubled }] }).series;
+        const weekEnd = cal.midnight('2026-10-05');
+        let lift = 0;
+        busy.hours.forEach((h, i) => {
+            if (h.at < weekEnd) lift += h.likely - plain.hours[i].likely;
+        });
+        expect(lift).to.be.above(100);
+        expect(busy.weeks[0].likely - plain.weeks[0].likely).to.be.closeTo(lift, 1);
+        // The nowcast is spent by Sunday: next week is untouched.
+        expect(busy.weeks[1].likely).to.equal(plain.weeks[1].likely);
     });
 });
