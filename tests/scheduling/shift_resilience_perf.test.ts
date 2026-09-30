@@ -2,8 +2,7 @@ import { expect } from 'chai';
 import { assessShiftResilience, type ScheduleInput, type ScheduledAssignment } from '../../src/scheduling';
 
 describe('assessShiftResilience performance', () => {
-    it('assesses 72 h of a 200-person site in under 500 ms', function () {
-        this.timeout(5000);
+    const site = (full: boolean) => {
         const dates = ['2026-01-06', '2026-01-07', '2026-01-08'];
         const employees = Array.from({ length: 200 }, (_, i) => ({
             id: `e${i}`,
@@ -20,6 +19,7 @@ describe('assessShiftResilience performance', () => {
                 dates,
                 minEmployees: 50,
                 tagRequirements: { forklift: 5 },
+                ...(full ? { maxEmployees: 50, tagMaximums: { forklift: 12 } } : {}),
             };
         });
         const input = {
@@ -37,9 +37,25 @@ describe('assessShiftResilience performance', () => {
                 }
             }),
         );
+        return { input, roster };
+    };
+
+    it('assesses 72 h of a 200-person site in under 500 ms', function () {
+        this.timeout(5000);
+        const { input, roster } = site(false);
         const started = Date.now();
         const result = assessShiftResilience(input, roster);
         expect(result).to.have.length(9);
+        expect(Date.now() - started).to.be.below(500);
+    });
+
+    it('stays under 500 ms when every shift is full and a seat has to be vacated', function () {
+        this.timeout(5000);
+        const { input, roster } = site(true);
+        const started = Date.now();
+        const result = assessShiftResilience(input, roster);
+        expect(result).to.have.length(9);
+        expect(result.every((s) => s.backups > 0)).to.equal(true);
         expect(Date.now() - started).to.be.below(500);
     });
 });

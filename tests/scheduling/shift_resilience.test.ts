@@ -3,6 +3,7 @@ import {
     assessShiftResilience,
     checkCompliance,
     rankCandidates,
+    rankSwapPartners,
     type ScheduleInput,
     type ScheduledAssignment,
 } from '../../src/scheduling';
@@ -171,6 +172,88 @@ describe('assessShiftResilience', () => {
                 .violations.filter((v) => v.constraintId === 'time-off')
                 .map((v) => v.employeeId);
             expect(night.absent).to.have.members([...new Set(flagged)]);
+        });
+    });
+
+    describe('backups are judged with one seat vacated', () => {
+        // A backup is someone who could step in if a rostered person dropped
+        // out. Asked with every rostered person still on it, a shift at its
+        // maxEmployees reads "already has its maximum" for everybody.
+        const capped = (early: number, late: number) => {
+            const input = warehouse();
+            (input.shifts[0] as any).maxEmployees = early;
+            (input.shifts[1] as any).maxEmployees = late;
+            return input;
+        };
+        const partners = (input: ScheduleInput, id: string, from: string, r: ScheduledAssignment[]) =>
+            rankSwapPartners(input, id, from, r)
+                .filter((c) => c.eligible)
+                .map((c) => c.employeeId)
+                .sort();
+
+        it('a full one-seat shift with a free eligible colleague has that colleague as its backup', () => {
+            const input = warehouse();
+            input.shifts[0] = { ...input.shifts[0], minEmployees: 1, maxEmployees: 1 } as any;
+            const oneSeat = [at('ann', `early@${DAY}`), at('cat', `late@${DAY}`), at('eve', `late@${DAY}`)];
+            const [early] = assessShiftResilience(input, oneSeat, {
+                shiftInstanceIds: [`early@${DAY}`],
+                expectedDropouts: { [`early@${DAY}`]: 0.2 },
+            });
+            expect(early.assigned).to.equal(1);
+            expect(early.shortBy).to.equal(0);
+            expect(early.topBackups.map((c) => c.employeeId)).to.deep.equal(['ben', 'dan']);
+            expect(early.backups).to.equal(2);
+            expect(['ok', 'watch']).to.include(early.tier);
+            expect(early.reasons).to.not.include('no-backups');
+            expect(early.backups).to.equal(partners(input, `early@${DAY}`, 'ann', oneSeat).length);
+        });
+
+        it('a full two-seat shift counts backups as if one person dropped out', () => {
+            const input = capped(2, 2);
+            const [early, late] = assessShiftResilience(input, roster);
+            expect(early.assigned).to.equal(2);
+            expect(early.shortBy).to.equal(0);
+            expect(early.topBackups.map((c) => c.employeeId)).to.deep.equal(['dan']);
+            expect(early.skills[0]).to.include({ held: 1, backups: 1 });
+            expect(late.topBackups.map((c) => c.employeeId).sort()).to.deep.equal(['dan']);
+            expect(late.tier).to.not.equal('critical');
+            // Parity: the counted backups are rankSwapPartners' eligible
+            // partners for the shift and any one person on it.
+            for (const [shift, id, people] of [
+                [early, `early@${DAY}`, ['ann', 'ben']],
+                [late, `late@${DAY}`, ['cat', 'eve']],
+            ] as const) {
+                for (const from of people) {
+                    expect(shift.topBackups.map((c) => c.employeeId).sort()).to.deep.equal(
+                        partners(input, id, from, roster),
+                    );
+                }
+            }
+        });
+
+        it('a shift below its maximum gives the same backups as uncapped', () => {
+            const uncapped = assessShiftResilience(warehouse(), roster);
+            const roomy = assessShiftResilience(capped(3, 3), roster);
+            expect(roomy).to.deep.equal(uncapped);
+        });
+
+        it('a skill capped at its maximum counts only holders who could replace a holder', () => {
+            // Early holds one forklift driver (ann) and caps forklift at one.
+            // dan drives a forklift: he can replace ann, not ben. With the
+            // shift also full, vacating ben alone would call dan ineligible.
+            const input = capped(2, 2);
+            (input.shifts[0] as any).tagMaximums = { forklift: 1 };
+            const [early] = assessShiftResilience(input, roster, { shiftInstanceIds: [`early@${DAY}`] });
+            expect(early.topBackups.map((c) => c.employeeId)).to.deep.equal(['dan']);
+            expect(early.skills[0]).to.include({ tag: 'forklift', held: 1, backups: 1 });
+            expect(partners(input, `early@${DAY}`, 'ann', roster)).to.deep.equal(['dan']);
+            expect(partners(input, `early@${DAY}`, 'ben', roster)).to.deep.equal([]);
+        });
+
+        it('leaves the roster exactly as it found it', () => {
+            const input = capped(2, 2);
+            const once = assessShiftResilience(input, roster);
+            expect(assessShiftResilience(input, roster)).to.deep.equal(once);
         });
     });
 

@@ -391,6 +391,11 @@ export interface ResilienceOptions {
  * judged: they are genuinely off, so they hold no seat on a capped shift and
  * their hours count against nobody. The state is local to the call.
  *
+ * Backups are judged with one seat vacated where a crew cap binds (see
+ * `backupsFor`): a backup replaces a dropout, and a full shift asked with
+ * everyone still on it has room for nobody. `assigned` and `shortBy` are
+ * always the real roster.
+ *
  * `need` is the folded `minEmployees`: a caller raises it with a
  * `demandOverrides` entry on the input, never through an option here.
  *
@@ -441,16 +446,13 @@ export function assessShiftResilience(
     }
 
     return instances.map((inst): ShiftResilience => {
-        const assignedIds = [...(assignedBy.get(inst.id) ?? [])];
+        const assignedIds = [...(assignedBy.get(inst.id) ?? [])].sort();
         const absent = absentBy.get(inst.id) ?? [];
         // Absentees are off the state now, so skip them by name: their own time
         // off already refuses them, and a person rostered on the shift is never
         // their own cover.
         const onShift = new Set([...assignedIds, ...absent]);
-        const eligible = sortCandidates(
-            ctx,
-            scoreCandidates(state, inst, (id) => onShift.has(id)).filter((c) => c.eligible),
-        );
+        const { eligible, bySkill } = backupsFor(state, inst, assignedIds, onShift);
         const skills: SkillResilience[] = Object.entries(inst.tagRequirements).map(([tag, requirement]) => {
             const held = assignedIds.filter((id) => tagsHeldOn(ctx, id, inst).includes(tag)).length;
             return {
@@ -458,7 +460,7 @@ export function assessShiftResilience(
                 required: requirement.min,
                 held,
                 shortBy: Math.max(0, requirement.min - held),
-                backups: eligible.filter((c) => c.tagsHeld.includes(tag)).length,
+                backups: bySkill(tag),
             };
         });
         const need = inst.minEmployees;
@@ -489,6 +491,91 @@ export function assessShiftResilience(
             reasons,
         };
     });
+}
+
+/**
+ * Who could step in on `inst` if one rostered person dropped out.
+ *
+ * A backup replaces somebody, so the question is asked with **one seat
+ * vacated** — the same move `rankSwapPartners` makes for a hand-over. Asked
+ * with everyone still on it, a shift at its `maxEmployees` reads "already has
+ * its maximum" for everybody and every full shift looks like a call to the
+ * agency.
+ *
+ * A seat is vacated only when a crew cap actually binds: headcount at or over
+ * `maxEmployees`, or a `tagMaximums` tag at or over its cap. Otherwise the
+ * rostered team is judged as it stands — vacating would change nothing a
+ * pair rule reads (removing a person only lowers counts), so a shift below its
+ * caps gives exactly the answer it always gave.
+ *
+ * Who is vacated does not matter for headcount; it does for a capped tag: a
+ * forklift driver can replace the forklift driver on a shift capped at one,
+ * not the picker beside him. So the rostered people are grouped by which
+ * binding-capped and required tags they hold, one representative per group
+ * (the last id in sorted order) is vacated in turn, and a candidate counts if
+ * they could replace *somebody* — the union. A skill's backups are counted
+ * only against representatives holding that skill (all of them when nobody
+ * holds it), so "could replace a dropout" stays honest per skill. Every
+ * vacated pair is restored before the next, as in `tradeFits`, so person
+ * caching stays valid and the state leaves as it came.
+ *
+ * Only `group-composition` reads the crew per pair; `hour-budget`, the other
+ * crew-listed rule, reads the candidate's own minutes, which vacating somebody
+ * else never moves. Rows come from the first representative that finds the
+ * candidate eligible.
+ */
+function backupsFor(
+    state: InternalState,
+    inst: import('./types').ShiftInstance,
+    assignedIds: string[],
+    onShift: Set<string>,
+): { eligible: RepairCandidate[]; bySkill: (tag: string) => number } {
+    const ctx = state.ctx;
+    const holds = (id: string, tag: string) => ctx.holdsTagOn(id, tag, inst.date);
+    const cappedTags = Object.entries(inst.tagMaximums)
+        .filter(([tag, max]) => assignedIds.filter((id) => holds(id, tag)).length >= max)
+        .map(([tag]) => tag);
+    const full = inst.maxEmployees !== undefined && assignedIds.length >= inst.maxEmployees;
+
+    if (assignedIds.length === 0 || (!full && cappedTags.length === 0)) {
+        const eligible = sortCandidates(
+            ctx,
+            scoreCandidates(state, inst, (id) => onShift.has(id)).filter((c) => c.eligible),
+        );
+        return { eligible, bySkill: (tag) => eligible.filter((c) => c.tagsHeld.includes(tag)).length };
+    }
+
+    // Capped tags are read as `group-composition` reads them; required skills
+    // as `held` counts them (at the requirement's level).
+    const holdsSkill = (id: string, tag: string) => tagsHeldOn(ctx, id, inst).includes(tag);
+    const skillTags = Object.keys(inst.tagRequirements).sort();
+    const reps = new Map<string, string>();
+    for (const id of assignedIds) {
+        const signature = [...cappedTags.map((tag) => holds(id, tag)), ...skillTags.map((tag) => holdsSkill(id, tag))];
+        reps.set(signature.map((bit) => (bit ? 1 : 0)).join(''), id);
+    }
+
+    const rows = new Map<string, RepairCandidate>();
+    const eligibleBy = new Map<string, Set<string>>();
+    for (const rep of [...reps.values()].sort()) {
+        unassign(state, rep, inst.id);
+        const found = new Set<string>();
+        for (const c of scoreCandidates(state, inst, (id) => onShift.has(id))) {
+            if (!c.eligible) continue;
+            found.add(c.employeeId);
+            if (!rows.has(c.employeeId)) rows.set(c.employeeId, c);
+        }
+        assign(state, rep, inst.id, []);
+        eligibleBy.set(rep, found);
+    }
+    const eligible = sortCandidates(ctx, [...rows.values()]);
+    const bySkill = (tag: string) => {
+        const holders = [...eligibleBy.keys()].filter((rep) => holdsSkill(rep, tag));
+        const from = holders.length > 0 ? holders : [...eligibleBy.keys()];
+        const ids = new Set(from.flatMap((rep) => [...eligibleBy.get(rep)!]));
+        return eligible.filter((c) => ids.has(c.employeeId) && c.tagsHeld.includes(tag)).length;
+    };
+    return { eligible, bySkill };
 }
 
 /**
