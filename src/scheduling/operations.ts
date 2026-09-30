@@ -27,7 +27,6 @@ import type {
     ScheduleInput,
     ScheduledAssignment,
     SearchState,
-    ShiftInstance,
     ContractHoursSummary,
     EmployeePreferenceReport,
 } from './types';
@@ -386,8 +385,8 @@ export interface ResilienceOptions {
  * `rankCandidates` and `rankSwapPartners` use — so the radar and a cover offer
  * can never disagree about who could take a shift.
  *
- * A rostered person with declared time off on the shift (a whole-day entry on
- * its date, or an entry naming the instance) is reported in `absent`, not
+ * A rostered person the time-off rule refuses on the shift (declared time off,
+ * an `absences` span or an external commitment) is reported in `absent`, not
  * counted in `assigned`, and is taken off the working state *before* anyone is
  * judged: they are genuinely off, so they hold no seat on a capped shift and
  * their hours count against nobody. The state is local to the call.
@@ -411,31 +410,38 @@ export function assessShiftResilience(
         .filter((inst) => !wanted || wanted.has(inst.id))
         .sort((a, b) => a.date.localeCompare(b.date) || a.startMinute - b.startMinute || a.id.localeCompare(b.id));
 
-    const onTimeOff = (employeeId: string, inst: ShiftInstance) =>
-        (ctx.employeeById.get(employeeId)?.timeOff ?? []).some((t) =>
-            t.shiftInstanceId !== undefined ? t.shiftInstanceId === inst.id : t.date === inst.date,
-        );
+    // Absence is the time-off rule's own judgement, asked of the registered
+    // constraint: declared time off (overnight spill-over included),
+    // `input.absences` spans and external commitments, exactly as the solver
+    // and `checkCompliance` block them. Its answer reads only static blocked
+    // intervals, so asking it of an assigned pair is sound.
+    const timeOffRule = ctx.constraints.find((c) => c.id === 'time-off');
+    const isAbsent = (employeeId: string, shiftInstanceId: string) =>
+        timeOffRule !== undefined && timeOffRule.delta(state, { employeeId, shiftInstanceId }) > 0;
 
     // Who holds what, as the working state saw it (unknown ids and duplicate
     // rows fall away exactly as `stateFor` drops them). Absentees leave the
     // state before any judgement, across the whole roster — an absentee on a
     // shift outside the window still frees the seat and hours they held.
-    const assignedBy = new Map<string, string[]>();
+    const assignedBy = new Map<string, Set<string>>();
     const absentBy = new Map<string, string[]>();
+    const bucket = <T>(map: Map<string, T>, key: string, empty: () => T): T => {
+        let value = map.get(key);
+        if (value === undefined) map.set(key, (value = empty()));
+        return value;
+    };
     for (const pair of roster) {
-        const inst = ctx.instanceById.get(pair.shiftInstanceId);
-        if (!inst || !state.isAssigned(pair.employeeId, inst.id)) continue;
-        if (onTimeOff(pair.employeeId, inst)) {
-            unassign(state, pair.employeeId, inst.id);
-            absentBy.set(inst.id, [...(absentBy.get(inst.id) ?? []), pair.employeeId]);
+        if (!state.isAssigned(pair.employeeId, pair.shiftInstanceId)) continue;
+        if (isAbsent(pair.employeeId, pair.shiftInstanceId)) {
+            unassign(state, pair.employeeId, pair.shiftInstanceId);
+            bucket(absentBy, pair.shiftInstanceId, () => []).push(pair.employeeId);
         } else {
-            const held = assignedBy.get(inst.id) ?? [];
-            if (!held.includes(pair.employeeId)) assignedBy.set(inst.id, [...held, pair.employeeId]);
+            bucket(assignedBy, pair.shiftInstanceId, () => new Set()).add(pair.employeeId);
         }
     }
 
     return instances.map((inst): ShiftResilience => {
-        const assignedIds = assignedBy.get(inst.id) ?? [];
+        const assignedIds = [...(assignedBy.get(inst.id) ?? [])];
         const absent = absentBy.get(inst.id) ?? [];
         // Absentees are off the state now, so skip them by name: their own time
         // off already refuses them, and a person rostered on the shift is never

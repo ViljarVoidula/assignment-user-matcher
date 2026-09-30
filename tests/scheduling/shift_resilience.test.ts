@@ -1,5 +1,11 @@
 import { expect } from 'chai';
-import { assessShiftResilience, rankCandidates, type ScheduleInput, type ScheduledAssignment } from '../../src/scheduling';
+import {
+    assessShiftResilience,
+    checkCompliance,
+    rankCandidates,
+    type ScheduleInput,
+    type ScheduledAssignment,
+} from '../../src/scheduling';
 import * as root from '../../src';
 
 const DAY = '2026-01-06';
@@ -109,8 +115,63 @@ describe('assessShiftResilience', () => {
             expectedDropouts: { [`late@${DAY}`]: 0.3 },
         });
         expect(late.shortBy).to.equal(0);
-        expect(['watch', 'ok']).to.include(late.tier);
+        // One backup (dan) against 0.3 expected dropouts covers today's
+        // expectation but not one more than that.
+        expect(late.tier).to.equal('watch');
         expect(late.expectedDropouts).to.equal(0.3);
+    });
+
+    describe('absence is decided by the time-off rule itself', () => {
+        const NEXT = '2026-01-07';
+        const nightInput = (): ScheduleInput => {
+            const input = warehouse();
+            input.shifts.push({
+                id: 'night',
+                name: 'Night',
+                startTime: '22:00',
+                endTime: '06:00',
+                dates: [DAY],
+                minEmployees: 2,
+            } as ScheduleInput['shifts'][number]);
+            return input;
+        };
+        const nightRoster = [at('ann', `night@${DAY}`), at('dan', `night@${DAY}`)];
+
+        it('counts an overnight shift spilling into next-day whole-day time off as absent', () => {
+            const input = nightInput();
+            input.employees[0].timeOff = [{ date: NEXT }];
+            const [night] = assessShiftResilience(input, nightRoster, { shiftInstanceIds: [`night@${DAY}`] });
+            expect(night.absent).to.deep.equal(['ann']);
+            expect(night.assigned).to.equal(1);
+            expect(night.shortBy).to.equal(1);
+        });
+
+        it('counts an input.absences span covering the shift as absent', () => {
+            const input = nightInput();
+            input.absences = [{ employeeId: 'dan', from: `${DAY}T20:00`, to: `${NEXT}T08:00`, kind: 'sick' }];
+            const [night] = assessShiftResilience(input, nightRoster, { shiftInstanceIds: [`night@${DAY}`] });
+            expect(night.absent).to.deep.equal(['dan']);
+            expect(night.assigned).to.equal(1);
+        });
+
+        it('counts an overlapping external commitment as absent', () => {
+            const input = warehouse();
+            (input.employees[1] as any).externalCommitments = [{ from: `${DAY}T10:00`, to: `${DAY}T12:00` }];
+            const [early] = assessShiftResilience(input, roster, { shiftInstanceIds: [`early@${DAY}`] });
+            expect(early.absent).to.deep.equal(['ben']);
+            expect(early.assigned).to.equal(1);
+        });
+
+        it('agrees with checkCompliance: every pair it reports absent is a time-off violation there', () => {
+            const input = nightInput();
+            input.employees[0].timeOff = [{ date: NEXT }];
+            input.absences = [{ employeeId: 'dan', from: `${DAY}T20:00`, to: `${NEXT}T08:00` }];
+            const [night] = assessShiftResilience(input, nightRoster, { shiftInstanceIds: [`night@${DAY}`] });
+            const flagged = checkCompliance(input, nightRoster)
+                .violations.filter((v) => v.constraintId === 'time-off')
+                .map((v) => v.employeeId);
+            expect(night.absent).to.have.members([...new Set(flagged)]);
+        });
     });
 
     it('reads need through demandOverrides, never a side channel', () => {
