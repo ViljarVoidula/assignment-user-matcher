@@ -152,6 +152,9 @@ export {
     repairSchedule,
     rankCandidates,
     rankShiftsFor,
+    // Capacity radar: is each shift short, and who could step in?
+    assessShiftResilience,
+    resilienceTier,
     // Hand-overs and trades between two workers, judged both ways.
     rankSwapPartners,
     checkSwap,
@@ -189,6 +192,10 @@ export {
     type HistoricalAssignment,
     type InfeasibilityReport,
     type TagCover,
+    type ResilienceOptions,
+    type ResilienceTier,
+    type ShiftResilience,
+    type SkillResilience,
     type LedgerEntry,
     type MinuteRange,
     type ModelContext,

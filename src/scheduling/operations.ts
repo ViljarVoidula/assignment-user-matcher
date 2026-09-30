@@ -27,6 +27,7 @@ import type {
     ScheduleInput,
     ScheduledAssignment,
     SearchState,
+    ShiftInstance,
     ContractHoursSummary,
     EmployeePreferenceReport,
 } from './types';
@@ -56,6 +57,7 @@ import { cancellationLedger } from './constraints/notice';
 import { protectionLedger } from './constraints/protections';
 import { overtimeLedger } from './constraints/overtime';
 import { MINUTES_PER_DAY } from './time';
+import { resilienceTier, type ShiftResilience, type SkillResilience } from './resilience';
 
 /** Soft-ranking weight for travel minutes in `rankCandidates`. */
 const TRAVEL_MINUTE_WEIGHT = 1;
@@ -364,6 +366,123 @@ export function rankShiftsFor(
         out.push(...scoreCandidates(state, inst, (id) => id !== employeeId));
     }
     return out;
+}
+
+export interface ResilienceOptions {
+    /** Only these instances; default every instance in the period. */
+    shiftInstanceIds?: string[];
+    /** Expected dropouts per instance (headcount × absence rate); default 0. */
+    expectedDropouts?: Record<string, number>;
+    /** How many ranked backups to return per shift; default 5. */
+    topBackups?: number;
+}
+
+/**
+ * The capacity radar's question for every shift in a window: is it short, and
+ * who could legally step in if someone drops out?
+ *
+ * One model build and one working state serve the whole window, as in
+ * `rankShiftsFor`. Backups come from `scoreCandidates` — the judgement
+ * `rankCandidates` and `rankSwapPartners` use — so the radar and a cover offer
+ * can never disagree about who could take a shift.
+ *
+ * A rostered person with declared time off on the shift (a whole-day entry on
+ * its date, or an entry naming the instance) is reported in `absent`, not
+ * counted in `assigned`, and is taken off the working state *before* anyone is
+ * judged: they are genuinely off, so they hold no seat on a capped shift and
+ * their hours count against nobody. The state is local to the call.
+ *
+ * `need` is the folded `minEmployees`: a caller raises it with a
+ * `demandOverrides` entry on the input, never through an option here.
+ *
+ * Profiling-free: declared facts (roster, time off, qualifications, rules) and
+ * the caller's aggregate expected-dropout number — nothing behavioural.
+ */
+export function assessShiftResilience(
+    input: ScheduleInput,
+    roster: ScheduledAssignment[],
+    options: ResilienceOptions = {},
+): ShiftResilience[] {
+    const ctx = buildModel(input);
+    const state = stateFor(ctx, roster);
+    const wanted = options.shiftInstanceIds ? new Set(options.shiftInstanceIds) : null;
+    const topBackups = options.topBackups ?? 5;
+    const instances = ctx.instances
+        .filter((inst) => !wanted || wanted.has(inst.id))
+        .sort((a, b) => a.date.localeCompare(b.date) || a.startMinute - b.startMinute || a.id.localeCompare(b.id));
+
+    const onTimeOff = (employeeId: string, inst: ShiftInstance) =>
+        (ctx.employeeById.get(employeeId)?.timeOff ?? []).some((t) =>
+            t.shiftInstanceId !== undefined ? t.shiftInstanceId === inst.id : t.date === inst.date,
+        );
+
+    // Who holds what, as the working state saw it (unknown ids and duplicate
+    // rows fall away exactly as `stateFor` drops them). Absentees leave the
+    // state before any judgement, across the whole roster — an absentee on a
+    // shift outside the window still frees the seat and hours they held.
+    const assignedBy = new Map<string, string[]>();
+    const absentBy = new Map<string, string[]>();
+    for (const pair of roster) {
+        const inst = ctx.instanceById.get(pair.shiftInstanceId);
+        if (!inst || !state.isAssigned(pair.employeeId, inst.id)) continue;
+        if (onTimeOff(pair.employeeId, inst)) {
+            unassign(state, pair.employeeId, inst.id);
+            absentBy.set(inst.id, [...(absentBy.get(inst.id) ?? []), pair.employeeId]);
+        } else {
+            const held = assignedBy.get(inst.id) ?? [];
+            if (!held.includes(pair.employeeId)) assignedBy.set(inst.id, [...held, pair.employeeId]);
+        }
+    }
+
+    return instances.map((inst): ShiftResilience => {
+        const assignedIds = assignedBy.get(inst.id) ?? [];
+        const absent = absentBy.get(inst.id) ?? [];
+        // Absentees are off the state now, so skip them by name: their own time
+        // off already refuses them, and a person rostered on the shift is never
+        // their own cover.
+        const onShift = new Set([...assignedIds, ...absent]);
+        const eligible = sortCandidates(
+            ctx,
+            scoreCandidates(state, inst, (id) => onShift.has(id)).filter((c) => c.eligible),
+        );
+        const skills: SkillResilience[] = Object.entries(inst.tagRequirements).map(([tag, requirement]) => {
+            const held = assignedIds.filter((id) => tagsHeldOn(ctx, id, inst).includes(tag)).length;
+            return {
+                tag,
+                required: requirement.min,
+                held,
+                shortBy: Math.max(0, requirement.min - held),
+                backups: eligible.filter((c) => c.tagsHeld.includes(tag)).length,
+            };
+        });
+        const need = inst.minEmployees;
+        const shortBy = Math.max(0, need - assignedIds.length);
+        const expectedDropouts = options.expectedDropouts?.[inst.id] ?? 0;
+        const { tier, reasons } = resilienceTier({
+            shortBy,
+            backups: eligible.length,
+            expectedDropouts,
+            assigned: assignedIds.length,
+            skills,
+        });
+        return {
+            shiftInstanceId: inst.id,
+            date: inst.date,
+            startMinute: inst.startMinute,
+            endMinute: inst.endMinute,
+            siteId: inst.siteId,
+            need,
+            assigned: assignedIds.length,
+            absent,
+            shortBy,
+            expectedDropouts,
+            backups: eligible.length,
+            skills,
+            topBackups: eligible.slice(0, topBackups),
+            tier,
+            reasons,
+        };
+    });
 }
 
 /**

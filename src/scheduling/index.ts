@@ -11,6 +11,7 @@ export {
     repairSchedule,
     rankCandidates,
     rankShiftsFor,
+    assessShiftResilience,
     rankSwapPartners,
     checkSwap,
     diagnoseInfeasibility,
@@ -24,7 +25,9 @@ export {
     type RepairResult,
     type InfeasibilityReport,
     type TagCover,
+    type ResilienceOptions,
 } from './operations';
+export { resilienceTier, type ResilienceTier, type ShiftResilience, type SkillResilience } from './resilience';
 
 // Time model, exported so hosts can resolve the same wall-clock the engine does.
 export { PeriodClock, type MinuteRange, type ClockRange } from './time';
