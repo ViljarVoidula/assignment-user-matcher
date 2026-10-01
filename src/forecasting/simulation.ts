@@ -2,15 +2,20 @@
  * Discrete-event simulation of one staffing interval under the router's own
  * rules, simplified but faithful:
  *
- * - A person can take a tag only if the router would offer it to them
- *   (`userCoversTag`: positive routing weight, wildcards, 0 = veto; tag match
- *   when they have no weights). A free person picks the waiting task with the
- *   highest `priority + weight` (the router's combined priority), oldest first
- *   on a tie. An arriving task goes to the free person who scores it highest.
+ * - A person can take a tag, and ranks it, exactly as the router scores it:
+ *   `calculateMatchScore(user, tag, 0, false)` — summed positive routing
+ *   weights (exact and wildcard), any matching weight 0 a veto, and without
+ *   weights the share of the person's tags the task matches. Score 0 = never
+ *   offered. A free person picks the waiting task with the highest
+ *   `priority + score` (the router's combined priority), oldest first on a
+ *   tie. An arriving task goes to the best-scoring people who can fit it,
+ *   onto somebody part-busy before somebody idle (packing keeps whole people
+ *   free for work that needs a whole person).
  * - Each person holds up to one unit of work; a task of a tag with
  *   concurrency c takes 1/c of it.
  * - Handle times and patience are drawn from the tag's measured distribution,
- *   never a mean. A task still queued when its patience runs out leaves.
+ *   never a mean. A task still queued when its patience runs out leaves, and
+ *   counts as not served — also when it leaves before the target wait.
  * - Arrivals are Poisson around a rate that is itself Gamma-noised around the
  *   forecast (overdispersion), over a warm-up, the interval, and a tail as long
  *   as the longest target, so the interval starts busy and its last arrivals
@@ -19,9 +24,12 @@
  *
  * One person is one person: a multi-skilled worker is a single head serving
  * every tag they cover, never counted once per tag.
+ *
+ * Consecutive intervals can be chained: `simulate` hands back what is still
+ * queued or in progress when the interval ends (a `Carry`), and `drawTasks`
+ * opens the next interval with it instead of a warm-up.
  */
-import { getEffectiveWeight } from '../scoring/match-score';
-import { userCoversTag } from '../validation/assignment-lint';
+import { calculateMatchScore } from '../scoring/match-score';
 import type { User } from '../types/matcher';
 import { meanOf, sampleGammaMeanOne, samplePoisson, sampleQuantiles } from './distributions';
 import type { PoolMember, QuantileDistribution, TagProfile } from './types';
@@ -49,6 +57,34 @@ export interface SimTasks {
     rate: Float64Array;
 }
 
+/**
+ * Work still on the floor when an interval ends, in the order it is picked up again: tasks in progress
+ * first (their remaining handle time, never leaving), then the queue oldest first (time left before each
+ * gives up).
+ */
+export interface Carry {
+    tag: Int32Array;
+    handle: Float64Array;
+    leaveIn: Float64Array;
+    /** The first `inProgress` entries are in someone's hands; the rest are queued. */
+    inProgress: number;
+}
+
+/** A carry `ms` later with nobody working it: work in progress runs down, the queue loses whoever gave up. */
+export function ageCarry(carry: Carry, ms: number): Carry {
+    const busy = (i: number) => i < carry.inProgress;
+    const keep: number[] = [];
+    for (let i = 0; i < carry.tag.length; i++) {
+        if ((busy(i) ? carry.handle[i] : carry.leaveIn[i]) - ms > 0) keep.push(i);
+    }
+    return {
+        tag: Int32Array.from(keep, (i) => carry.tag[i]),
+        handle: Float64Array.from(keep, (i) => (busy(i) ? carry.handle[i] - ms : carry.handle[i])),
+        leaveIn: Float64Array.from(keep, (i) => (busy(i) ? Infinity : carry.leaveIn[i] - ms)),
+        inProgress: keep.filter(busy).length,
+    };
+}
+
 export interface SimWindow {
     warmMs: number;
     lengthMs: number;
@@ -72,16 +108,13 @@ export function createSimStats(nTags: number): SimStats {
     return { delayed: new Int32Array(nTags), abandoned: new Int32Array(nTags), maxUsed: 0 };
 }
 
-/** Router score per tag for one declared profile: -1 = the router would never offer it. */
+/** The router's score per tag for one declared profile (`calculateMatchScore`); -1 = never offered. */
 export function profileScores(member: Pick<PoolMember, 'tags' | 'weights'>, tags: readonly SimTag[]): Float64Array {
     const user = { id: 'sim', tags: member.tags, routingWeights: member.weights } as User;
-    const hasWeights = member.weights !== undefined && Object.keys(member.weights).length > 0;
     const out = new Float64Array(tags.length);
     tags.forEach((t, i) => {
-        const tag = t.profile.tag;
-        if (!userCoversTag(user, tag)) out[i] = -1;
-        else if (hasWeights) out[i] = getEffectiveWeight(member.weights!, tag);
-        else out[i] = 1; // covered without weights = one of their tags matches it (`userCoversTag`)
+        const [score] = calculateMatchScore(user, t.profile.tag, 0, false);
+        out[i] = score > 0 ? score : -1;
     });
     return out;
 }
@@ -110,6 +143,7 @@ export function drawTasks(
     window: SimWindow,
     overdispersion: number,
     rand: () => number,
+    carry?: Carry | null,
 ): SimTasks {
     const from = -window.warmMs;
     const until = window.lengthMs + window.tailMs;
@@ -128,7 +162,8 @@ export function drawTasks(
         // Already in hand when the warm-up starts: the tasks a busy floor holds at this rate (Little's law),
         // each with the rest of its handle time. Without them every run starts from an empty floor and the
         // warm-up is too short to fill it, which reads a near-critical hour as better served than it is.
-        const inHand = samplePoisson(rate * meanOf(t.profile.handleMs), rand);
+        // A chained interval opens with the previous one's actual leftovers instead.
+        const inHand = carry ? 0 : samplePoisson(rate * meanOf(t.profile.handleMs), rand);
         for (let i = 0; i < inHand; i++) {
             stream.at.push(from);
             stream.handle.push(Math.max(1, residualHandle(t.profile.handleMs, rand)));
@@ -142,6 +177,8 @@ export function drawTasks(
         }
         total += stream.at.length;
     });
+    const carried = carry ? carry.tag.length : 0;
+    total += carried;
     const out: SimTasks = {
         tag: new Int32Array(total),
         at: new Float64Array(total),
@@ -151,8 +188,14 @@ export function drawTasks(
         measuredByTag,
         rate: rates,
     };
+    for (let i = 0; i < carried; i++) {
+        out.tag[i] = carry!.tag[i];
+        out.at[i] = from;
+        out.handle[i] = Math.max(1, carry!.handle[i]);
+        out.leaveAt[i] = from + carry!.leaveIn[i];
+    }
     const next = new Int32Array(tags.length);
-    for (let i = 0; i < total; i++) {
+    for (let i = carried; i < total; i++) {
         let g = -1;
         for (let k = 0; k < streams.length; k++) {
             if (next[k] < streams[k].at.length && (g < 0 || streams[k].at[next[k]] < streams[g].at[next[g]])) g = k;
@@ -173,26 +216,39 @@ class Completions {
     private time = new Float64Array(64);
     private worker = new Int32Array(64);
     private cost = new Float64Array(64);
+    private task = new Int32Array(64);
     size = 0;
     lastWorker = -1;
     lastCost = 0;
+    /** Task and completion time of the k-th entry (heap order), for a snapshot. */
+    taskAt(k: number): number {
+        return this.task[k];
+    }
+    timeAt(k: number): number {
+        return this.time[k];
+    }
     peek(): number {
         return this.size > 0 ? this.time[0] : Infinity;
     }
-    push(t: number, w: number, c: number): void {
+    push(t: number, w: number, c: number, task: number): void {
         if (this.size === this.time.length) this.grow();
         let i = this.size++;
         while (i > 0) {
             const p = (i - 1) >> 1;
             if (this.time[p] <= t) break;
-            this.time[i] = this.time[p];
-            this.worker[i] = this.worker[p];
-            this.cost[i] = this.cost[p];
+            this.move(p, i);
             i = p;
         }
         this.time[i] = t;
         this.worker[i] = w;
         this.cost[i] = c;
+        this.task[i] = task;
+    }
+    private move(from: number, to: number): void {
+        this.time[to] = this.time[from];
+        this.worker[to] = this.worker[from];
+        this.cost[to] = this.cost[from];
+        this.task[to] = this.task[from];
     }
     /** Removes the earliest completion; read `lastWorker` / `lastCost` for what it freed. */
     pop(): void {
@@ -202,6 +258,7 @@ class Completions {
         const t = this.time[n];
         const w = this.worker[n];
         const c = this.cost[n];
+        const task = this.task[n];
         let i = 0;
         for (;;) {
             const l = 2 * i + 1;
@@ -209,25 +266,27 @@ class Completions {
             const r = l + 1;
             const m = r < n && this.time[r] < this.time[l] ? r : l;
             if (this.time[m] >= t) break;
-            this.time[i] = this.time[m];
-            this.worker[i] = this.worker[m];
-            this.cost[i] = this.cost[m];
+            this.move(m, i);
             i = m;
         }
         this.time[i] = t;
         this.worker[i] = w;
         this.cost[i] = c;
+        this.task[i] = task;
     }
     private grow(): void {
         const time = new Float64Array(this.time.length * 2);
         const worker = new Int32Array(this.worker.length * 2);
         const cost = new Float64Array(this.cost.length * 2);
+        const task = new Int32Array(this.task.length * 2);
         time.set(this.time);
         worker.set(this.worker);
         cost.set(this.cost);
+        task.set(this.task);
         this.time = time;
         this.worker = worker;
         this.cost = cost;
+        this.task = task;
     }
 }
 
@@ -235,9 +294,11 @@ class Completions {
  * Runs one interval with `team[p]` people of each pool profile `pool[p]` and
  * returns, per tag, how many measured arrivals were picked up within target.
  *
- * An arriving task goes to the highest-scoring profile with somebody free —
- * an idle person before a part-busy one — and waits in its tag's queue
- * otherwise. A person who frees up takes the best waiting task they can fit.
+ * An arriving task goes to the highest-scoring profile with somebody who can
+ * fit it — a part-busy person before an idle one — and waits in its tag's
+ * queue otherwise. A person who frees up takes the best waiting task they can
+ * fit. With `out`, what is still queued or in progress at the interval's end
+ * comes back as `out.carry`.
  */
 export function simulate(
     tasks: SimTasks,
@@ -246,6 +307,7 @@ export function simulate(
     tags: readonly SimTag[],
     window: SimWindow,
     stats?: SimStats,
+    out?: { carry: Carry | null },
 ): Int32Array {
     const nTags = tags.length;
     const end = window.lengthMs + window.tailMs;
@@ -314,7 +376,7 @@ export function simulate(
             if (used[w] > stats.maxUsed) stats.maxUsed = used[w];
         }
         refile(w);
-        completions.push(t + tasks.handle[i], w, tags[g].cost);
+        completions.push(t + tasks.handle[i], w, tags[g].cost, i);
     };
     const headOf = (g: number, t: number): number => {
         const q = queues[g];
@@ -345,6 +407,16 @@ export function simulate(
         const g = tasks.tag[i];
         const cost = tags[g].cost;
         for (const tier of tiers[g]) {
+            if (cost < 1 - EPS) {
+                for (const p of tier) {
+                    for (const w of partial[p]) {
+                        if (used[w] + cost <= 1 + EPS) {
+                            start(i, w, t);
+                            return true;
+                        }
+                    }
+                }
+            }
             for (const p of tier) {
                 const w = idle[p].pop();
                 if (w !== undefined) {
@@ -352,16 +424,42 @@ export function simulate(
                     return true;
                 }
             }
-            for (const p of tier) {
-                for (const w of partial[p]) {
-                    if (used[w] + cost <= 1 + EPS) {
-                        start(i, w, t);
-                        return true;
-                    }
-                }
-            }
         }
         return false;
+    };
+
+    const snapshotAt = window.lengthMs;
+    /** What is on the floor at the interval's end: in progress first, then the queue oldest first. */
+    const snapshot = (): Carry => {
+        const inProgress: number[] = [];
+        for (let k = 0; k < completions.size; k++) inProgress.push(k);
+        inProgress.sort((a, b) => completions.taskAt(a) - completions.taskAt(b));
+        const waiting: number[] = [];
+        for (let g = 0; g < nTags; g++) {
+            for (let j = heads[g]; j < queues[g].length; j++) {
+                if (tasks.leaveAt[queues[g][j]] > snapshotAt) waiting.push(queues[g][j]);
+            }
+        }
+        waiting.sort((a, b) => a - b);
+        const count = inProgress.length + waiting.length;
+        const carry: Carry = {
+            tag: new Int32Array(count),
+            handle: new Float64Array(count),
+            leaveIn: new Float64Array(count),
+            inProgress: inProgress.length,
+        };
+        inProgress.forEach((k, j) => {
+            carry.tag[j] = tasks.tag[completions.taskAt(k)];
+            carry.handle[j] = completions.timeAt(k) - snapshotAt;
+            carry.leaveIn[j] = Infinity;
+        });
+        waiting.forEach((i, j) => {
+            const at = inProgress.length + j;
+            carry.tag[at] = tasks.tag[i];
+            carry.handle[at] = tasks.handle[i];
+            carry.leaveIn[at] = tasks.leaveAt[i] - snapshotAt;
+        });
+        return carry;
     };
 
     let next = 0;
@@ -370,6 +468,7 @@ export function simulate(
         const tA = next < n ? tasks.at[next] : Infinity;
         const tC = completions.peek();
         const t = tA < tC ? tA : tC;
+        if (out && !out.carry && t > snapshotAt) out.carry = snapshot();
         if (t > end || t === Infinity) break;
         if (tC <= tA) {
             completions.pop();

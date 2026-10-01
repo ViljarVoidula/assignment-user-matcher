@@ -27,7 +27,7 @@ export {
     DEFAULT_QUANTIZE,
     DEFAULT_MAX_PEOPLE,
 } from './staffing';
-export { erlangA, erlangAAbandonment, erlangASeed, type ErlangAInput } from './erlang';
+export { erlangA, erlangASeed, type ErlangAInput } from './erlang';
 export { exponentialQuantiles, meanOf, sampleQuantiles, assertDistribution } from './distributions';
 export type {
     HourlyPoint,

@@ -199,7 +199,10 @@ export interface TagProfile {
     priority?: number;
     /** Picked up within this wait counts as served, ms. */
     targetWaitMs: number;
-    /** Share of arrivals that must be picked up within `targetWaitMs`, 0–1. */
+    /**
+     * Share of arrivals that must be picked up within `targetWaitMs`, 0–1. A task that gives up waiting
+     * counts as not served, also when it gives up before the target wait.
+     */
     targetShare: number;
 }
 
@@ -221,7 +224,10 @@ export interface StaffingInterval {
 }
 
 export interface StaffingOptions {
-    /** Simulation seeds per interval; default 20. */
+    /**
+     * Most simulation seeds per interval; default 20. After 8, an interval stops drawing more once every
+     * tag's pooled service level near the answer is known to ±0.01 (95 %).
+     */
     seeds?: number;
     /** Base seed; default 1. Same inputs + seed = same answer. */
     seed?: number;
@@ -233,7 +239,11 @@ export interface StaffingOptions {
     intervalMinutes?: number;
     /** Stop simulating after this many ms of wall time; remaining intervals come back `method: 'skipped'`. */
     budgetMs?: number;
-    /** Relative grid arrivals are rounded to before simulating (memo key); default 0.05. */
+    /**
+     * Relative grid arrivals are rounded to before simulating (memo key); default 0.05. Not used when the
+     * intervals are chained (a tag's target is ≥ 15 min or ≥ 2 mean handle times): back-to-back intervals
+     * are then simulated in sequence with the queue carried over, and never share a simulation.
+     */
     quantizeStep?: number;
     /** The most people the search will try; default 500. */
     maxPeople?: number;
@@ -248,8 +258,9 @@ export interface Range {
 export interface IntervalNeed {
     startMs: number;
     /**
-     * People working the queue (after shrinkage is removed). `likely` meets the target over all seeds together
-     * (the expected service level); `low` / `high` are the p10 / p90 of each seed's own answer.
+     * People working the queue (after shrinkage is removed). `likely` meets the target on average, allowing
+     * for forecast error: the fewest people whose share served in time, over all seeds (rate-noised draws)
+     * together, meets the target. `low` / `high` are the p10 / p90 of each seed's own answer.
      */
     productive: Range;
     /** People to have on shift: productive ÷ (1 − shrinkage), rounded up. */
@@ -264,6 +275,11 @@ export interface IntervalNeed {
     method: 'simulation' | 'none' | 'skipped';
     /** The search hit `maxPeople` without meeting the target. */
     capped: boolean;
+    /**
+     * The likely team needs more people of some declared profile than the pool has: the extra heads are
+     * people to hire (or borrow) with that profile's skills.
+     */
+    exceedsPool: boolean;
 }
 
 export interface StaffingResult {

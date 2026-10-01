@@ -61,7 +61,8 @@ export function erlangA(n: number, input: ErlangAInput): { pWait: number; servic
 
 /**
  * Share of arrivals that give up before anybody picks them up: θ·E[queue] ÷ λ (exact for M/M/n+M).
- * 0 when nobody leaves; 1 with nobody to serve.
+ * 0 when nobody leaves; 1 with nobody to serve. Validation only — the tests hold the simulation to it;
+ * not exported from the module.
  */
 export function erlangAAbandonment(n: number, input: ErlangAInput): number {
     const theta = abandonRate(input);
