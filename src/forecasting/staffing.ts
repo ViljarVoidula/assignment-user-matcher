@@ -523,7 +523,16 @@ export function staffingNeed(
         const shortFloors: number[] = [];
         /** Seeds whose forecast error put never-abandoning work above the forecast: where the cap applies. */
         const above: boolean[] = [];
-        /** Erlang C service level of a seed's never-abandoning work, all n people on it: the sustained hour. */
+        /**
+         * Erlang C service level of a seed's never-abandoning work, all n people on it: the sustained hour.
+         *
+         * An approximation in a mixed pool. It pools every patient tag into one queue with the tightest
+         * target and the work-weighted mean handle time, and puts all n people on it — as if everybody could
+         * take every tag and nobody were busy with abandoning or long-target work. With partial skills, or
+         * with those other tags taking people, the real sustained service is lower, so the cap is generous:
+         * it can only fail to lower an optimistic simulated hour, never push a plan above what the simulation
+         * itself needs. Exact for one tag and a pool that all covers it.
+         */
         const sustained = (s: number, n: number): number => {
             let lambda = 0;
             let work = 0;
@@ -697,6 +706,12 @@ export function staffingNeed(
     let chain: Solved[] = [];
     const boosted = Math.max(maxSeeds, BACKLOG_SEEDS);
     const out: IntervalNeed[] = [];
+    const overBudget = () => options.budgetMs !== undefined && Date.now() - started > options.budgetMs;
+    const skip = (startMs: number, uncovered: string[]): IntervalNeed => {
+        incomplete = true;
+        chain = [];
+        return quiet(startMs, uncovered, 'skipped');
+    };
     const one = (interval: StaffingInterval, index: number): IntervalNeed => {
         // Chained hours never share a simulation, so they are simulated at their own load, not the grid's.
         const expected = prep.tags.map((t) => {
@@ -731,11 +746,7 @@ export function staffingNeed(
                 return { startMs: interval.startMs, ...hit, uncovered };
             }
         }
-        if (options.budgetMs !== undefined && Date.now() - started > options.budgetMs) {
-            incomplete = true;
-            chain = [];
-            return quiet(interval.startMs, uncovered, 'skipped');
-        }
+        if (overBudget()) return skip(interval.startMs, uncovered);
         // Uncovered tags' work would only sit in a queue nobody reads: it is neither drawn nor seeded.
         const offered = expected.map((v, g) => (judged.includes(g) ? v : 0));
         const seedKey = prep.chained ? `${key}@${interval.startMs}` : key;
@@ -754,6 +765,9 @@ export function staffingNeed(
             if (builders.length > 0) {
                 let feed = builders[0].carryIn;
                 for (const e of builders) {
+                    // The re-read is two or three solves on the boosted seed count: checked before each one,
+                    // so a backlog hour cannot run a nearly spent budget far past its end.
+                    if (overBudget()) return skip(interval.startMs, uncovered);
                     const again = solve(e.offered, e.judged, e.seedKey, feed, e.continues, boosted, e.spread);
                     out[e.index] = { startMs: intervals[e.index].startMs, ...again.need, uncovered: e.uncovered };
                     e.carryIn = feed;
@@ -761,6 +775,7 @@ export function staffingNeed(
                     feed = again.carryOut;
                 }
                 carryIn = feed;
+                if (overBudget()) return skip(interval.startMs, uncovered);
             }
         }
         const seedCount = backlog ? boosted : maxSeeds;

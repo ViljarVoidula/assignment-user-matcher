@@ -250,7 +250,12 @@ export interface StaffingOptions {
     shrinkage: number;
     /** Interval length, minutes; default 60. */
     intervalMinutes?: number;
-    /** Stop simulating after this many ms of wall time; remaining intervals come back `method: 'skipped'`. */
+    /**
+     * Stop simulating after this many ms of wall time; remaining intervals come back `method: 'skipped'`
+     * (an interval whose load an earlier one already simulated is still answered from the memo). Checked
+     * before each interval's simulation and before each solve of a backlog re-read; a solve in progress is
+     * never interrupted, so a run can overshoot by one interval's simulation.
+     */
     budgetMs?: number;
     /**
      * Relative grid arrivals are rounded to before simulating (memo key); default 0.05. Not used when the

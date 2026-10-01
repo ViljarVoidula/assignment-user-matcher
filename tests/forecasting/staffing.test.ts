@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import sinon from 'sinon';
 import {
     createPrng,
     exponentialQuantiles,
@@ -580,6 +581,66 @@ describe('staffingNeed: review fixes', () => {
         const naive = [...planned];
         naive[after] = alone.productive.likely;
         expect(replayDay(email, loads, naive)[after]).to.be.below(0.8);
+    });
+
+    /** Date.now reads 0 for its first `calls` calls, then far past any budget. */
+    const clockRunsOutAfter = (calls: number) => {
+        let n = 0;
+        return sinon.stub(Date, 'now').callsFake(() => (++n <= calls ? 0 : 1e9));
+    };
+
+    it('answers the hours it reached within a partial budget, skips the rest, and still answers from the memo', () => {
+        // Calls: the start, then interval 0's check. Interval 1 is past the budget; interval 2 is interval 0's load.
+        const clock = clockRunsOutAfter(2);
+        try {
+            const result = staffingNeed(
+                [hour({ chat: 50 }, 0), hour({ chat: 80 }, 1), hour({ chat: 50 }, 2), hour({ chat: 120 }, 3)],
+                [tag('chat')],
+                everyone(['chat']),
+                { ...poisson, budgetMs: 1000 },
+            );
+            expect(result.incomplete).to.equal(true);
+            expect(result.intervals.map((i) => i.method)).to.deep.equal(['simulation', 'skipped', 'simulation', 'skipped']);
+            expect(result.cacheHits).to.equal(1);
+            expect(result.intervals[2].productive).to.deep.equal(result.intervals[0].productive);
+            expect(result.intervals[0].productive.likely).to.be.above(0);
+        } finally {
+            clock.restore();
+        }
+    });
+
+    it('checks the budget before re-reading a backlog on more seeds, not only between intervals', () => {
+        const email = tag('email', { handleMs: exponentialQuantiles(10 * MIN), targetWaitMs: 30 * MIN });
+        const hours = [20, 120, 120, 0, 40].map((n, h) => hour({ email: n }, h * 60 * MIN));
+        // Calls: the start, then intervals 0–3's checks. Hour 3 is a backlog hour: its re-read of hours 1–2 on
+        // more seeds would run past the budget, so the hour is skipped instead of overrunning it.
+        const clock = clockRunsOutAfter(5);
+        let plan;
+        try {
+            plan = staffingNeed(hours, [email], everyone(['email'], 500), { ...poisson, budgetMs: 1000 });
+        } finally {
+            clock.restore();
+        }
+        expect(plan.incomplete).to.equal(true);
+        expect(plan.intervals.map((i) => i.method)).to.deep.equal([
+            'simulation',
+            'simulation',
+            'simulation',
+            'skipped',
+            'skipped',
+        ]);
+    });
+
+    it('is deterministic when chained: the same input plans the same hours', () => {
+        const email = tag('email', { handleMs: exponentialQuantiles(10 * MIN), targetWaitMs: 30 * MIN });
+        const run = () =>
+            staffingNeed(
+                [20, 120, 120, 0, 40].map((n, h) => hour({ email: n }, h * 60 * MIN)),
+                [email],
+                everyone(['email'], 500),
+                { ...poisson, seed: 4 },
+            ).intervals;
+        expect(run()).to.deep.equal(run());
     });
 
     it('staffs an hour with no new work to clear the backlog it inherits (R2)', () => {
