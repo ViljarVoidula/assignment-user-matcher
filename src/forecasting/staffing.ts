@@ -47,6 +47,20 @@ export const DEFAULT_QUANTIZE = 0.05;
 export const DEFAULT_MAX_PEOPLE = 500;
 const MINUTE = 60_000;
 
+/**
+ * The staffing run's wall-clock budget scales with volume: `baseMs` per `perPeakRate` arrivals an hour at
+ * the peak, never under `baseMs` and never over `maxMs`. Simulation cost grows with the tasks simulated, so
+ * a fixed budget would skip the busiest workspaces' hours.
+ */
+export const STAFFING_BUDGET = { baseMs: 3_000, perPeakRate: 300, maxMs: 15_000 } as const;
+
+/** `budgetMs` for a run whose busiest interval brings `peakPerHour` arrivals an hour over all tags. */
+export function staffingBudgetMs(peakPerHour: number): number {
+    if (Number.isNaN(peakPerHour)) return STAFFING_BUDGET.baseMs;
+    const scaled = (STAFFING_BUDGET.baseMs * peakPerHour) / STAFFING_BUDGET.perPeakRate;
+    return clamp(scaled, STAFFING_BUDGET.baseMs, STAFFING_BUDGET.maxMs);
+}
+
 /** Arrivals rounded onto a relative grid, so hours with near-identical load share one simulation. */
 export function quantize(value: number, step = DEFAULT_QUANTIZE): number {
     if (value <= 0) return 0;

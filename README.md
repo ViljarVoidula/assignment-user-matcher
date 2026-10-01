@@ -2327,6 +2327,97 @@ Infeasibility is never silent: understaffed periods return a best-effort partial
 
 Scale (500 employees × 31 days × 3 shifts/day, full EU rule set — `pnpm benchmark:scheduling`): first feasible ~0.4s, converged within the time budget, compliance re-check ~0.1s, repair ~0.15s.
 
+## Forecasting (`forecasting` module)
+
+How much work is coming, and how many people it takes. Like the scheduler, this module is **pure, Redis-free and deterministic** (same inputs and seed, same numbers) and ships only from its own subpath:
+
+```ts
+import {
+    forecastWorkspace,
+    applyNowcast,
+    staffingNeed,
+    staffingBudgetMs,
+    coverNeed,
+} from 'assignment-user-matcher/forecasting';
+```
+
+It never describes a person. A series is a volume of work (a routing tag, a site, an imported series); a pool member is a declared skill profile with a head count. Nothing here takes per-person rates, speed, reliability or learned routing weights.
+
+### Volume: `forecastWorkspace`
+
+```ts
+const { series, spikes } = forecastWorkspace({
+    timeZone: 'Europe/Tallinn',
+    now: Date.now(),
+    series: [
+        { series: '*', hourly, daily }, // the workspace total — always pass it
+        { series: 'lang:en', hourly: enHourly, daily: enDaily },
+    ],
+    occurrences: [{ label: 'winter-sale', kind: 'sale', from: '2026-12-01', to: '2026-12-03' }],
+});
+```
+
+Every series is forecast hourly for 28 days (from local midnight today) and weekly for 26 weeks. Each hour is `base × trend × season × holiday × Π events × nowcast`, and every factor comes back in `components` so a planner can read why a number is what it is:
+
+- **Level and trend** — a recency-weighted weekly level with a damped trend, fitted on the daily history. In-sample levels are one step ahead, and unexplained outlier days are left out on a refit, so a spike cannot hide in the level before somebody names it. A large step (about ×2 or ×0.5) that has held for a week and still holds over the last two days is read as a **level shift**: the level is re-anchored on it. A moderate step is followed by the smoothing alone and lags it by 2–4 weeks. A week-long burst that ended within the last ~2 days cannot be told apart from a shift yet, and reads as one until more ordinary days arrive.
+- **Shape** — each weekday's share of the week and each hour's share of the day, read on **local** days through `PeriodClock` (so a DST week keeps its 10am peak at 10am, and a UTC day is never mistaken for a local one). Shares are pooled ratios over the last 8 clean weeks, and each weekday's hour shape is shrunk towards the all-weekday shape by its own volume, so a sparse series keeps its quiet hours instead of reading them as zero.
+- **Season** — a week-of-year factor once there are 56 weeks of daily history, shrunk towards 1 by the years of evidence behind it (one year cannot tell a season from a step).
+- **Holidays and events** — past occurrences are divided out of history and teach an effect per `label`: its size, a day-by-day shape and a knock-on wave in the 14 days after. Learned sizes are shrunk towards 1 by the evidence behind them, a knock-on day must clear Poisson noise to count, and days the baseline expects fewer than 5 tasks on teach nothing. Without history for the label the planner's own percent (`planned`) is used, then what other events of the same `kind` did, then a wide first-time default that marks the forecast low confidence (`first-time-event:<label>`). `closed: true` forecasts zero. `suggestEffect(occurrence, forecast.effects)` answers "what will this do?" before an occurrence is saved.
+- **Nowcast** — the next 72 hours rescaled by how today has gone, fading to nothing over those 72 hours. The ratio is shrunk by 25 tasks on each side, held to 0.5–3 and ignored under 5 expected, so twelve tasks against six at 7am does not double the afternoon. Only **drained** hours count: hours after the latest one present in the feed are not read as zero, and a feed more than 3 hours behind gets no nowcast at all. `applyNowcast(hours, actual, now)` re-applies it to a stored forecast as the day goes on.
+
+**Ranges and accuracy.** The model is refit at six rolling origins (one a week back from `now`) and compared with what happened. An hour's range is the p10/p90 of a negative binomial around the forecast — Poisson counting noise plus a relative model error fitted per lead bucket (24 h, 72 h, 7 d, 28 d) and never narrowing with lead — so the range is never narrower than counting noise. Week rows are the exact sum of their 167, 168 or 169 local hours, with a band from complete backtested weeks. WAPE is reported per lead bucket on local-day totals. The total and the 10 busiest series are backtested; the rest borrow the total's ranges. A forecast is flagged low confidence for fewer than 4 weeks of history, a 72-hour WAPE above 35 %, a first-time event, or no hourly shape.
+
+**What was this?** Recent days (16 weeks) far outside the forecast that no known occurrence explains come back as `spikes` on the total, each broken down by the series that moved. Naming one as an occurrence divides it out and teaches its effect. A level shift shows here too, as its first days.
+
+**The total series matters.** Pass the workspace total as series `'*'` (or name another with `totalSeries`). Spikes are found on it, and the long tail of series outside the busiest ten borrow its ranges; without it every series pays for its own backtests and there is no "What was this?".
+
+`pnpm benchmark:forecast -- [series] [weeks] [seed]` replays a seeded synthetic workspace (by default the worst case the platform stores: the total plus 50 tags, three years of daily and 16 weeks of hourly history) and reports WAPE by lead and the median time per workspace. It exits 1 over 200 ms.
+
+### People: `staffingNeed`
+
+```ts
+const result = staffingNeed(
+    hours.map((h) => ({ startMs: h.at, arrivals: { 'lang:en': h.likely } })),
+    [
+        {
+            tag: 'lang:en',
+            handleMs: { q: measuredHandleQuantiles }, // quantiles, never a mean
+            patienceMs: { q: measuredPatienceQuantiles }, // omit when nobody gives up
+            concurrency: 2,
+            targetWaitMs: 60_000,
+            targetShare: 0.8,
+        },
+    ],
+    [
+        { tags: ['lang:en'], count: 12 },
+        { tags: ['lang:en', 'lang:fi'], count: 4 },
+    ],
+    { shrinkage: 0.3, budgetMs: staffingBudgetMs(peakArrivalsPerHour) },
+);
+// result.intervals[i]: { productive, onShift, serviceByTag, uncovered, exceedsPool, method, capped }
+```
+
+How many people each hour needs so every tag meets its service target (a share picked up within a wait) comes from a **discrete-event simulation of the router itself**, not from Erlang C:
+
+- A person takes and ranks a tag exactly as the router scores it (`calculateMatchScore`: positive routing weights, suffix wildcards, weight 0 a veto, and without weights the share of their tags the task matches). A freed person takes the waiting task with the highest `priority + score`, oldest first; an arriving task goes to the best-scoring person who can fit it, onto someone part-busy before someone idle.
+- Each tag has its own concurrency: a task of a tag with concurrency c takes 1/c of a person.
+- Handle times and patience are drawn from measured quantiles. A task that gives up waiting counts as **not served**, also when it gives up before the target wait — so short patience shows up as lost work, not as a free pass.
+- The pool is the declared skill mix, and a multi-skilled person is one head serving every tag they cover. For each head count the team follows the work: one person on every busy tag first (rarest first), then each next head to the tag furthest from its target, placed on the coverer that gains most across the short tags (a specialist on a tie); before a rare skill goes short, a generalist placed for other work is swapped for a spare specialist. `exceedsPool` says the likely team needs more of some declared profile than the pool has: the extra heads are people to hire or borrow with that profile's skills.
+- Arrivals are Poisson around a Gamma-noised rate (forecast error, `overdispersion`, default k = 20), stratified across the seeds. Each interval opens with the work a floor at that rate already has in hand.
+
+**What `likely` means.** `productive.likely` is the fewest people whose share served in time, pooled over all seeds, meets the target: it **likely meets the target on average, allowing for forecast error**. `low`/`high` are the p10/p90 of each seed's own answer. Without forecast error it agrees with Erlang C on the one case Erlang C models exactly (one tag, concurrency 1, nobody leaves); with patience it is fewer, with concurrency far fewer, with a shared multi-skill pool fewer than the tags staffed apart. For short-target work, a seed whose forecast error puts more never-abandoning work on the floor than the people can handle counts as unserved, so a sustained peak is staffed for its busy days rather than its average one. Erlang A only brackets the search and is never returned as the answer. `onShift = ⌈productive ÷ (1 − shrinkage)⌉`.
+
+**Long targets.** When a tag's target is at least 15 minutes or two mean handle times (email, back office), back-to-back intervals are simulated in sequence: each hour opens with what the previous one left queued or in progress at its planned head count, and work still inside its target at the hour's end is judged in the hour that inherits it. Hours whose work is mostly inherited backlog, and the hours that built it, are read on 80 seeds. Staffing is planned **hour by hour**, so a peak is held at its own floor and the backlog is paid for in the hour after; on a test day that came out about 8 % more person-hours than the best whole-day plan.
+
+**Budget.** The run's wall-clock budget scales with volume: `staffingBudgetMs(peakPerHour)` is 3 s per 300 arrivals an hour at the peak, at least 3 s and at most 15 s. Intervals left when it runs out come back `method: 'skipped'` and the result `incomplete`. `pnpm benchmark:staffing -- [peakPerHour] [days] [seed]` times a nightly run (14 days hourly, chat with concurrency 2 and abandonment, phone, a 30-minute-target email, a three-profile pool) against that budget and exits 1 over it or incomplete.
+
+### Other conversions and people per shift
+
+- `rateNeed(unitsPerHour, unitsPerPersonHour, shrinkage)` — volume that is not a queue (picking, production): units ÷ units per person-hour ÷ (1 − shrinkage).
+- `headcountNeed(value)` — the series already counts people.
+- `coverNeed(need, shifts)` turns hourly need (`{ at, people }`) into people per shift: greedy left to right, adding at each short hour to the covering shift that runs latest. Each shift's `min` is a floor and `max` a ceiling; an hour no shift can cover is returned in `unmet` with how many were missing.
+- `coverPersonHours(personHours, shifts)` spreads a day's person-hours over its shifts, longest shift first.
+
 ## Important Considerations (Disclaimer)
 
 - **Optimized for a Specific Use Case:** `assignment-user-matcher` is primarily designed and optimized for scenarios with a **relatively small set of active users processing a large volume of incoming assignments** (e.g., call centers, customer support teams, back-office operations). While it might work for other scenarios, its performance characteristics are best suited for this model.

@@ -26,7 +26,10 @@ export {
     DEFAULT_OVERDISPERSION,
     DEFAULT_QUANTIZE,
     DEFAULT_MAX_PEOPLE,
+    STAFFING_BUDGET,
+    staffingBudgetMs,
 } from './staffing';
+export { coverNeed, coverPersonHours, type CoverShift, type CoverResult } from './cover';
 export { erlangA, erlangASeed, type ErlangAInput } from './erlang';
 export { exponentialQuantiles, meanOf, sampleQuantiles, assertDistribution } from './distributions';
 export type {
