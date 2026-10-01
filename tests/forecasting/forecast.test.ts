@@ -397,6 +397,17 @@ describe('forecastWorkspace: local days and ranges', () => {
         expect(f.accuracy.wape['7d']).to.be.below(0.05);
     });
 
+    it('judges backtest hours only up to the latest drained hour, as the nowcast does', () => {
+        const history = syntheticHistory({ now: NOW, weeks: 12, weeklyTotal: 7000, noise: false });
+        // The hourly feed lags 36 hours: those hours have not been drained, they are not zero.
+        const lagged = { ...history, hourly: history.hourly.filter((p) => p.at < NOW - 36 * HOUR_MS) };
+        const result = backtest(prepareHistory(lagged), [], cal, NOW, 6);
+        for (const bucket of ['24h', '72h', '7d', '28d'] as const) {
+            expect(result.accuracy.wape[bucket], bucket).to.be.below(0.05);
+            expect(result.dispersion[bucket], bucket).to.be.below(0.01);
+        }
+    });
+
     it('skips origins without three weeks of history before them', () => {
         // 35 days of history: only the origin a week back has 21 full days before it (two weeks back has 20 and a bit).
         const history = syntheticHistory({ now: NOW, weeks: 5, weeklyTotal: 7000, noise: false });

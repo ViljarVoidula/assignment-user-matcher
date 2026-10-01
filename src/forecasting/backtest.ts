@@ -110,6 +110,11 @@ export function backtest(
     origins: number,
 ): BacktestResult {
     const firstHour = history.hourlyPoints.length > 0 ? history.hourlyPoints[0].at : Infinity;
+    // Hours after the latest one the feed has delivered have not been drained yet; they are not zeros. As
+    // in `applyNowcast`, the hourly comparison reads up to the latest hourly point before `now`, plus its hour.
+    let latest = -Infinity;
+    for (const p of history.hourlyPoints) if (p.at < now && p.at > latest) latest = p.at;
+    const drainedUntil = Math.min(now, latest + HOUR_MS);
     const earliest = history.daily.length > 0 ? history.firstDay * DAY_MS : Infinity;
     const tally: Tally = {
         excess: perBucket(),
@@ -146,7 +151,7 @@ export function backtest(
             let day = { day: calendar.slot(origin).day, lead: 0, a: 0, f: 0 };
             for (let h = 0; h < HORIZON_HOURS; h++) {
                 const at = origin + h * HOUR_MS;
-                if (at >= now) break;
+                if (at >= drainedUntil) break;
                 const slot = calendar.slot(at);
                 if (slot.day !== day.day) {
                     // A local day is complete: its sum is one error sample. The last, cut-off day never is.
@@ -177,7 +182,7 @@ export function backtest(
         }
         for (const sum of weekSums.values()) {
             // A week `now` or the horizon cuts is partly elapsed: not a week's error.
-            if (sum.end > now || sum.end > horizonEnd || sum.f < 1) continue;
+            if (sum.end > (firstHour <= origin ? drainedUntil : now) || sum.end > horizonEnd || sum.f < 1) continue;
             weekRatios.push(sum.a / sum.f);
             weekExcess += (sum.a - sum.f) ** 2 - sum.f;
             weekSquares += sum.f * sum.f;
