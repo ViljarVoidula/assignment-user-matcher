@@ -643,6 +643,27 @@ describe('staffingNeed: review fixes', () => {
         expect(delivered[3]).to.be.at.least(0.78);
     });
 
+    it('does not count a long-target overload twice: the carried queue already holds it (F1)', () => {
+        const loads = [20, 120, 120, 120, 40, 20];
+        const day = loads.map((n, h) => hour({ email: n }, h * 60 * MIN));
+        const plan = (targetMin: number) => {
+            const email = tag('email', { handleMs: exponentialQuantiles(10 * MIN), targetWaitMs: targetMin * MIN });
+            const heads = staffingNeed(day, [email], everyone(['email'], 500), { shrinkage: 0 }).intervals.map(
+                (i) => i.productive.likely,
+            );
+            // Replayed with the rate off by one factor all day (k = 20), as the plan assumed.
+            return { heads, total: heads.reduce((a, b) => a + b, 0), delivered: replayDay(email, loads, heads, 300, 20) };
+        };
+        // Four hours to answer: the peak can be worked through over the afternoon (73 person-hours of work).
+        const four = plan(240);
+        expect(four.total).to.be.at.most(78);
+        for (const share of four.delivered) expect(share).to.be.at.least(0.78);
+        // Thirty minutes: the carried queue is the overload; no per-seed floor or cap on top of it.
+        const half = plan(30);
+        expect(half.total).to.be.at.most(106);
+        for (const share of half.delivered) expect(share).to.be.at.least(0.75);
+    });
+
     it('spends generalists where they help most and keeps specialists for the rest (R4)', () => {
         const pool: PoolMember[] = [
             { tags: ['en'], count: 40 },

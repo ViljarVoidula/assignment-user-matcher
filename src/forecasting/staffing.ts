@@ -201,7 +201,9 @@ interface Prepared {
     pool: Float64Array[];
     counts: number[];
     window: SimWindow;
-    /** Some tag's queue outlives its hour: intervals are simulated in sequence, queue carried over. */
+    /** Per tag: its target outlasts the hour (≥ 15 min or ≥ 2 handle times), so its queue is carried over. */
+    long: boolean[];
+    /** Some tag is long: intervals are simulated in sequence, queue carried over. */
     chained: boolean;
 }
 
@@ -227,16 +229,18 @@ function prepare(tags: readonly TagProfile[], pool: readonly PoolMember[], inter
     }
     const members = [...merged.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, m]) => m);
     const meanHandle = simTags.map((t) => meanOf(t.profile.handleMs));
+    const long = simTags.map(
+        (t, g) =>
+            t.profile.targetWaitMs >= CARRY_TARGET_MS || t.profile.targetWaitMs >= CARRY_TARGET_HANDLES * meanHandle[g],
+    );
     return {
         tags: simTags,
         meanHandle,
         pool: members.map((m) => profileScores(m, simTags)),
         counts: members.map((m) => m.count),
         window: windowFor(tags, intervalMinutes),
-        chained: simTags.some(
-            (t, g) =>
-                t.profile.targetWaitMs >= CARRY_TARGET_MS || t.profile.targetWaitMs >= CARRY_TARGET_HANDLES * meanHandle[g],
-        ),
+        long,
+        chained: long.some(Boolean),
     };
 }
 
@@ -271,12 +275,14 @@ function seedFor(expected: number[], prep: Prepared, max: number): number {
  * The fewest people a seed's arrivals can be served by in steady state: more than the work that never
  * leaves (tags without patience), in person-units. Below it the queue only grows, however well a single
  * hour that started without a backlog seems to go; work that gives up is shed instead, so it sets no floor.
+ * A long-target tag's work only has to be done within its target, so its rate is scaled by `spread[g]`
+ * (its load averaged over the target window, relative to this hour's).
  */
-function stableFloor(rate: ArrayLike<number>, prep: Prepared, judged: readonly number[]): number {
+function stableFloor(rate: ArrayLike<number>, prep: Prepared, tags: readonly number[], spread?: ArrayLike<number>): number {
     let load = 0;
-    for (const g of judged) {
+    for (const g of tags) {
         const t = prep.tags[g];
-        if (!t.profile.patienceMs) load += rate[g] * prep.meanHandle[g] * t.cost;
+        if (!t.profile.patienceMs) load += rate[g] * (spread ? spread[g] : 1) * prep.meanHandle[g] * t.cost;
     }
     return Math.floor(load + 1e-9) + 1;
 }
@@ -414,10 +420,23 @@ export function staffingNeed(
         carryIn: Carry[] | null,
         continues: boolean,
         seedCount: number,
+        spread: number[],
     ) => {
         const strata = strataFor(seedCount);
-        // No adaptive stop on the boosted hours: their trajectories are the sample the backlog hour reads.
-        const adaptive = seedCount === maxSeeds;
+        // Forecast error lasts: seed s continues the leftovers of the earlier seed whose error stratum is
+        // nearest its own, also when the two hours were read on different numbers of seeds.
+        const inherit = (s: number): number => {
+            if (!carryIn || carryIn.length === seedCount) return s;
+            const from = strataFor(carryIn.length);
+            let best = 0;
+            for (let j = 1; j < from.length; j++) {
+                if (Math.abs(from[j] - strata[s]) < Math.abs(from[best] - strata[s])) best = j;
+            }
+            return best;
+        };
+        // No adaptive stop when chained: each seed's leftovers are a trajectory the next hours read, and a
+        // calm hour that settles on eight seeds would hand on only eight, missing the busy days' backlogs.
+        const adaptive = seedCount === maxSeeds && !prep.chained;
         // A chained interval opens with the last one's leftovers (no warm-up), and when another follows it
         // has no tail: nobody is assumed to stay on, and work still queued at its end is judged next door.
         const window: SimWindow = {
@@ -483,7 +502,11 @@ export function staffingNeed(
             }
             return hit;
         };
-        const patient = judged.filter((g) => !prep.tags[g].profile.patienceMs);
+        // The per-seed floor and the steady-state cap are for short-target work only: a long-target tag's
+        // overload is already in the queue the chained hours carry, and counting it again overstaffs it.
+        const patient = judged.filter((g) => !prep.tags[g].profile.patienceMs && !prep.long[g]);
+        /** Per seed: the floor of its short-target never-abandoning work alone (see `counted`). */
+        const shortFloors: number[] = [];
         /** Seeds whose forecast error put never-abandoning work above the forecast: where the cap applies. */
         const above: boolean[] = [];
         /** Erlang C service level of a seed's never-abandoning work, all n people on it: the sustained hour. */
@@ -513,7 +536,7 @@ export function staffingNeed(
         const counted = (s: number, n: number): { served: Float64Array; arrived: Int32Array } => {
             const r = run(s, n);
             const served = Float64Array.from(r.served);
-            if (n < floors[s]) served.fill(0);
+            if (n < shortFloors[s]) for (const g of patient) served[g] = 0;
             else if (above[s]) {
                 const cap = sustained(s, n);
                 for (const g of patient) served[g] = Math.min(served[g], cap * r.arrived[g]);
@@ -532,18 +555,11 @@ export function staffingNeed(
             // tag's strata in a different order), so the seeds see the error's whole range instead of whatever
             // as many random draws happen to give — the likely head count depends on its upper tail.
             const factors = prep.tags.map((_, g) => gammaMeanOneQuantile(k, strata[(s + g * 7) % seedCount]));
-            const tasks = drawTasks(
-                offered,
-                prep.tags,
-                window,
-                k,
-                rand,
-                carryIn ? carryIn[s % carryIn.length] : null,
-                factors,
-            );
+            const tasks = drawTasks(offered, prep.tags, window, k, rand, carryIn ? carryIn[inherit(s)] : null, factors);
             drawn.push(tasks);
             runs.push(new Map());
-            floors.push(stableFloor(tasks.rate, prep, judged));
+            floors.push(stableFloor(tasks.rate, prep, judged, spread));
+            shortFloors.push(stableFloor(tasks.rate, prep, patient));
             above.push(patient.some((g) => tasks.rate[g] * lengthMs > offered[g] * (1 + 1e-9)));
             if (judged.every((g) => tasks.measuredByTag[g] === 0)) perSeed.push(0);
             else {
@@ -619,7 +635,7 @@ export function staffingNeed(
                       return meets(sums.served, sums.arrived, prep, judged);
                   },
                   Math.max(1, Math.ceil(quantileSorted(sorted, 0.5))),
-                  stableFloor(expectedRate, prep, judged),
+                  stableFloor(expectedRate, prep, judged, spread),
                   max,
               )
             : { n: 0, capped: false };
@@ -662,6 +678,7 @@ export function staffingNeed(
         continues: boolean;
         uncovered: string[];
         boosted: boolean;
+        spread: number[];
     }
     let chain: Solved[] = [];
     const boosted = Math.max(maxSeeds, BACKLOG_SEEDS);
@@ -723,7 +740,7 @@ export function staffingNeed(
             if (builders.length > 0) {
                 let feed = builders[0].carryIn;
                 for (const e of builders) {
-                    const again = solve(e.offered, e.judged, e.seedKey, feed, e.continues, boosted);
+                    const again = solve(e.offered, e.judged, e.seedKey, feed, e.continues, boosted, e.spread);
                     out[e.index] = { startMs: intervals[e.index].startMs, ...again.need, uncovered: e.uncovered };
                     e.carryIn = feed;
                     e.boosted = true;
@@ -733,9 +750,23 @@ export function staffingNeed(
             }
         }
         const seedCount = backlog ? boosted : maxSeeds;
-        const { need, carryOut } = solve(offered, judged, seedKey, carryIn, continues, seedCount);
+        // A long-target tag's floor: its load averaged over the hours its target spans (as far as the chain
+        // goes), not this hour's alone — work arriving now may be done in the hours after.
+        const spread = prep.tags.map((t, g) => {
+            if (!prep.long[g] || !(offered[g] > 0)) return 1;
+            const span = Math.max(1, Math.ceil(t.profile.targetWaitMs / lengthMs));
+            let sum = 0;
+            let count = 0;
+            for (let i = index; i < intervals.length && i < index + span; i++) {
+                if (i > index && intervals[i].startMs !== intervals[i - 1].startMs + lengthMs) break;
+                sum += Math.max(0, intervals[i].arrivals[t.profile.tag] ?? 0);
+                count += 1;
+            }
+            return sum / count / offered[g];
+        });
+        const { need, carryOut } = solve(offered, judged, seedKey, carryIn, continues, seedCount, spread);
         if (prep.chained) {
-            chain.push({ index, offered, judged, seedKey, carryIn, continues, uncovered, boosted: backlog });
+            chain.push({ index, offered, judged, seedKey, carryIn, continues, uncovered, boosted: backlog, spread });
             if (chain.length > 2) chain.shift();
         }
         carries = carryOut;
