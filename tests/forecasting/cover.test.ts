@@ -76,11 +76,12 @@ describe('forecasting cover and surface', () => {
     });
 
     it('scales the staffing time budget with peak volume, within its floor and ceiling', () => {
-        expect(staffingBudgetMs(0)).to.equal(3_000);
-        expect(staffingBudgetMs(100)).to.equal(3_000);
-        expect(staffingBudgetMs(300)).to.equal(3_000);
-        expect(staffingBudgetMs(1_000)).to.equal(10_000);
-        expect(staffingBudgetMs(5_000)).to.equal(15_000);
-        expect(staffingBudgetMs(Number.NaN)).to.equal(3_000);
+        expect(staffingBudgetMs(0)).to.equal(6_000);
+        expect(staffingBudgetMs(100)).to.equal(6_000);
+        expect(staffingBudgetMs(300)).to.equal(6_000);
+        expect(staffingBudgetMs(600)).to.equal(12_000);
+        expect(staffingBudgetMs(1_000)).to.equal(20_000);
+        expect(staffingBudgetMs(5_000)).to.equal(20_000);
+        expect(staffingBudgetMs(Number.NaN)).to.equal(6_000);
     });
 });

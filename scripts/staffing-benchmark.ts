@@ -8,7 +8,7 @@
  *   pnpm benchmark:staffing -- [peakPerHour] [days] [seed]
  *
  * The budget is the one the platform runs with, `staffingBudgetMs(peak)`:
- * 3 s up to 300 an hour, scaled with volume above that, at most 15 s. It is
+ * 6 s up to 300 an hour, scaled with volume above that, at most 20 s. It is
  * passed to `staffingNeed` as `budgetMs`, so an over-budget run skips hours
  * exactly as it would in production. Exits 1 when the run is over budget or
  * comes back incomplete.

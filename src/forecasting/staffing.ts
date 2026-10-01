@@ -52,7 +52,7 @@ const MINUTE = 60_000;
  * the peak, never under `baseMs` and never over `maxMs`. Simulation cost grows with the tasks simulated, so
  * a fixed budget would skip the busiest workspaces' hours.
  */
-export const STAFFING_BUDGET = { baseMs: 3_000, perPeakRate: 300, maxMs: 15_000 } as const;
+export const STAFFING_BUDGET = { baseMs: 6_000, perPeakRate: 300, maxMs: 20_000 } as const;
 
 /** `budgetMs` for a run whose busiest interval brings `peakPerHour` arrivals an hour over all tags. */
 export function staffingBudgetMs(peakPerHour: number): number {
