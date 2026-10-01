@@ -17,6 +17,17 @@ export { YEARLY_MIN_WEEKS, OUTLIER } from './model';
 export { HIGH_ERROR_WAPE, LEAD_BUCKETS } from './backtest';
 export { SPIKE_LOOKBACK_DAYS } from './spikes';
 export { ForecastCalendar, type LocalSlot } from './calendar';
+export {
+    staffingNeed,
+    rateNeed,
+    headcountNeed,
+    quantize,
+    DEFAULT_SEEDS,
+    DEFAULT_OVERDISPERSION,
+    DEFAULT_QUANTIZE,
+    DEFAULT_MAX_PEOPLE,
+} from './staffing';
+export { erlangA, erlangAAbandonment, erlangASeed, type ErlangAInput } from './erlang';
 export { exponentialQuantiles, meanOf, sampleQuantiles, assertDistribution } from './distributions';
 export type {
     HourlyPoint,

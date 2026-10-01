@@ -247,11 +247,14 @@ export interface Range {
 
 export interface IntervalNeed {
     startMs: number;
-    /** People working the queue (after shrinkage is removed), p10 / median / p90 across seeds. */
+    /**
+     * People working the queue (after shrinkage is removed). `likely` meets the target over all seeds together
+     * (the expected service level); `low` / `high` are the p10 / p90 of each seed's own answer.
+     */
     productive: Range;
     /** People to have on shift: productive ÷ (1 − shrinkage), rounded up. */
     onShift: Range;
-    /** Share served within target per tag at the likely head count, mean across seeds. */
+    /** Share served within target per tag at the likely head count, over all seeds together. */
     serviceByTag: Record<string, number>;
     /** Tags with arrivals nobody in the pool can take: left out of the search. */
     uncovered: string[];
@@ -266,6 +269,7 @@ export interface IntervalNeed {
 export interface StaffingResult {
     intervals: IntervalNeed[];
     ms: number;
+    /** Seeds drawn: simulated loads × seeds (memo hits draw none). */
     simulations: number;
     cacheHits: number;
     incomplete: boolean;
