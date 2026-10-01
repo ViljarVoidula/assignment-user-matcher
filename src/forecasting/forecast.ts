@@ -234,6 +234,7 @@ function forecastOne(
         accuracy: { ...bt.accuracy, lowConfidence: unique.some((r) => r !== 'no-hourly-shape'), reasons: unique },
         yearly: model.yearly !== null,
         historyWeeks: model.historyWeeks,
+        hasHourlyShape: model.hasHourlyShape,
         effects: [...effects.values()],
     };
 }

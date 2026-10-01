@@ -220,7 +220,14 @@ describe('forecastWorkspace', () => {
         const history = syntheticHistory({ now: NOW, weeks: 12, weeklyTotal: 7000, noise: false, dailyOnly: true });
         const [f] = forecastWorkspace({ timeZone: ZONE, now: NOW, series: [history] }).series;
         expect(f.accuracy.reasons).to.include('no-hourly-shape');
+        // The reason is reported but does not by itself flag low confidence: the day totals are sound.
+        expect(f.accuracy.lowConfidence).to.equal(false);
+        expect(f.hasHourlyShape).to.equal(false);
         expect(f.weeks[1].likely).to.be.closeTo(7000, 7000 * 0.05);
+        const withHours = syntheticHistory({ now: NOW, weeks: 12, weeklyTotal: 7000, noise: false });
+        expect(forecastWorkspace({ timeZone: ZONE, now: NOW, series: [withHours] }).series[0].hasHourlyShape).to.equal(
+            true,
+        );
     });
 
     it('nowcasts from completed hours only, fades over 72 hours, and can be re-applied', () => {

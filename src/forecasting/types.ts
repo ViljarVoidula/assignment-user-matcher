@@ -118,6 +118,12 @@ export interface ForecastAccuracy {
      * the defaults when neither had enough history.
      */
     rangesFrom: 'own' | 'total' | 'default';
+    /**
+     * True when any reason other than `no-hourly-shape` applies: under 4 weeks of history, a 72-hour WAPE
+     * above 35 %, or a first-time event in the horizon. A missing hourly shape is reported in `reasons`
+     * but does not by itself make the forecast low confidence — its day and week totals are as sound as
+     * any; only its hours are an even spread (see `SeriesForecast.hasHourlyShape`).
+     */
     lowConfidence: boolean;
     /** `short-history`, `high-error`, `first-time-event:<label>`, `no-hourly-shape`. */
     reasons: string[];
@@ -134,6 +140,13 @@ export interface SeriesForecast {
     yearly: boolean;
     /** Complete weeks of daily history the level was fitted on. */
     historyWeeks: number;
+    /**
+     * Whether the hour-of-day pattern was read from hourly history. False for a series with only daily
+     * history: its `hours` are the day total spread evenly over the day (1/24 each), not a pattern, so
+     * hourly need read off them is wrong at both ends of the day. Convert such a series' day total with
+     * `coverPersonHours` instead of reading its hours through `coverNeed`.
+     */
+    hasHourlyShape: boolean;
     /** Every effect the forecast used or learned, by label. */
     effects: LearnedEffect[];
 }
