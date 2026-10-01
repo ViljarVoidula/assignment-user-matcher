@@ -302,9 +302,10 @@ export function fitSeries(
     if (outliers.size === 0) return first;
     // One refit with the outliers left out, so an unexplained spike cannot drag the level (and hide itself)
     // before anybody has named it. A run of at least a week that still holds at the end of history is a
-    // level shift, not a spike: it stays in, and the level is re-anchored on it. Known cost: a genuine step
-    // younger than a week is still left out, so the level lags it until it has lasted a week; the nowcast
-    // and "What was this?" spans are where a fresh step shows.
+    // level shift, not a spike: it stays in, and the level is re-anchored on it. Only a large step (about
+    // ×2 or ×0.5) makes every day an outlier, so only such a step re-anchors, once it has lasted a week. A
+    // moderate step leaves few or no outlier days and is followed by the level smoothing alone, which lags
+    // it by 2–4 weeks. The nowcast and "What was this?" spans are where a fresh step shows.
     const shiftFrom = levelShiftFrom(first, outliers);
     const excluded = new Set([...outliers.keys()].filter((day) => shiftFrom === null || day < shiftFrom));
     return fitWith(history, occurrences, calendar, asOf, excluded, shiftFrom);

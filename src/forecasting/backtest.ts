@@ -13,7 +13,8 @@
  *
  * Ranges are a negative binomial around the forecast: variance `f + c·f²`,
  * Poisson counting noise plus a relative model error `c` fitted per lead
- * bucket by moments, `c = max(0, Σ((a − f)² − f) ÷ Σf²)`. A ratio quantile of
+ * bucket by moments, `c = max(0, Σ((a − f)² − f) ÷ Σf²)`, and held non-decreasing
+ * with lead (each bucket's `c` is at least the shorter bucket's). A ratio quantile of
  * hours reads a quiet hour's Poisson noise as model error and spreads it over
  * every busy hour, which is why ranges are not built that way.
  */
@@ -185,11 +186,16 @@ export function backtest(
 
     const dispersion = {} as Record<LeadBucket, number>;
     const wape = {} as Record<LeadBucket, number | null>;
+    // A forecast never gets surer further out: each bucket's `c` is at least the one before it, so a
+    // noisy short-lead estimate cannot leave the 72-hour band narrower than the 24-hour one.
+    let floor = 0;
     for (const { bucket } of LEAD_BUCKETS) {
-        dispersion[bucket] =
+        const own =
             tally.samples[bucket] >= MIN_SAMPLES
                 ? dispersionOf(tally.excess[bucket], tally.squares[bucket])
                 : DEFAULT_DISPERSION[bucket];
+        dispersion[bucket] = Math.max(floor, own);
+        floor = dispersion[bucket];
         wape[bucket] = tally.act[bucket] > 0 ? Math.round((tally.abs[bucket] / tally.act[bucket]) * 1000) / 1000 : null;
     }
     const weeks = weekRatios.sort((a, b) => a - b);

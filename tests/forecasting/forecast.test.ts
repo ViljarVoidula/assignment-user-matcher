@@ -2,6 +2,8 @@ import { expect } from 'chai';
 import { forecastWorkspace } from '../../src/forecasting/forecast';
 import { ForecastCalendar, DAY_MS, HOUR_MS } from '../../src/forecasting/calendar';
 import { applyNowcast, nowcastRatio } from '../../src/forecasting/nowcast';
+import { backtest, LEAD_BUCKETS } from '../../src/forecasting/backtest';
+import { prepareHistory } from '../../src/forecasting/model';
 import type { HourForecast } from '../../src/forecasting/types';
 import { officeShape, syntheticHistory } from './synthetic';
 
@@ -583,5 +585,14 @@ describe('forecastWorkspace: review fixes', () => {
         expect(busy.weeks[0].likely - plain.weeks[0].likely).to.be.closeTo(lift, 1);
         // The nowcast is spent by Sunday: next week is untouched.
         expect(busy.weeks[1].likely).to.equal(plain.weeks[1].likely);
+    });
+
+    it('never reads a longer lead as surer than a shorter one', () => {
+        // Seed 1 backtests to c(24h) > c(72h) > c(7d) on its own: sampling noise, not a narrower forecast.
+        const history = prepareHistory(syntheticHistory({ now: NOW, weeks: 16, weeklyTotal: 7000, seed: 1 }));
+        const { dispersion } = backtest(history, [], cal, NOW, 6);
+        const ordered = LEAD_BUCKETS.map(({ bucket }) => dispersion[bucket]);
+        expect(ordered[0]).to.be.above(0);
+        for (let i = 1; i < ordered.length; i++) expect(ordered[i]).to.be.at.least(ordered[i - 1]);
     });
 });
