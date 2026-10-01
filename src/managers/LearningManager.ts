@@ -456,8 +456,24 @@ export class LearningManager {
      */
     queueDecisionWrites(multi: ReturnType<RedisClientType['multi']>, inputs: LearningDecisionInput[], gen: number): void {
         if (inputs.length === 0) return;
+        for (const write of this.decisionWrites(inputs, gen)) {
+            multi.set(write.decisionKey, write.json, { PX: this.decisionTtlMs });
+            multi.set(write.pointerKey, write.decisionId, { PX: this.decisionTtlMs });
+        }
+        multi.hIncrBy(this.keys.learningStats(), 'decisions', inputs.length);
+    }
+
+    /**
+     * The keys and values one committed decision writes, for a caller that
+     * performs the writes itself — the claim script, which commits them in the
+     * same atomic step as the claim. Both writes expire after `decisionTtlMs`.
+     */
+    decisionWrites(
+        inputs: LearningDecisionInput[],
+        gen: number,
+    ): Array<{ assignmentId: string; decisionId: string; decisionKey: string; pointerKey: string; json: string }> {
         const now = Date.now();
-        for (const input of inputs) {
+        return inputs.map((input) => {
             const record: LearningDecisionRecord = {
                 decisionId: input.decisionId,
                 userId: input.userId,
@@ -474,12 +490,14 @@ export class LearningManager {
                 accruedReward: 0,
                 timestamp: now,
             };
-            multi.set(this.keys.learningDecision(input.decisionId), JSON.stringify(record), { PX: this.decisionTtlMs });
-            multi.set(this.keys.learningDecisionPointer(input.assignmentId), input.decisionId, {
-                PX: this.decisionTtlMs,
-            });
-        }
-        multi.hIncrBy(this.keys.learningStats(), 'decisions', inputs.length);
+            return {
+                assignmentId: input.assignmentId,
+                decisionId: input.decisionId,
+                decisionKey: this.keys.learningDecision(input.decisionId),
+                pointerKey: this.keys.learningDecisionPointer(input.assignmentId),
+                json: JSON.stringify(record),
+            };
+        });
     }
 
     /**

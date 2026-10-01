@@ -300,6 +300,10 @@ const WORKFLOW_TRANSITION_LUA = loadLuaScript('workflow-transition.lua');
 // are one decision, or two sweeps both book somebody's 14:00.
 const BOOK_SLOT_LUA = loadLuaScript('book-slot.lua');
 
+// Lua script for the claim: the queued -> pending move, its deadline, its owner
+// and its learning context, in the one step that decides who won the work.
+const CLAIM_QUEUED_LUA = loadLuaScript('claim-queued.lua');
+
 /**
  * The longest appointment allowed by default, and therefore how far back the
  * overlap probe reaches. A booking that started more than this before the one
@@ -3866,13 +3870,88 @@ export default class AssignmentMatcher implements WorkflowHost {
         const jsons = await Promise.all(jsonPromises);
         const now = Date.now();
 
-        const claimMulti = this.redisClient.multi();
-        for (const s of selected) {
-            claimMulti.hDel(this.assignmentsRefKey, s.id);
+        // What each assignment becomes once it is won, worked out before the
+        // claim so the claim itself can write it. SLA-bearing assignments get a
+        // match timestamp for accept-latency SLO stats; everyone else's JSON
+        // stays byte-identical (guarded by the same cheap indexOf).
+        const pendingJsons: Array<string | null> = jsons.map((json) => {
+            if (!json || json.indexOf('"sla"') === -1) return json;
+            try {
+                const parsed = JSON.parse(json);
+                parsed[SLA_MATCHED_AT_FIELD] = now;
+                return JSON.stringify(parsed);
+            } catch {
+                return json; // keep original JSON on parse failure
+            }
+        });
+
+        // The claim and the queued -> pending move are ONE atomic step. The
+        // HDEL on the queued hash is still the gate (only one caller ever gets
+        // 1 back), but the pending record, its response deadline and its owner
+        // are written in the same script: between two round trips the
+        // assignment was in no store at all, so a concurrent read (cancel,
+        // GET, explain) answered "not found" for live work, and a crash in that
+        // gap lost the assignment outright. An id with no JSON at the snapshot
+        // read is not claimed — it has nothing to move.
+        //
+        // The learning context of a won attempt is committed in the same step,
+        // and only for the attempts this worker actually wins: a separate write
+        // afterwards would leave a crash gap in which the worker owns the
+        // assignment but no learning context exists for it, and its outcome
+        // would then arrive orphaned. A candidate that loses the gate writes
+        // nothing, so no decision is ever left behind for work never received.
+        const decisionFor = new Map<string, ReturnType<LearningManager['decisionWrites']>[number]>();
+        if (this.enableLearning) {
+            const inputs = selected
+                .filter((s) => s.learning)
+                .map((s) => ({
+                    decisionId: this.learning.newDecisionId(s.id),
+                    userId: user.id,
+                    assignmentId: s.id,
+                    features: s.learning!.features,
+                    predictedReward: s.learning!.predictedReward,
+                    components: s.learning!.components,
+                    tags: s.learning!.tags,
+                    propensity: s.learning!.propensity,
+                    policy: s.learning!.policy,
+                    candidateCount: s.learning!.candidateCount,
+                }));
+            const generation = selected.find((s) => s.learning)?.learning?.generation ?? 0;
+            for (const write of this.learning.decisionWrites(inputs, generation)) {
+                decisionFor.set(write.assignmentId, write);
+            }
         }
-        const claimResults = (await claimMulti.exec()) as unknown as number[];
+        const claimArgs: string[] = [user.id, String(this.learning?.decisionTtlMs ?? 0)];
+        const claimIndex: number[] = [];
         for (let i = 0; i < selected.length; i++) {
-            if (Number(claimResults[i]) > 0) claimedIds.add(selected[i].id);
+            const json = jsons[i];
+            if (!json) continue;
+            claimIndex.push(i);
+            const decision = decisionFor.get(selected[i].id);
+            claimArgs.push(
+                selected[i].id,
+                pendingJsons[i]!,
+                String(now + responseDeadlineFromJson(json, this.matchExpirationMs)),
+                decision?.decisionKey ?? '',
+                decision?.json ?? '',
+                decision?.pointerKey ?? '',
+                decision?.decisionId ?? '',
+            );
+        }
+        if (claimIndex.length > 0) {
+            const won = (await this.redisClient.eval(CLAIM_QUEUED_LUA, {
+                keys: [
+                    this.assignmentsRefKey,
+                    this.pendingAssignmentsKey,
+                    this.pendingAssignmentsExpiryKey,
+                    this.assignmentOwnerKey,
+                    this.keys.learningStats(),
+                ],
+                arguments: claimArgs,
+            })) as number[];
+            claimIndex.forEach((selectedIndex, k) => {
+                if (Number(won[k]) > 0) claimedIds.add(selected[selectedIndex].id);
+            });
         }
 
         if (claimedIds.size > 0) {
@@ -3896,68 +3975,21 @@ export default class AssignmentMatcher implements WorkflowHost {
                 // index grows monotonically with completed work.
                 rm.zRem(this.keys.assignmentsGeo(), s.id);
 
-                // Add to pending structures. An assignment carrying an
-                // EscalationPolicy sets its own response deadline; everything
-                // else uses the matcher-wide one and never pays for a parse.
-                if (json) {
-                    // SLA-bearing assignments get a match timestamp for
-                    // accept-latency SLO stats; everyone else's JSON stays
-                    // byte-identical (guarded by the same cheap indexOf).
-                    let pendingJson = json;
-                    if (json.indexOf('"sla"') !== -1) {
-                        try {
-                            const parsed = JSON.parse(json);
-                            parsed[SLA_MATCHED_AT_FIELD] = now;
-                            pendingJson = JSON.stringify(parsed);
-                            // Count the offer (global + per-tag) in the same batch.
-                            rm.hIncrByFloat(this.keys.slaStats(), 'offers', 1);
-                            for (const tag of (parsed.tags ?? []) as string[]) {
-                                if (tag) rm.hIncrByFloat(this.keys.slaTagStats(tag), 'offers', 1);
-                            }
-                        } catch {
-                            // keep original JSON on parse failure
+                // The pending record, its deadline and its owner were written
+                // by the claim itself; what is left is the SLA offer count.
+                if (json && json.indexOf('"sla"') !== -1) {
+                    try {
+                        const parsed = JSON.parse(json);
+                        // Count the offer (global + per-tag) in the same batch.
+                        rm.hIncrByFloat(this.keys.slaStats(), 'offers', 1);
+                        for (const tag of (parsed.tags ?? []) as string[]) {
+                            if (tag) rm.hIncrByFloat(this.keys.slaTagStats(tag), 'offers', 1);
                         }
+                    } catch {
+                        // an unparseable record counts no offer, as before
                     }
-                    rm.hSet(this.pendingAssignmentsKey, s.id, pendingJson);
-                    rm.zAdd(this.pendingAssignmentsExpiryKey, {
-                        score: now + responseDeadlineFromJson(json, this.matchExpirationMs),
-                        value: s.id,
-                    });
-                    rm.hSet(this.assignmentOwnerKey, s.id, user.id);
                 }
             }
-            // Commit the learning context for the attempts this worker
-            // actually won — and only those. The HDEL above is the atomic gate
-            // that decides ownership, so this is the first point at which "who
-            // got this assignment" is a settled fact. The writes go into the
-            // SAME transaction as the queued -> pending move: a separate write
-            // afterwards would leave a crash gap in which the worker owns the
-            // assignment but no learning context exists for it, and its
-            // outcome would then arrive orphaned.
-            if (this.enableLearning) {
-                const decisions = selected
-                    .filter((s) => claimedIds.has(s.id) && s.learning)
-                    .map((s) => ({
-                        decisionId: this.learning.newDecisionId(s.id),
-                        userId: user.id,
-                        assignmentId: s.id,
-                        features: s.learning!.features,
-                        predictedReward: s.learning!.predictedReward,
-                        components: s.learning!.components,
-                        tags: s.learning!.tags,
-                        propensity: s.learning!.propensity,
-                        policy: s.learning!.policy,
-                        candidateCount: s.learning!.candidateCount,
-                    }));
-                if (decisions.length > 0) {
-                    this.learning.queueDecisionWrites(
-                        rm,
-                        decisions,
-                        selected.find((s) => s.learning)?.learning?.generation ?? 0,
-                    );
-                }
-            }
-
             await rm.exec();
 
             for (let i = 0; i < selected.length; i++) {
