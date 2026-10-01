@@ -14,12 +14,11 @@ describe('forecasting cover and surface', () => {
             'coverNeed',
             'coverPersonHours',
             'suggestEffect',
-            'erlangA',
         ]) {
             expect(forecasting).to.have.property(name).that.is.a('function');
         }
-        // Validation-only helpers stay off the subpath.
-        expect(forecasting).not.to.have.property('erlangAAbandonment');
+        // Erlang A is the simulation's internal seed and a validation helper: it stays off the subpath.
+        for (const name of ['erlangA', 'erlangASeed', 'erlangAAbandonment']) expect(forecasting).not.to.have.property(name);
     });
 
     it('covers hourly need with the fewest heads on the day’s shifts, floor and ceiling kept', () => {

@@ -30,7 +30,6 @@ export {
     staffingBudgetMs,
 } from './staffing';
 export { coverNeed, coverPersonHours, type CoverShift, type CoverResult, type CoverUnmet } from './cover';
-export { erlangA, erlangASeed, type ErlangAInput } from './erlang';
 export { exponentialQuantiles, meanOf, sampleQuantiles, assertDistribution } from './distributions';
 export type {
     HourlyPoint,
