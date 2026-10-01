@@ -2415,8 +2415,8 @@ How many people each hour needs so every tag meets its service target (a share p
 
 - `rateNeed(unitsPerHour, unitsPerPersonHour, shrinkage)` — volume that is not a queue (picking, production): units ÷ units per person-hour ÷ (1 − shrinkage).
 - `headcountNeed(value)` — the series already counts people.
-- `coverNeed(need, shifts)` turns hourly need (`{ at, people }`) into people per shift: greedy left to right, adding at each short hour to the covering shift that runs latest. Each shift's `min` is a floor and `max` a ceiling; an hour no shift can cover is returned in `unmet` with how many were missing.
-- `coverPersonHours(personHours, shifts)` spreads a day's person-hours over its shifts, longest shift first.
+- `coverNeed(need, shifts)` turns hourly need (`{ at, people }`) into people per shift: greedy left to right, adding at each short hour to the covering shift that runs latest. Each shift's `min` is a floor and `max` a ceiling; `max: null` (or omitted) is **no ceiling** — unlike the scheduler, where an unstated maximum is no room. `counts` are capped at each shift's `max`, so every hour whose need exceeds what its overlapping shifts can hold is in `unmet` as `{ at, short, reason, atMax }`: `reason: 'no-shift'` when nothing overlaps the hour, `'at-max'` when every covering shift is full, with `atMax` listing those shift ids. `counts` alone reads as covered on a day that is not — **show `unmet` wherever you show `counts`**.
+- `coverPersonHours(personHours, shifts)` spreads a day's person-hours over its shifts, longest shift first; its `unmet` has the same shape (one entry for the day). Use it for a series without hourly history (`hasHourlyShape: false`), whose hours are an even spread.
 
 ## Important Considerations (Disclaimer)
 

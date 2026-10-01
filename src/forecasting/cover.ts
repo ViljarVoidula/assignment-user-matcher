@@ -10,6 +10,12 @@
  * A shift covers an hour when it overlaps it at all: a shift that starts at
  * 13:30 counts for the 13:00 hour. Need is read in whole people (a fractional
  * need rounds up).
+ *
+ * `counts` never exceeds a shift's `max`, so `counts` alone can read as
+ * "covered" on a day that is not: whatever an hour needs beyond what its
+ * overlapping shifts can hold is in `unmet` — with no shift there
+ * (`'no-shift'`) or with every covering shift full (`'at-max'`). A caller that
+ * shows `counts` must show `unmet` beside it.
  */
 
 export interface CoverShift {
@@ -17,15 +23,39 @@ export interface CoverShift {
     /** Epoch ms, `[startMs, endMs)`. */
     startMs: number;
     endMs: number;
+    /** Floor: the shift is never proposed with fewer people. */
     min: number;
+    /**
+     * Ceiling. `null` or omitted means no ceiling — the shift takes as many people as the need asks. This
+     * differs from the scheduler, where an unstated `maxEmployees` is no room (`max = min`): here a caller
+     * that means "exactly the minimum" must say `max: min`.
+     */
     max?: number | null;
 }
 
+/** An hour (or, from `coverPersonHours`, a day) whose need the shifts could not hold. */
+export interface CoverUnmet {
+    /** Epoch ms of the hour (`coverPersonHours`: the first shift's start, or 0 without shifts). */
+    at: number;
+    /** Whole people (`coverPersonHours`: whole person-hours) missing. */
+    short: number;
+    /** `'no-shift'`: no shift overlaps the hour. `'at-max'`: every covering shift is at its `max`. */
+    reason: 'no-shift' | 'at-max';
+    /** Ids of the covering shifts that are at their `max` (empty for `'no-shift'`). */
+    atMax: string[];
+}
+
 export interface CoverResult {
-    /** People per shift id. */
+    /**
+     * People per shift id, between each shift's `min` and `max`. Capped at `max`: need beyond it is in
+     * `unmet`, never here, so `counts` must not be shown without `unmet`.
+     */
     counts: Record<string, number>;
-    /** Hours (epoch ms) whose need could not be met, with how many were missing. */
-    unmet: Array<{ at: number; short: number }>;
+    /**
+     * Every hour whose need exceeds what its overlapping shifts can hold, with how many were missing —
+     * including when every covering shift is full. Empty only when every hour's need is met.
+     */
+    unmet: CoverUnmet[];
 }
 
 const HOUR_MS = 3_600_000;
@@ -49,7 +79,16 @@ export function coverNeed(need: ReadonlyArray<{ at: number; people: number }>, s
             counts[open[0].id] += 1;
             have += 1;
         }
-        if (have < want) unmet.push({ at: hour.at, short: want - have });
+        if (have < want)
+            unmet.push({
+                at: hour.at,
+                short: want - have,
+                reason: options.length === 0 ? 'no-shift' : 'at-max',
+                atMax: options
+                    .filter((s) => s.max != null && counts[s.id] >= s.max)
+                    .map((s) => s.id)
+                    .sort(),
+            });
     }
     return { counts, unmet };
 }
@@ -81,5 +120,17 @@ export function coverPersonHours(personHours: number, shifts: readonly CoverShif
         have += hoursOf(s);
     }
     const short = Math.max(0, Math.ceil(personHours - have - 1e-9));
-    return { counts, unmet: short > 0 ? [{ at: shifts[0]?.startMs ?? 0, short }] : [] };
+    if (short <= 0) return { counts, unmet: [] };
+    const atMax = shifts.filter((s) => s.max != null && counts[s.id] >= s.max).map((s) => s.id);
+    return {
+        counts,
+        unmet: [
+            {
+                at: shifts[0]?.startMs ?? 0,
+                short,
+                reason: shifts.length === 0 ? 'no-shift' : 'at-max',
+                atMax: atMax.sort(),
+            },
+        ],
+    };
 }

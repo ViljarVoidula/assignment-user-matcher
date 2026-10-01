@@ -38,8 +38,25 @@ describe('forecasting cover and surface', () => {
         const result = coverNeed(need, shifts);
         // 8am: early → 2. 12pm: mid (ends latest of early/mid) → 1. 4pm: late ×2 (cap), then mid → 2.
         expect(result.counts).to.deep.equal({ early: 2, late: 2, mid: 2 });
-        expect(result.unmet).to.deep.equal([{ at: h(23), short: 1 }]);
+        expect(result.unmet).to.deep.equal([{ at: h(23), short: 1, reason: 'no-shift', atMax: [] }]);
         expect(coverNeed([{ at: h(8), people: 0 }], shifts).counts).to.deep.equal({ early: 1, late: 1, mid: 0 });
+    });
+
+    it('caps counts at a shift’s max and reports the rest of the hour’s need as unmet, at max', () => {
+        const h = (n: number) => n * HOUR_MS;
+        const shifts = [{ id: 'late', startMs: h(14), endMs: h(22), min: 0, max: 2 }];
+        const result = coverNeed([{ at: h(16), people: 3 }], shifts);
+        expect(result.counts).to.deep.equal({ late: 2 });
+        expect(result.unmet).to.deep.equal([{ at: h(16), short: 1, reason: 'at-max', atMax: ['late'] }]);
+        // No shift overlaps the hour at all.
+        expect(coverNeed([{ at: h(3), people: 2 }], shifts).unmet).to.deep.equal([
+            { at: h(3), short: 2, reason: 'no-shift', atMax: [] },
+        ]);
+        // `max: null` is no ceiling (unlike the scheduler, where an unstated maximum is no room).
+        expect(coverNeed([{ at: h(16), people: 5 }], [{ ...shifts[0], max: null }])).to.deep.equal({
+            counts: { late: 5 },
+            unmet: [],
+        });
     });
 
     it('reads need in time order and rounds a fractional need up', () => {
@@ -68,9 +85,12 @@ describe('forecasting cover and surface', () => {
         ];
         expect(coverPersonHours(18, shifts)).to.deep.equal({ counts: { long: 1, short: 2 }, unmet: [] });
         expect(coverPersonHours(10, [{ id: 'x', startMs: 0, endMs: h(4), min: 0, max: 1 }]).unmet).to.deep.equal([
-            { at: 0, short: 6 },
+            { at: 0, short: 6, reason: 'at-max', atMax: ['x'] },
         ]);
-        expect(coverPersonHours(5, [])).to.deep.equal({ counts: {}, unmet: [{ at: 0, short: 5 }] });
+        expect(coverPersonHours(5, [])).to.deep.equal({
+            counts: {},
+            unmet: [{ at: 0, short: 5, reason: 'no-shift', atMax: [] }],
+        });
         // Floors already cover the day: nobody is added.
         expect(coverPersonHours(4, [{ id: 'x', startMs: 0, endMs: h(8), min: 1 }]).counts).to.deep.equal({ x: 1 });
     });
