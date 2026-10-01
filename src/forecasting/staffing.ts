@@ -17,7 +17,7 @@
  * units per person-hour (warehouses, production), or the series already is
  * people.
  */
-import { assertDistribution, createPrng, meanOf } from './distributions';
+import { assertDistribution, createPrng, gammaMeanOneQuantile, meanOf, spreadStrata } from './distributions';
 import { erlangA, erlangASeed } from './erlang';
 import {
     ageCarry,
@@ -25,6 +25,7 @@ import {
     profileScores,
     simulate,
     type Carry,
+    type SimOut,
     type SimTag,
     type SimTasks,
     type SimWindow,
@@ -63,9 +64,11 @@ export function quantize(value: number, step = DEFAULT_QUANTIZE): number {
  *    has)`; by default `1 − heads ÷ load`, and in `staffingNeed` the Erlang A service level it would have
  *    on its own against its target, so a small tag gets the second person it needs instead of a share.
  *
- * A head for a tag goes to a profile that covers it: one the pool still has people of first, the least
- * versatile among those (generalists are kept for the work only they can take), then the one with the
- * most people left.
+ * A head for a tag goes to a profile that covers it: one the pool still has people of first; among
+ * those, the one whose head makes the most progress towards the targets of all the short tags it covers
+ * (so a generalist goes where two queues are short), a specialist on a tie (generalists are kept for work
+ * only they can take), then the one with the most people left. A rare skill is still protected: its tag
+ * becomes the most short, and only its coverers can take that head.
  * Past the declared pool, the head still goes to the tag that needs it, so `team[p]` can exceed
  * `counts[p]` — the people to hire; `staffingNeed` reports it as `exceedsPool`. Without any work the
  * pool's own mix is used.
@@ -87,15 +90,53 @@ export function composeTeam(
     const breadth = pool.map((s) => busy.filter((g) => s[g] >= 0).length);
     const credit = new Float64Array(load.length);
     let placed = 0;
-    const place = (g: number) => {
-        const p = coverers(g).sort((a, b) => {
-            const spareA = counts[a] - team[a];
-            const spareB = counts[b] - team[b];
-            return Number(spareB > 0) - Number(spareA > 0) || breadth[a] - breadth[b] || spareB - spareA || a - b;
-        })[0];
+    /** Progress a head on profile p would make towards the targets of all the busy tags it covers. */
+    const gain = (p: number) => {
+        let sum = 0;
+        for (const g of busy) {
+            if (pool[p][g] < 0) continue;
+            sum += Math.max(0, short(g, credit[g])) - Math.max(0, short(g, credit[g] + 1));
+        }
+        return sum;
+    };
+    /** Heads of profile p placed for tag g: which work each head is there for, so a head can be swapped. */
+    const placedFor = pool.map(() => new Float64Array(load.length));
+    const spare = (p: number) => counts[p] - team[p];
+    const add = (p: number, g: number) => {
         team[p] += 1;
+        placedFor[p][g] += 1;
+    };
+    const place = (g: number) => {
+        const options = coverers(g);
+        const value = new Map(options.map((p) => [p, gain(p)]));
+        options.sort(
+            (a, b) =>
+                Number(spare(b) > 0) - Number(spare(a) > 0) ||
+                value.get(b)! - value.get(a)! ||
+                breadth[a] - breadth[b] ||
+                spare(b) - spare(a) ||
+                a - b,
+        );
         credit[g] += 1;
         placed += 1;
+        if (spare(options[0]) <= 0) {
+            // Nobody left in the pool who can take g. Before hiring, free one who can: a head of a profile
+            // covering g placed for other work that somebody else in the pool can still do.
+            for (const p of options) {
+                for (const other of busy) {
+                    if (other === g || placedFor[p][other] < 1) continue;
+                    const stand = coverers(other)
+                        .filter((q) => q !== p && spare(q) > 0)
+                        .sort((a, b) => breadth[a] - breadth[b] || spare(b) - spare(a) || a - b)[0];
+                    if (stand === undefined) continue;
+                    placedFor[p][other] -= 1;
+                    placedFor[p][g] += 1;
+                    add(stand, other);
+                    return;
+                }
+            }
+        }
+        add(options[0], g);
     };
     const rarest = [...busy].sort((a, b) => coverers(a).length - coverers(b).length || a - b);
     for (const g of rarest) {
@@ -340,6 +381,7 @@ export function staffingNeed(
     const nTags = prep.tags.length;
     const lengthMs = prep.window.lengthMs;
     const memo = new Map<string, Omit<IntervalNeed, 'startMs'>>();
+    const strata = spreadStrata(maxSeeds);
     let simulations = 0;
     let cacheHits = 0;
     let incomplete = false;
@@ -348,8 +390,14 @@ export function staffingNeed(
     let carriedTo = Number.NaN;
 
     /** One interval, simulated from scratch (`carryIn` null) or opening with the previous one's leftovers. */
-    const solve = (offered: number[], judged: number[], seedKey: string, carryIn: Carry[] | null) => {
-        const window: SimWindow = carryIn ? { ...prep.window, warmMs: 0 } : prep.window;
+    const solve = (offered: number[], judged: number[], seedKey: string, carryIn: Carry[] | null, continues: boolean) => {
+        // A chained interval opens with the last one's leftovers (no warm-up), and when another follows it
+        // has no tail: nobody is assumed to stay on, and work still queued at its end is judged next door.
+        const window: SimWindow = {
+            ...prep.window,
+            warmMs: carryIn ? 0 : prep.window.warmMs,
+            tailMs: continues ? 0 : prep.window.tailMs,
+        };
         // Work per tag: this interval's arrivals plus what the seeds carried in on average (tasks per ms).
         const rates = offered.map((v) => v / lengthMs);
         if (carryIn) {
@@ -373,7 +421,10 @@ export function staffingNeed(
                 }).serviceLevel;
                 levels.set(key, level);
             }
-            return t(g) - level;
+            // Below the tag's own load its service level is flat at 0, so the uncovered work itself is the
+            // gradient there: every head short of the load counts, as a share of it.
+            const load = rates[g] * prep.meanHandle[g] * prep.tags[g].cost;
+            return t(g) - level + (load > 0 ? Math.max(0, load - h) / load : 0);
         };
         const t = (g: number) => prep.tags[g].profile.targetShare;
         const teams = new Map<number, number[]>();
@@ -384,18 +435,64 @@ export function staffingNeed(
         };
         const erlangSeed = seedFor(offered, prep, max);
         const drawn: SimTasks[] = [];
-        const runs: Array<Map<number, { served: Int32Array; carry: Carry | null }>> = [];
-        const run = (s: number, n: number) => {
+        /** Per seed: the fewest people its drawn never-abandoning work leaves able to keep up. */
+        const floors: number[] = [];
+        interface Run {
+            served: Int32Array;
+            /** Arrivals judged in this interval: measured, less those handed over to the next. */
+            arrived: Int32Array;
+            carry: Carry | null;
+        }
+        const runs: Array<Map<number, Run>> = [];
+        const run = (s: number, n: number): Run => {
             let hit = runs[s].get(n);
             if (!hit) {
-                const out = prep.chained ? { carry: null as Carry | null } : undefined;
+                const out: SimOut | undefined = prep.chained ? { carry: null, handOver: continues } : undefined;
                 const served = simulate(drawn[s], prep.pool, teamOf(n), prep.tags, window, undefined, out);
-                hit = { served, carry: out ? out.carry : null };
+                const arrived = Int32Array.from(drawn[s].measuredByTag);
+                if (out?.handedOver) for (let g = 0; g < nTags; g++) arrived[g] -= out.handedOver[g];
+                hit = { served, arrived, carry: out ? out.carry : null };
                 runs[s].set(n, hit);
             }
             return hit;
         };
-        const served = (s: number, n: number) => run(s, n).served;
+        const patient = judged.filter((g) => !prep.tags[g].profile.patienceMs);
+        /** Seeds whose forecast error put never-abandoning work above the forecast: where the cap applies. */
+        const above: boolean[] = [];
+        /** Erlang C service level of a seed's never-abandoning work, all n people on it: the sustained hour. */
+        const sustained = (s: number, n: number): number => {
+            let lambda = 0;
+            let work = 0;
+            let target = Infinity;
+            for (const g of patient) {
+                const rate = drawn[s].rate[g];
+                lambda += rate;
+                work += rate * prep.meanHandle[g] * prep.tags[g].cost;
+                target = Math.min(target, prep.tags[g].profile.targetWaitMs);
+            }
+            if (lambda <= 0) return 1;
+            return erlangA(n, { lambda, meanHandleMs: work / lambda, meanPatienceMs: Infinity, targetMs: target })
+                .serviceLevel;
+        };
+        /**
+         * What a seed counts for at n people, if its drawn rate is the rate all peak long (forecast error
+         * lasts longer than an hour). A seed whose never-abandoning work is at least n is a failed hour —
+         * at that rate the queue only grows, and the following hours inherit it. Below that, its
+         * never-abandoning tags count no better than the steady state at that rate when the error put it
+         * above the forecast: a single simulated hour opens with an empty queue, which a near-full floor
+         * takes hours to build, so on its own it reads a sustained peak as better served than it will be.
+         * (At or under the forecast the simulated hour stands: it agrees with Erlang C there.)
+         */
+        const counted = (s: number, n: number): { served: Float64Array; arrived: Int32Array } => {
+            const r = run(s, n);
+            const served = Float64Array.from(r.served);
+            if (n < floors[s]) served.fill(0);
+            else if (above[s]) {
+                const cap = sustained(s, n);
+                for (const g of patient) served[g] = Math.min(served[g], cap * r.arrived[g]);
+            }
+            return { served, arrived: r.arrived };
+        };
         const perSeed: number[] = [];
         /** Each answer minus the Erlang A seed of that seed's own drawn load: how far the bracket is off. */
         const offsets: number[] = [];
@@ -404,9 +501,23 @@ export function staffingNeed(
             // The seed is a function of the load (and, chained, of the interval), not of the position in the
             // list: the same load always gets the same draws, so memoised and fresh answers agree.
             const rand = createPrng(hashSeed(baseSeed, seedKey, s));
-            const tasks = drawTasks(offered, prep.tags, window, k, rand, carryIn ? carryIn[s % carryIn.length] : null);
+            // Forecast error, stratified: seed s takes the rate factor at its own stratum of the Gamma (each
+            // tag's strata in a different order), so the seeds see the error's whole range instead of whatever
+            // as many random draws happen to give — the likely head count depends on its upper tail.
+            const factors = prep.tags.map((_, g) => gammaMeanOneQuantile(k, strata[(s + g * 7) % maxSeeds]));
+            const tasks = drawTasks(
+                offered,
+                prep.tags,
+                window,
+                k,
+                rand,
+                carryIn ? carryIn[s % carryIn.length] : null,
+                factors,
+            );
             drawn.push(tasks);
             runs.push(new Map());
+            floors.push(stableFloor(tasks.rate, prep, judged));
+            above.push(patient.some((g) => tasks.rate[g] * lengthMs > offered[g] * (1 + 1e-9)));
             if (judged.every((g) => tasks.measuredByTag[g] === 0)) perSeed.push(0);
             else {
                 // Start from Erlang A on this seed's own drawn rate (the overdispersion draw moves a seed's
@@ -418,9 +529,12 @@ export function staffingNeed(
                 );
                 const offset = offsets.length > 0 ? [...offsets].sort((a, b) => a - b)[offsets.length >> 1] : 0;
                 const found = search(
-                    (n) => meets(served(s, n), tasks.measuredByTag, prep, judged),
+                    (n) => {
+                        const r = run(s, n);
+                        return meets(r.served, r.arrived, prep, judged);
+                    },
                     own + offset,
-                    stableFloor(tasks.rate, prep, judged),
+                    floors[s],
                     max,
                 );
                 capped ||= found.capped;
@@ -442,8 +556,8 @@ export function staffingNeed(
                 const settled = judged.every(
                     (g) =>
                         halfWidth(
-                            drawn.map((_, j) => served(j, at)[g]),
-                            drawn.map((t) => t.measuredByTag[g]),
+                            drawn.map((_, j) => counted(j, at).served[g]),
+                            drawn.map((_, j) => counted(j, at).arrived[g]),
                         ) < SERVICE_HALF_WIDTH,
                 );
                 if (settled) break;
@@ -456,37 +570,43 @@ export function staffingNeed(
         // One hour's service level is skewed (a bad hour is very bad), so the median of per-seed answers
         // sits a person under it even on Poisson arrivals; with the rate noised, the busier draws bring more
         // arrivals too and pull further. Low and high are the seeds' own spread.
-        const arrived = new Float64Array(nTags);
-        for (const tasks of drawn) for (const g of judged) arrived[g] += tasks.measuredByTag[g];
-        const pooledServed = (n: number): Float64Array => {
-            const sum = new Float64Array(nTags);
+        const pooled = (n: number) => {
+            const served = new Float64Array(nTags);
+            const arrived = new Float64Array(nTags);
             for (let s = 0; s < seeds; s++) {
-                const one = served(s, n);
-                for (const g of judged) sum[g] += one[g];
+                const one = counted(s, n);
+                for (const g of judged) {
+                    served[g] += one.served[g];
+                    arrived[g] += one.arrived[g];
+                }
             }
-            return sum;
+            return { served, arrived };
         };
+        const anyArrivals = drawn.some((tasks) => judged.some((g) => tasks.measuredByTag[g] > 0));
         const sorted = [...perSeed].sort((a, b) => a - b);
         const expectedRate = offered.map((v) => v / lengthMs);
-        const pooled = judged.some((g) => arrived[g] > 0)
+        const best = anyArrivals
             ? search(
-                  (n) => meets(pooledServed(n), arrived, prep, judged),
+                  (n) => {
+                      const sums = pooled(n);
+                      return meets(sums.served, sums.arrived, prep, judged);
+                  },
                   Math.max(1, Math.ceil(quantileSorted(sorted, 0.5))),
                   stableFloor(expectedRate, prep, judged),
                   max,
               )
             : { n: 0, capped: false };
-        capped ||= pooled.capped;
-        const likely = pooled.n;
+        capped ||= best.capped;
+        const likely = best.n;
         const productive: Range = {
             low: Math.min(likely, Math.floor(quantileSorted(sorted, 0.1))),
             likely,
             high: Math.max(likely, Math.ceil(quantileSorted(sorted, 0.9))),
         };
-        const atLikely = pooledServed(likely);
+        const atLikely = pooled(likely);
         const serviceByTag: Record<string, number> = {};
         for (const g of judged) {
-            const share = arrived[g] > 0 ? atLikely[g] / arrived[g] : 1;
+            const share = atLikely.arrived[g] > 0 ? atLikely.served[g] / atLikely.arrived[g] : 1;
             serviceByTag[prep.tags[g].profile.tag] = Math.round(share * 1000) / 1000;
         }
         const team = teamOf(likely);
@@ -505,7 +625,7 @@ export function staffingNeed(
         return { need, carryOut };
     };
 
-    const out: IntervalNeed[] = intervals.map((interval) => {
+    const out: IntervalNeed[] = intervals.map((interval, index) => {
         // Chained hours never share a simulation, so they are simulated at their own load, not the grid's.
         const expected = prep.tags.map((t) => {
             const value = interval.arrivals[t.profile.tag] ?? 0;
@@ -513,13 +633,19 @@ export function staffingNeed(
         });
         const busy = expected.map((v, g) => (v > 0 ? g : -1)).filter((g) => g >= 0);
         const uncovered = busy.filter((g) => !prep.pool.some((s) => s[g] >= 0)).map((g) => prep.tags[g].profile.tag);
-        const judged = busy.filter((g) => prep.pool.some((s) => s[g] >= 0));
         // A chain holds only across back-to-back intervals.
         const carryIn = carries && interval.startMs === carriedTo ? carries : null;
         carries = null;
         carriedTo = interval.startMs + lengthMs;
+        const continues = prep.chained && intervals[index + 1]?.startMs === carriedTo;
+        // Judged here: tags with new work somebody can take, and tags with work handed over still in time.
+        const handed = new Set<number>();
+        for (const carry of carryIn ?? []) carry.judge.forEach((j, i) => j && handed.add(carry.tag[i]));
+        const judged = prep.tags
+            .map((_, g) => g)
+            .filter((g) => (busy.includes(g) && prep.pool.some((s) => s[g] >= 0)) || handed.has(g));
         if (judged.length === 0) {
-            // Nobody is needed for new work; whatever was left over runs down or gives up meanwhile.
+            // Nothing to judge: whatever was left over (already past its target) runs down or gives up.
             if (carryIn) carries = carryIn.map((c) => ageCarry(c, lengthMs));
             return quiet(interval.startMs, uncovered, 'none');
         }
@@ -538,7 +664,7 @@ export function staffingNeed(
         // Uncovered tags' work would only sit in a queue nobody reads: it is neither drawn nor seeded.
         const offered = expected.map((v, g) => (judged.includes(g) ? v : 0));
         const seedKey = prep.chained ? `${key}@${interval.startMs}` : key;
-        const { need, carryOut } = solve(offered, judged, seedKey, carryIn);
+        const { need, carryOut } = solve(offered, judged, seedKey, carryIn, continues);
         carries = carryOut;
         if (!prep.chained) memo.set(key, need);
         return { startMs: interval.startMs, ...need, uncovered };

@@ -46,7 +46,10 @@ export interface SimTag {
 /** One seed's arrivals for one interval, as parallel arrays sorted by arrival time. */
 export interface SimTasks {
     tag: Int32Array;
+    /** When the task enters the run (a carried task: the run's start). */
     at: Float64Array;
+    /** When the task arrived: waits and oldest-first are measured from here. */
+    born: Float64Array;
     handle: Float64Array;
     leaveAt: Float64Array;
     /** 1 when the task arrived inside the interval (the ones the service level is judged on). */
@@ -66,8 +69,24 @@ export interface Carry {
     tag: Int32Array;
     handle: Float64Array;
     leaveIn: Float64Array;
+    /** How long each queued task has already waited (0 for work in progress). */
+    waited: Float64Array;
+    /** 1 = still inside its target and handed over: judged in the interval that picks it up. */
+    judge: Uint8Array;
     /** The first `inProgress` entries are in someone's hands; the rest are queued. */
     inProgress: number;
+}
+
+/** What `simulate` hands back about the interval's end. */
+export interface SimOut {
+    /** Filled with what is still queued or in progress when the interval ends. */
+    carry: Carry | null;
+    /**
+     * The next interval follows on: measured work still queued and inside its target at the end is handed
+     * over to be judged there, not here (`handedOver` counts it per tag; take it off this interval's arrivals).
+     */
+    handOver?: boolean;
+    handedOver?: Int32Array;
 }
 
 /** A carry `ms` later with nobody working it: work in progress runs down, the queue loses whoever gave up. */
@@ -81,6 +100,8 @@ export function ageCarry(carry: Carry, ms: number): Carry {
         tag: Int32Array.from(keep, (i) => carry.tag[i]),
         handle: Float64Array.from(keep, (i) => (busy(i) ? carry.handle[i] - ms : carry.handle[i])),
         leaveIn: Float64Array.from(keep, (i) => (busy(i) ? Infinity : carry.leaveIn[i] - ms)),
+        waited: Float64Array.from(keep, (i) => (busy(i) ? 0 : carry.waited[i] + ms)),
+        judge: Uint8Array.from(keep, (i) => carry.judge[i]),
         inProgress: keep.filter(busy).length,
     };
 }
@@ -133,7 +154,8 @@ function residualHandle(d: QuantileDistribution, rand: () => number): number {
 }
 
 /**
- * Draws one seed's arrivals. Deterministic in `rand`. Each tag's arrivals are a Poisson process (exponential
+ * Draws one seed's arrivals. Deterministic in `rand`. `factors` (one per tag) replaces the Gamma draw of the
+ * rate's forecast error, for callers that stratify it. Each tag's arrivals are a Poisson process (exponential
  * gaps, so already in time order) at a rate Gamma-noised around the forecast; the tags' streams are then
  * merged, earliest first and the lower tag index on a tie.
  */
@@ -144,6 +166,7 @@ export function drawTasks(
     overdispersion: number,
     rand: () => number,
     carry?: Carry | null,
+    factors?: ArrayLike<number>,
 ): SimTasks {
     const from = -window.warmMs;
     const until = window.lengthMs + window.tailMs;
@@ -156,7 +179,8 @@ export function drawTasks(
         streams.push(stream);
         const mean = expected[g] ?? 0;
         if (mean <= 0) return;
-        const rate = (mean * sampleGammaMeanOne(overdispersion, rand)) / window.lengthMs;
+        const factor = factors ? factors[g] : sampleGammaMeanOne(overdispersion, rand);
+        const rate = (mean * factor) / window.lengthMs;
         rates[g] = rate;
         const patience = () => (t.profile.patienceMs ? sampleQuantiles(t.profile.patienceMs, rand) : Infinity);
         // Already in hand when the warm-up starts: the tasks a busy floor holds at this rate (Little's law),
@@ -182,6 +206,7 @@ export function drawTasks(
     const out: SimTasks = {
         tag: new Int32Array(total),
         at: new Float64Array(total),
+        born: new Float64Array(total),
         handle: new Float64Array(total),
         leaveAt: new Float64Array(total),
         measured: new Uint8Array(total),
@@ -191,8 +216,13 @@ export function drawTasks(
     for (let i = 0; i < carried; i++) {
         out.tag[i] = carry!.tag[i];
         out.at[i] = from;
+        out.born[i] = from - carry!.waited[i];
         out.handle[i] = Math.max(1, carry!.handle[i]);
         out.leaveAt[i] = from + carry!.leaveIn[i];
+        if (carry!.judge[i]) {
+            out.measured[i] = 1;
+            measuredByTag[carry!.tag[i]] += 1;
+        }
     }
     const next = new Int32Array(tags.length);
     for (let i = carried; i < total; i++) {
@@ -204,6 +234,7 @@ export function drawTasks(
         const at = streams[g].at[j];
         out.tag[i] = g;
         out.at[i] = at;
+        out.born[i] = at;
         out.handle[i] = streams[g].handle[j];
         out.leaveAt[i] = streams[g].leaveAt[j];
         out.measured[i] = at >= 0 && at < window.lengthMs ? 1 : 0;
@@ -307,7 +338,7 @@ export function simulate(
     tags: readonly SimTag[],
     window: SimWindow,
     stats?: SimStats,
-    out?: { carry: Carry | null },
+    out?: SimOut,
 ): Int32Array {
     const nTags = tags.length;
     const end = window.lengthMs + window.tailMs;
@@ -369,7 +400,7 @@ export function simulate(
 
     const start = (i: number, w: number, t: number) => {
         const g = tasks.tag[i];
-        if (tasks.measured[i] && t - tasks.at[i] <= tags[g].profile.targetWaitMs + EPS) served[g] += 1;
+        if (tasks.measured[i] && t - tasks.born[i] <= tags[g].profile.targetWaitMs + EPS) served[g] += 1;
         used[w] += tags[g].cost;
         if (stats) {
             started![i] = 1;
@@ -393,7 +424,7 @@ export function simulate(
                 const i = headOf(g, t);
                 if (i < 0) continue;
                 const key = tags[g].priority + scores[g];
-                if (best < 0 || key > bestKey || (key === bestKey && tasks.at[i] < tasks.at[best])) {
+                if (best < 0 || key > bestKey || (key === bestKey && tasks.born[i] < tasks.born[best])) {
                     best = i;
                     bestKey = key;
                 }
@@ -440,12 +471,14 @@ export function simulate(
                 if (tasks.leaveAt[queues[g][j]] > snapshotAt) waiting.push(queues[g][j]);
             }
         }
-        waiting.sort((a, b) => a - b);
+        waiting.sort((a, b) => tasks.born[a] - tasks.born[b] || a - b);
         const count = inProgress.length + waiting.length;
         const carry: Carry = {
             tag: new Int32Array(count),
             handle: new Float64Array(count),
             leaveIn: new Float64Array(count),
+            waited: new Float64Array(count),
+            judge: new Uint8Array(count),
             inProgress: inProgress.length,
         };
         inProgress.forEach((k, j) => {
@@ -453,12 +486,21 @@ export function simulate(
             carry.handle[j] = completions.timeAt(k) - snapshotAt;
             carry.leaveIn[j] = Infinity;
         });
+        const handedOver = new Int32Array(nTags);
         waiting.forEach((i, j) => {
             const at = inProgress.length + j;
-            carry.tag[at] = tasks.tag[i];
+            const g = tasks.tag[i];
+            carry.tag[at] = g;
             carry.handle[at] = tasks.handle[i];
             carry.leaveIn[at] = tasks.leaveAt[i] - snapshotAt;
+            carry.waited[at] = snapshotAt - tasks.born[i];
+            // Still able to make its target: the next interval judges it, on that interval's people.
+            if (out!.handOver && tasks.measured[i] && carry.waited[at] <= tags[g].profile.targetWaitMs) {
+                carry.judge[at] = 1;
+                handedOver[g] += 1;
+            }
         });
+        out!.handedOver = handedOver;
         return carry;
     };
 

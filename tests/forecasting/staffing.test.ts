@@ -1,12 +1,22 @@
 import { expect } from 'chai';
-import { createPrng, exponentialQuantiles, meanOf } from '../../src/forecasting/distributions';
+import {
+    createPrng,
+    exponentialQuantiles,
+    gammaMeanOneQuantile,
+    meanOf,
+    normalQuantile,
+    sampleGammaMeanOne,
+    spreadStrata,
+} from '../../src/forecasting/distributions';
 import { erlangA, erlangAAbandonment, erlangASeed } from '../../src/forecasting/erlang';
 import {
+    ageCarry,
     createSimStats,
     drawTasks,
     profileScores,
     simulate,
     type Carry,
+    type SimOut,
     type SimTag,
 } from '../../src/forecasting/simulation';
 import {
@@ -384,6 +394,7 @@ describe('the simulation, case by case', () => {
         const tasks = {
             tag: Int32Array.from([0, 1]),
             at: Float64Array.from([0, 1000]),
+            born: Float64Array.from([0, 1000]),
             handle: Float64Array.from([10 * MIN, MIN]),
             leaveAt: Float64Array.from([Infinity, Infinity]),
             measured: Uint8Array.from([1, 1]),
@@ -406,6 +417,7 @@ describe('the simulation, case by case', () => {
         const tasks = {
             tag: Int32Array.from([0, 0, 1]),
             at: Float64Array.from([0, 1000, 2000]),
+            born: Float64Array.from([0, 1000, 2000]),
             handle: Float64Array.from([10 * MIN, 10 * MIN, MIN]),
             leaveAt: Float64Array.from([Infinity, Infinity, Infinity]),
             measured: Uint8Array.from([1, 1, 1]),
@@ -459,9 +471,9 @@ describe('composeTeam', () => {
         expect(team.reduce((a, b) => a + b, 0)).to.equal(14);
         expect(team[1]).to.be.above(10); // more fi than the pool has: hire fi
         expect(team[0]).to.be.within(1, 3);
-        // Within the pool: specialists for the common work, generalists kept for what only they can take,
-        // never over a declared count while the pool has people left.
-        expect(composeTeam(10, [en, both], [10, 10], [2, 2])).to.deep.equal([5, 5]);
+        // Within the pool: generalists while both queues are short, then specialists; never over a declared
+        // count while the pool has people left.
+        expect(composeTeam(10, [en, both], [10, 10], [2, 2])).to.deep.equal([3, 7]);
         expect(composeTeam(14, [en, both], [10, 4], [8, 2])).to.deep.equal([10, 4]);
         expect(composeTeam(0, [en, fi], [90, 10], [1, 1])).to.deep.equal([0, 0]);
     });
@@ -519,6 +531,36 @@ describe('staffingNeed: review fixes', () => {
         expect(backward.intervals).to.deep.equal(forward.intervals);
     });
 
+    /**
+     * Replays a day on fresh draws with given head counts, the way a floor lives it: each hour opens with
+     * what the last one left, nobody stays on past their hour, and work still queued (and still inside its
+     * target) at the hour's end is judged in the hour that picks it up.
+     */
+    const replayDay = (profile: TagProfile, loads: number[], heads: number[], seeds = 200, k = Infinity) => {
+        const simTags = [{ profile, cost: 1, priority: 0 }];
+        const pool = [profileScores({ tags: [profile.tag] }, simTags)];
+        const served = loads.map(() => 0);
+        const arrived = loads.map(() => 0);
+        for (let s = 0; s < seeds; s++) {
+            const rand = createPrng(70_000 + s);
+            // Forecast error that lasts: one rate multiplier for the whole day.
+            const factor = sampleGammaMeanOne(k, rand);
+            let carry: Carry | null = null;
+            loads.forEach((load, h) => {
+                const last = h === loads.length - 1;
+                const base = windowFor([profile]);
+                const window = { ...base, warmMs: carry ? 0 : base.warmMs, tailMs: last ? base.tailMs : 0 };
+                const tasks = drawTasks([load * factor], simTags, window, Infinity, rand, carry);
+                const out: SimOut = { carry: null, handOver: !last };
+                const done = simulate(tasks, pool, [heads[h]], simTags, window, undefined, out);
+                carry = out.carry;
+                served[h] += done[0];
+                arrived[h] += tasks.measuredByTag[0] - (out.handedOver?.[0] ?? 0);
+            });
+        }
+        return served.map((v, h) => v / arrived[h]);
+    };
+
     it('carries the queue into the next hour for long-target work (I1)', () => {
         // Email: 10 minutes each, 80 % within 30 minutes. A three-hour peak, then a quiet hour.
         const email = tag('email', { handleMs: exponentialQuantiles(10 * MIN), targetWaitMs: 30 * MIN });
@@ -526,57 +568,85 @@ describe('staffingNeed: review fixes', () => {
         const hours = loads.map((n, h) => hour({ email: n }, h * 60 * MIN));
         const plan = staffingNeed(hours, [email], everyone(['email'], 500), poisson).intervals;
         const after = 4;
-        // Replay the day on fresh draws with the planned head counts, the queue carried hour to hour.
-        const simTags = [{ profile: email, cost: 1, priority: 0 }];
-        const pool = [profileScores({ tags: ['email'] }, simTags)];
-        const replay = (heads: number[]) => {
-            let served = 0;
-            let arrived = 0;
-            for (let s = 0; s < 200; s++) {
-                const rand = createPrng(70_000 + s);
-                let carry: Carry | null = null;
-                for (let h = 0; h <= after; h++) {
-                    const window = { ...windowFor([email]), ...(carry ? { warmMs: 0 } : {}) };
-                    const tasks = drawTasks([loads[h]], simTags, window, Infinity, rand, carry);
-                    const out = { carry: null as Carry | null };
-                    const done = simulate(tasks, pool, [heads[h]], simTags, window, undefined, out);
-                    carry = out.carry;
-                    if (h === after) {
-                        served += done[0];
-                        arrived += tasks.measuredByTag[0];
-                    }
-                }
-            }
-            return served / arrived;
-        };
         const planned = plan.map((i) => i.productive.likely);
         expect(planned[after]).to.be.above(planned[0]);
-        expect(replay(planned)).to.be.at.least(plan[after].serviceByTag.email - 0.03);
+        const delivered = replayDay(email, loads, planned);
+        for (let h = 1; h < loads.length; h++) {
+            expect(delivered[h], `hour ${h}`).to.be.at.least(plan[h].serviceByTag.email - 0.03);
+        }
         // Staffed as if the hour after the peak started empty, the backlog sinks it.
         const alone = staffingNeed([hours[after]], [email], everyone(['email'], 500), poisson).intervals[0];
         expect(alone.productive.likely).to.be.below(planned[after]);
         const naive = [...planned];
         naive[after] = alone.productive.likely;
-        expect(replay(naive)).to.be.below(0.8);
+        expect(replayDay(email, loads, naive)[after]).to.be.below(0.8);
     });
 
-    it('lets a backlog wait through a quiet hour, and starts afresh after a gap (I1)', () => {
+    it('staffs an hour with no new work to clear the backlog it inherits (R2)', () => {
         const email = tag('email', { handleMs: exponentialQuantiles(10 * MIN), targetWaitMs: 30 * MIN });
         const H = 60 * MIN;
-        const pool = everyone(['email'], 500);
-        // At most 20 people: the 150-an-hour peak (25 erlangs) leaves a real backlog behind.
-        const run = (hours: ReturnType<typeof hour>[]) =>
-            staffingNeed(hours, [email], pool, { ...poisson, maxPeople: 20 }).intervals;
-        const day = run([hour({ email: 150 }, 0), hour({ email: 0 }, H), hour({ email: 40 }, 2 * H)]);
-        expect(day[0].capped).to.equal(true);
-        expect(day[1].method).to.equal('none');
-        const alone = run([hour({ email: 40 }, 2 * H)])[0];
-        // Nobody works the quiet hour, and email never gives up: the peak's leftovers are still there.
-        expect(day[2].productive.likely).to.be.above(alone.productive.likely);
+        const loads = [20, 120, 120, 0, 40];
+        const plan = staffingNeed(
+            loads.map((n, h) => hour({ email: n }, h * H)),
+            [email],
+            everyone(['email'], 500),
+            poisson,
+        ).intervals;
+        expect(plan[3].method).to.equal('simulation');
+        expect(plan[3].productive.likely).to.be.above(0);
+        // The people matter: with nobody on that hour, the inherited work misses its target.
+        const heads = plan.map((i) => i.productive.likely);
+        expect(replayDay(email, loads, [...heads.slice(0, 3), 0, heads[4]])[3]).to.be.below(0.05);
         // A gap breaks the chain: the later hour is staffed as if it started fresh.
+        const run = (hours: ReturnType<typeof hour>[]) =>
+            staffingNeed(hours, [email], everyone(['email'], 500), poisson).intervals;
         const gap = run([hour({ email: 150 }, 0), hour({ email: 40 }, 5 * H)]);
         expect(gap[1]).to.deep.equal(run([hour({ email: 40 }, 5 * H)])[0]);
-        expect(run([hour({ email: 150 }, 0), hour({ email: 0 }, H), hour({ email: 40 }, 2 * H)])).to.deep.equal(day);
+        expect(run(loads.map((n, h) => hour({ email: n }, h * H)))).to.deep.equal(plan);
+    });
+
+    it('runs a leftover down while nobody works it', () => {
+        const carry: Carry = {
+            tag: Int32Array.from([0, 0, 0]),
+            handle: Float64Array.from([10 * MIN, 90 * MIN, 5 * MIN]),
+            leaveIn: Float64Array.from([Infinity, Infinity, 30 * MIN]),
+            waited: Float64Array.from([0, 0, 5 * MIN]),
+            judge: Uint8Array.from([0, 0, 1]),
+            inProgress: 2,
+        };
+        const aged = ageCarry(carry, 20 * MIN);
+        expect(Array.from(aged.handle)).to.deep.equal([70 * MIN, 5 * MIN]);
+        expect(Array.from(aged.leaveIn)).to.deep.equal([Infinity, 10 * MIN]);
+        expect(Array.from(aged.waited)).to.deep.equal([0, 25 * MIN]);
+        expect(aged.inProgress).to.equal(1);
+        expect(ageCarry(carry, 40 * MIN).tag.length).to.equal(1);
+    });
+
+    it('counts an hour whose drawn load outruns the team as unserved: sustained forecast error (R1)', () => {
+        // 600 an hour at 20 s, with the default rate noise: a seed whose rate keeps the floor busier than its
+        // people can keep up with is a failed hour, however its own hour happened to go.
+        const chat = tag('chat', { targetWaitMs: 20_000 });
+        const need = staffingNeed([hour({ chat: 600 })], [chat], everyone(['chat'], 500), { shrinkage: 0 }).intervals[0];
+        expect(need.productive.likely).to.be.within(65, 68);
+        // Four sustained hours at that head count, the rate off by the same factor all day, deliver it.
+        const delivered = replayDay(
+            chat,
+            [600, 600, 600, 600],
+            [0, 1, 2, 3].map(() => need.productive.likely),
+            300,
+            20,
+        );
+        expect(delivered[3]).to.be.at.least(0.78);
+    });
+
+    it('spends generalists where they help most and keeps specialists for the rest (R4)', () => {
+        const pool: PoolMember[] = [
+            { tags: ['en'], count: 40 },
+            { tags: ['fi'], count: 40 },
+            { tags: ['en', 'fi'], count: 20 },
+        ];
+        const need = staffingNeed([hour({ en: 120, fi: 120 })], [tag('en'), tag('fi')], pool, poisson).intervals[0];
+        expect(need.productive.likely).to.be.at.most(24);
     });
 
     it('merges repeated pool profiles and ignores empty ones', () => {
@@ -647,6 +717,21 @@ describe('staffingNeed: review fixes', () => {
         const result = staffingNeed([hour({ chat: 2000 })], [big], everyone(['chat'], 1000), poisson);
         expect(result.simulations).to.be.below(DEFAULT_SEEDS);
         expect(result.intervals[0].productive.likely).to.be.above(160);
+    });
+});
+
+describe('stratified forecast error', () => {
+    it('spreads seeds over the Gamma’s whole range, every prefix already spread', () => {
+        expect(normalQuantile(0.5)).to.be.closeTo(0, 1e-9);
+        expect(normalQuantile(0.975)).to.be.closeTo(1.959964, 1e-5);
+        expect(normalQuantile(0.01)).to.be.closeTo(-2.326348, 1e-5);
+        expect(gammaMeanOneQuantile(Infinity, 0.9)).to.equal(1);
+        expect(gammaMeanOneQuantile(20, 0.5)).to.be.closeTo(0.983, 0.005);
+        const strata = spreadStrata(20);
+        expect([...strata].sort((a, b) => a - b)).to.deep.equal(strata.map((_, i) => (i + 0.5) / 20));
+        const first = strata.slice(0, 4).sort((a, b) => a - b);
+        expect(first[0]).to.be.below(0.3);
+        expect(first[3]).to.be.above(0.7);
     });
 });
 
