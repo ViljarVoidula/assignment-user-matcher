@@ -62,9 +62,12 @@ export const MIN_EXPECTED = 5;
  * teach a large effect from noise.
  */
 export const EFFECT_SHRINK = 50;
-/** A knock-on day counts only when it is this many Poisson sigmas off the baseline (as `isOutlier`)… */
+/**
+ * A knock-on day counts only when it is this many sigmas off the baseline, the variance being Poisson
+ * plus the series' own day-level dispersion (`dayDispersion`)…
+ */
 const KNOCK_ON_SIGMAS = 2.5;
-/** …and only inside a run of at least this many such days: one odd day is not a wave. */
+/** …and only inside a run of at least this many such days, all off the same way: one odd day is not a wave. */
 const KNOCK_ON_RUN = 2;
 /** Sigmas either side of a single occurrence's size for its range. */
 const RANGE_SIGMAS = 2;
@@ -72,46 +75,73 @@ const RANGE_SIGMAS = 2;
 const shrink = (ratio: number, evidence: number) => 1 + ((ratio - 1) * evidence) / (evidence + EFFECT_SHRINK);
 
 /**
+ * Day-level dispersion of a series: the share of a day's expected volume squared that real days scatter
+ * by beyond Poisson, `c = max(0, Σ((a − e)² − e) ÷ Σe²)` over ordinary days. A day expected at `e` then
+ * has variance `e + c·e²`. Real arrivals are rarely Poisson at the day grain (weather, a mailing, one
+ * client's batch), and at 7,000 a week even 8 % day noise is several Poisson sigmas: a gate on Poisson
+ * alone reads that noise as knock-on waves.
+ */
+export function dayDispersion(days: ReadonlyArray<{ actual: number; expected: number }>): number {
+    let excess = 0;
+    let squares = 0;
+    for (const { actual, expected } of days) {
+        if (expected < MIN_EXPECTED) continue;
+        excess += (actual - expected) ** 2 - expected;
+        squares += expected * expected;
+    }
+    return squares > 0 ? Math.max(0, excess / squares) : 0;
+}
+
+/**
  * Learns one effect per label from past occurrences, judged day by day
  * against `expected` (the baseline with no effects) and `actual`. Days the
  * baseline expects under `MIN_EXPECTED` tasks are skipped: a ratio of almost
- * nothing is noise.
+ * nothing is noise. `dispersion` is the series' day-level dispersion
+ * (`dayDispersion`); 0 is pure Poisson.
  *
  * Size is Σ actual ÷ Σ expected over the label's days, shrunk towards 1 by the
- * evidence (`EFFECT_SHRINK`). A single occurrence's range is its Poisson
- * uncertainty (± 2 · √actual ÷ expected, widened to cover the unshrunk
- * estimate); several occurrences range over their own sizes. A knock-on day
- * is kept only when the pooled actual is `2.5 · √expected` off the baseline
- * and it sits in a run of at least two such days; its factor is shrunk the
+ * evidence (`EFFECT_SHRINK`). A single occurrence's range is its uncertainty
+ * (± 2 · √(actual + c·Σe²) ÷ expected, widened to cover the unshrunk
+ * estimate); several occurrences range over their own sizes. The shape is
+ * indexed by day of the event (`day − from`), so a skipped day stays 1 and
+ * does not shift the days after it. A knock-on day is kept only when the
+ * pooled actual is `2.5 · √(expected + c·Σe²)` off the baseline and it sits in
+ * a run of at least two such days off the same way; its factor is shrunk the
  * same way as the size.
  */
 export function learnEffects(
     past: readonly Occ[],
     actual: (day: number) => number | null,
     expected: (day: number) => number,
+    dispersion = 0,
 ): Map<string, LearnedEffect> {
     interface Entry {
         kind: string;
         sizes: number[];
         a: number;
         e: number;
+        /** Σ e² over the label's days, for the day-level part of the variance. */
+        e2: number;
         shape: number[][];
         knockA: number[];
         knockE: number[];
+        knockE2: number[];
     }
     const byLabel = new Map<string, Entry>();
     for (const occ of past) {
         if (occ.o.closed) continue;
-        const ratios: number[] = [];
+        const ratios: Array<{ at: number; ratio: number }> = [];
         let sa = 0;
         let se = 0;
+        let se2 = 0;
         for (let d = occ.from; d <= occ.to; d++) {
             const a = actual(d);
             const e = expected(d);
             if (a === null || e < MIN_EXPECTED) continue;
-            ratios.push(a / e);
+            ratios.push({ at: d - occ.from, ratio: a / e });
             sa += a;
             se += e;
+            se2 += e * e;
         }
         if (ratios.length === 0) continue;
         const size = sa / se;
@@ -120,16 +150,20 @@ export function learnEffects(
             sizes: [],
             a: 0,
             e: 0,
+            e2: 0,
             shape: [],
             knockA: [],
             knockE: [],
+            knockE2: [],
         };
         entry.sizes.push(size);
         entry.a += sa;
         entry.e += se;
-        ratios.slice(0, MAX_SHAPE_DAYS).forEach((r, i) => {
-            (entry.shape[i] ??= []).push(size > 0 ? r / size : 1);
-        });
+        entry.e2 += se2;
+        for (const { at, ratio } of ratios) {
+            if (at >= MAX_SHAPE_DAYS) break;
+            (entry.shape[at] ??= []).push(size > 0 ? ratio / size : 1);
+        }
         if (!occ.holiday) {
             for (let j = 0; j < KNOCK_ON_DAYS; j++) {
                 const a = actual(occ.to + j + 1);
@@ -137,6 +171,7 @@ export function learnEffects(
                 if (a === null || e < MIN_EXPECTED) continue;
                 entry.knockA[j] = (entry.knockA[j] ?? 0) + a;
                 entry.knockE[j] = (entry.knockE[j] ?? 0) + e;
+                entry.knockE2[j] = (entry.knockE2[j] ?? 0) + e * e;
             }
         }
         byLabel.set(occ.o.label, entry);
@@ -151,7 +186,7 @@ export function learnEffects(
             low = Math.min(...entry.sizes.map((k) => shrink(k, entry.e)));
             high = Math.max(...entry.sizes.map((k) => shrink(k, entry.e)));
         } else {
-            const sigma = (RANGE_SIGMAS * Math.sqrt(Math.max(entry.a, 1))) / entry.e;
+            const sigma = (RANGE_SIGMAS * Math.sqrt(Math.max(entry.a, 1) + dispersion * entry.e2)) / entry.e;
             low = Math.max(0, Math.min(size, raw) - sigma);
             high = Math.max(size, raw) + sigma;
         }
@@ -163,31 +198,46 @@ export function learnEffects(
             size,
             low: Math.min(low, size),
             high: Math.max(high, size),
-            shape: entry.shape.map((values) => clamp(mean(values), 0.05, 20)),
-            knockOn: knockOnOf(entry.knockA, entry.knockE),
+            // A day of the event never read (it expected too little) is an ordinary day of it: 1.
+            shape: Array.from(entry.shape, (values) => (values ? clamp(mean(values), 0.05, 20) : 1)),
+            knockOn: knockOnOf(entry.knockA, entry.knockE, entry.knockE2, dispersion),
         });
     }
     return out;
 }
 
-/** Knock-on factors per day after an event: significant days in runs of `KNOCK_ON_RUN`, trailing 1s trimmed. */
-function knockOnOf(actuals: readonly number[], expecteds: readonly number[]): number[] {
+/**
+ * Knock-on factors per day after an event: significant days in same-direction runs of `KNOCK_ON_RUN`,
+ * trailing 1s trimmed. A day is significant when the pooled actual is off the pooled expectation by more
+ * than `KNOCK_ON_SIGMAS · √(E + c·Σe²)`.
+ */
+function knockOnOf(
+    actuals: readonly number[],
+    expecteds: readonly number[],
+    squares: readonly number[],
+    dispersion: number,
+): number[] {
     const factors: number[] = [];
-    const significant: boolean[] = [];
+    // +1 above the baseline, −1 below, 0 not significant.
+    const direction: number[] = [];
     for (let j = 0; j < KNOCK_ON_DAYS; j++) {
         const a = actuals[j];
         const e = expecteds[j];
         const known = a !== undefined && e !== undefined;
         const k = known ? clamp(shrink(a / e, e), 0.2, 5) : 1;
         factors.push(k);
-        significant.push(known && Math.abs(a - e) > KNOCK_ON_SIGMAS * Math.sqrt(e) && Math.abs(k - 1) >= KNOCK_ON_MIN);
+        const sd = known ? Math.sqrt(e + dispersion * (squares[j] ?? 0)) : 0;
+        const significant = known && Math.abs(a - e) > KNOCK_ON_SIGMAS * sd && Math.abs(k - 1) >= KNOCK_ON_MIN;
+        direction.push(significant ? Math.sign(a - e) : 0);
     }
     const knockOn = factors.map((k, j) => {
+        const sign = direction[j];
+        if (sign === 0) return 1;
         let from = j;
-        while (from > 0 && significant[from - 1]) from--;
+        while (from > 0 && direction[from - 1] === sign) from--;
         let to = j;
-        while (to < KNOCK_ON_DAYS - 1 && significant[to + 1]) to++;
-        return significant[j] && to - from + 1 >= KNOCK_ON_RUN ? k : 1;
+        while (to < KNOCK_ON_DAYS - 1 && direction[to + 1] === sign) to++;
+        return to - from + 1 >= KNOCK_ON_RUN ? k : 1;
     });
     while (knockOn.length > 0 && knockOn[knockOn.length - 1] === 1) knockOn.pop();
     return knockOn;

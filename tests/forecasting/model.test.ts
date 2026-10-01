@@ -528,6 +528,92 @@ describe('forecast model: review fixes', () => {
         expect(invented).to.be.at.most(2);
     });
 
+    for (const dayNoise of [0.08, 0.15]) {
+        it(`invents no knock-on wave under ${dayNoise * 100} % day noise at 7,000/week`, () => {
+            const occurrences = [{ label: 'sale', kind: 'sale', from: '2026-08-10', to: '2026-08-12' }];
+            const event = { from: '2026-08-10', to: '2026-08-12', factor: 1.5 };
+            let invented = 0;
+            for (let seed = 1; seed <= 30; seed++) {
+                const model = fit({ now: NOW, weeks: 16, weeklyTotal: 7000, seed, dayNoise, events: [event] }, occurrences);
+                if (model.learned.get('sale')!.knockOn.some((k) => k !== 1)) invented += 1;
+            }
+            expect(invented).to.be.at.most(2);
+        });
+    }
+
+    it('keeps a strong knock-on wave under 8 % day noise at 7,000/week', () => {
+        const occurrences = [{ label: 'sale', kind: 'sale', from: '2026-08-10', to: '2026-08-12' }];
+        let found = 0;
+        for (let seed = 1; seed <= 30; seed++) {
+            const model = fit(
+                {
+                    now: NOW,
+                    weeks: 16,
+                    weeklyTotal: 7000,
+                    seed,
+                    dayNoise: 0.08,
+                    events: [{ from: '2026-08-10', to: '2026-08-12', factor: 1.5, knockOn: { days: 7, factor: 1.4 } }],
+                },
+                occurrences,
+            );
+            if (model.learned.get('sale')!.knockOn.filter((k) => k !== 1).length >= 3) found += 1;
+        }
+        expect(found / 30).to.be.at.least(0.6);
+    });
+
+    it('reads a knock-on run as one direction: a day up next to a day down is not a wave', () => {
+        const [occ] = prepareOccurrences([{ label: 'flip', kind: 'sale', from: '2026-04-06', to: '2026-04-06' }]);
+        const values = new Map([
+            [dayOf('2026-04-07'), 160],
+            [dayOf('2026-04-08'), 40],
+        ]);
+        const learned = learnEffects(
+            [occ],
+            (day) => values.get(day) ?? 100,
+            () => 100,
+        );
+        expect(learned.get('flip')!.knockOn).to.deep.equal([]);
+    });
+
+    it('widens the knock-on gate and a single occurrence range by day-level dispersion', () => {
+        const [occ] = prepareOccurrences([{ label: 'd', kind: 'sale', from: '2026-04-06', to: '2026-04-06' }]);
+        const values = new Map([
+            [dayOf('2026-04-06'), 150],
+            [dayOf('2026-04-07'), 130],
+            [dayOf('2026-04-08'), 130],
+        ]);
+        const actual = (day: number) => values.get(day) ?? 100;
+        // 30 over 100 is 3σ of Poisson alone, but only 30/√(100 + 0.04·100²) ≈ 1.3σ with 20 % day dispersion.
+        expect(learnEffects([occ], actual, () => 100).get('d')!.knockOn).to.have.length(2);
+        const dispersed = learnEffects([occ], actual, () => 100, 0.04).get('d')!;
+        expect(dispersed.knockOn).to.deep.equal([]);
+        const plain = learnEffects([occ], actual, () => 100).get('d')!;
+        expect(dispersed.high - dispersed.low).to.be.above(plain.high - plain.low);
+        // ±2·√(150 + 0.04·100²)/100 around the size.
+        expect(dispersed.high).to.be.closeTo(1.5 + (2 * Math.sqrt(150 + 400)) / 100, 1e-12);
+    });
+
+    it('indexes an event shape by day of the event, so a skipped quiet day keeps later days in place', () => {
+        const [occ] = prepareOccurrences([{ label: 'gap', kind: 'sale', from: '2026-04-06', to: '2026-04-08' }]);
+        const expected = new Map([[dayOf('2026-04-06'), 2]]);
+        const values = new Map([
+            [dayOf('2026-04-07'), 100],
+            [dayOf('2026-04-08'), 300],
+        ]);
+        const learned = learnEffects(
+            [occ],
+            (day) => values.get(day) ?? 2,
+            (day) => expected.get(day) ?? 100,
+        );
+        const shape = learned.get('gap')!.shape;
+        // Day 0 is unread (expects under five tasks): it stays 1, and day 2 is still the peak, at index 2.
+        expect(shape).to.have.length(3);
+        expect(shape[0]).to.equal(1);
+        expect(shape[2]).to.be.above(shape[1]);
+        expect(shape[1]).to.be.closeTo(0.5, 1e-12);
+        expect(shape[2]).to.be.closeTo(1.5, 1e-12);
+    });
+
     it('projects a local day as the sum of its local hours, across the clock change', () => {
         const model = fit({ now: NOW, weeks: 16, weeklyTotal: 7000, seed: 6 }, [
             { label: 'x', kind: 'sale', from: '2026-10-20', to: '2026-10-21' },

@@ -16,7 +16,7 @@
  */
 import { ForecastCalendar, HOUR_MS } from './calendar';
 import { DAY_MS, dayOf, mondayOfDay, utcDay, weekOfYear, weekdayOf } from './days';
-import { dayEffect, effectFor, learnEffects, specialDays, type DayEffect, type Occ } from './effects';
+import { dayDispersion, dayEffect, effectFor, learnEffects, specialDays, type DayEffect, type Occ } from './effects';
 import type { HourComponents, LearnedEffect, SeriesHistory } from './types';
 import { clamp, median } from './stats';
 
@@ -416,7 +416,7 @@ function fitWith(
         effects: new Map(),
         occurrences,
     };
-    if (!span) return withEffects(base);
+    if (!span) return withEffects(base, special);
 
     let monday = mondayOfDay(span.from);
     if (monday < span.from) monday += 7;
@@ -488,27 +488,42 @@ function fitWith(
             trend = 0;
         }
     }
-    return withEffects({
-        ...base,
-        dayShare: local.dayShare ?? utcDayShare,
-        utcDayShare,
-        level,
-        trend,
-        lastWeek: weeks.length > 0 ? weeks[weeks.length - 1] : null,
-        levels,
-        yearly,
-        historyWeeks: weeks.length,
-    });
+    return withEffects(
+        {
+            ...base,
+            dayShare: local.dayShare ?? utcDayShare,
+            utcDayShare,
+            level,
+            trend,
+            lastWeek: weeks.length > 0 ? weeks[weeks.length - 1] : null,
+            levels,
+            yearly,
+            historyWeeks: weeks.length,
+        },
+        special,
+    );
 }
 
-/** Learns effects from past occurrences against the fitted baseline, and resolves every occurrence's effect. */
-function withEffects(model: FittedSeries): FittedSeries {
+/**
+ * Learns effects from past occurrences against the fitted baseline, and resolves every occurrence's effect.
+ * The knock-on gate and single-occurrence ranges allow for the series' own day-level dispersion, read off
+ * the recent ordinary days (`SHAPE_WEEKS`, not special, not an outlier left out) against `expectedDay`.
+ */
+function withEffects(model: FittedSeries, special: ReadonlySet<number>): FittedSeries {
     const today = utcDay(model.asOf);
     const past = model.occurrences.filter((occ) => occ.from < today);
+    const recent: Array<{ actual: number; expected: number }> = [];
+    if (model.span && model.lastWeek !== null) {
+        for (let day = Math.max(model.span.from, model.span.to - SHAPE_WEEKS * 7 + 1); day <= model.span.to; day++) {
+            if (special.has(day)) continue;
+            recent.push({ actual: actualOn(model, day) ?? 0, expected: expectedDay(model, day) });
+        }
+    }
     const learned = learnEffects(
         past,
         (day) => actualOn(model, day),
         (day) => expectedDay(model, day),
+        dayDispersion(recent),
     );
     const effects = new Map<Occ, LearnedEffect>();
     for (const occ of model.occurrences) effects.set(occ, effectFor(occ.o, learned));

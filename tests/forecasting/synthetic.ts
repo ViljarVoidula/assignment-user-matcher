@@ -30,6 +30,11 @@ export interface SyntheticOptions {
     noise?: boolean;
     /** Keep only daily rows (an imported daily series). */
     dailyOnly?: boolean;
+    /**
+     * Day-level noise on top of Poisson: each local day's volume is multiplied by a mean-one lognormal
+     * factor with this sigma (0.08 ≈ 8 %). Drawn from its own stream, so the Poisson draws do not move.
+     */
+    dayNoise?: number;
 }
 
 /** Office-hours shape: weekdays 8–18 busy, a little in the evening, quiet weekends. */
@@ -46,6 +51,18 @@ export function syntheticHistory(options: SyntheticOptions): SeriesHistory {
     const start = end - options.weeks * 7 * DAY_MS;
     const calendar = new ForecastCalendar(zone, start, end);
     const rand = createPrng(options.seed ?? 7);
+    const dayRand = createPrng(((options.seed ?? 7) * 7919 + 13) >>> 0);
+    const dayFactor = new Map<string, number>();
+    const dayNoiseOf = (date: string): number => {
+        const sigma = options.dayNoise ?? 0;
+        if (sigma <= 0) return 1;
+        let f = dayFactor.get(date);
+        if (f === undefined) {
+            const z = Math.sqrt(-2 * Math.log(1 - dayRand())) * Math.cos(2 * Math.PI * dayRand());
+            dayFactor.set(date, (f = Math.exp(sigma * z - (sigma * sigma) / 2)));
+        }
+        return f;
+    };
     // Normalise the shape over one local week so `weeklyTotal` is what a week sums to.
     let weekWeight = 0;
     for (let wd = 1; wd <= 7; wd++) for (let h = 0; h < 24; h++) weekWeight += shape(wd, h);
@@ -71,6 +88,7 @@ export function syntheticHistory(options: SyntheticOptions): SeriesHistory {
                 if (after >= 1 && after <= e.knockOn.days) mean *= e.knockOn.factor;
             }
         }
+        mean *= dayNoiseOf(slot.date);
         const value = options.noise === false ? mean : samplePoisson(mean, rand);
         if (value <= 0) continue;
         if (at >= hourlyFrom && !options.dailyOnly) hourly.push({ at, value });
