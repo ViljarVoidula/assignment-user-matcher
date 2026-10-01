@@ -596,6 +596,10 @@ describe('staffingNeed: review fixes', () => {
         expect(plan[3].productive.likely).to.be.above(0);
         // The people matter: with nobody on that hour, the inherited work misses its target.
         const heads = plan.map((i) => i.productive.likely);
+        // Its service level hangs on rare big-backlog days, so it is read on more seeds (and so is the hour
+        // that hands the backlog over): replayed on 400 fresh days, it delivers what it reports.
+        expect(plan[3].productive.likely).to.be.within(11, 13);
+        expect(replayDay(email, loads, heads, 400)[3]).to.be.at.least(plan[3].serviceByTag.email - 0.04);
         expect(replayDay(email, loads, [...heads.slice(0, 3), 0, heads[4]])[3]).to.be.below(0.05);
         // A gap breaks the chain: the later hour is staffed as if it started fresh.
         const run = (hours: ReturnType<typeof hour>[]) =>

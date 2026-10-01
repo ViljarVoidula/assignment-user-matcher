@@ -325,6 +325,15 @@ function search(ok: (n: number) => boolean, start: number, floor: number, max: n
 const meets = (served: ArrayLike<number>, arrived: ArrayLike<number>, prep: Prepared, judged: readonly number[]) =>
     judged.every((g) => arrived[g] === 0 || served[g] / arrived[g] >= prep.tags[g].profile.targetShare - 1e-9);
 
+/**
+ * Seeds for a chained hour whose work is mostly inherited backlog (carried-in work ≥ half the hour's), and
+ * for the two hours before it that built the backlog (re-read when the backlog shows): its service level
+ * hangs on rare big-backlog days, which twenty seeds mostly miss. No adaptive stop for them.
+ */
+export const BACKLOG_SEEDS = 80;
+/** Share of an hour's work that, carried in, makes it a backlog hour. */
+const BACKLOG_SHARE = 0.5;
+
 /** Seeds every load gets before the adaptive stop may end it early. */
 export const MIN_SEEDS = 8;
 /** Stop drawing seeds once every judged tag's pooled service level is known to ±this (95 %). */
@@ -381,7 +390,15 @@ export function staffingNeed(
     const nTags = prep.tags.length;
     const lengthMs = prep.window.lengthMs;
     const memo = new Map<string, Omit<IntervalNeed, 'startMs'>>();
-    const strata = spreadStrata(maxSeeds);
+    const strataBy = new Map<number, number[]>();
+    const strataFor = (count: number) => {
+        let strata = strataBy.get(count);
+        if (!strata) strataBy.set(count, (strata = spreadStrata(count)));
+        return strata;
+    };
+    /** Expected work of an hour's new arrivals, in person-ms. */
+    const newWork = (arrivals: Record<string, number>) =>
+        prep.tags.reduce((sum, t, g) => sum + Math.max(0, arrivals[t.profile.tag] ?? 0) * prep.meanHandle[g] * t.cost, 0);
     let simulations = 0;
     let cacheHits = 0;
     let incomplete = false;
@@ -390,7 +407,17 @@ export function staffingNeed(
     let carriedTo = Number.NaN;
 
     /** One interval, simulated from scratch (`carryIn` null) or opening with the previous one's leftovers. */
-    const solve = (offered: number[], judged: number[], seedKey: string, carryIn: Carry[] | null, continues: boolean) => {
+    const solve = (
+        offered: number[],
+        judged: number[],
+        seedKey: string,
+        carryIn: Carry[] | null,
+        continues: boolean,
+        seedCount: number,
+    ) => {
+        const strata = strataFor(seedCount);
+        // No adaptive stop on the boosted hours: their trajectories are the sample the backlog hour reads.
+        const adaptive = seedCount === maxSeeds;
         // A chained interval opens with the last one's leftovers (no warm-up), and when another follows it
         // has no tail: nobody is assumed to stay on, and work still queued at its end is judged next door.
         const window: SimWindow = {
@@ -497,14 +524,14 @@ export function staffingNeed(
         /** Each answer minus the Erlang A seed of that seed's own drawn load: how far the bracket is off. */
         const offsets: number[] = [];
         let capped = false;
-        for (let s = 0; s < maxSeeds; s++) {
+        for (let s = 0; s < seedCount; s++) {
             // The seed is a function of the load (and, chained, of the interval), not of the position in the
             // list: the same load always gets the same draws, so memoised and fresh answers agree.
             const rand = createPrng(hashSeed(baseSeed, seedKey, s));
             // Forecast error, stratified: seed s takes the rate factor at its own stratum of the Gamma (each
             // tag's strata in a different order), so the seeds see the error's whole range instead of whatever
             // as many random draws happen to give — the likely head count depends on its upper tail.
-            const factors = prep.tags.map((_, g) => gammaMeanOneQuantile(k, strata[(s + g * 7) % maxSeeds]));
+            const factors = prep.tags.map((_, g) => gammaMeanOneQuantile(k, strata[(s + g * 7) % seedCount]));
             const tasks = drawTasks(
                 offered,
                 prep.tags,
@@ -543,7 +570,7 @@ export function staffingNeed(
             }
             // Adaptive stop: enough seeds once the pooled service level near the answer is pinned down.
             const count = s + 1;
-            if (count >= minSeeds && count < maxSeeds && (count - minSeeds) % 4 === 0) {
+            if (adaptive && count >= minSeeds && count < seedCount && (count - minSeeds) % 4 === 0) {
                 const at = Math.max(
                     1,
                     Math.ceil(
@@ -625,7 +652,21 @@ export function staffingNeed(
         return { need, carryOut };
     };
 
-    const out: IntervalNeed[] = intervals.map((interval, index) => {
+    /** The chained intervals solved since the chain last broke, to re-read on more seeds when a backlog shows. */
+    interface Solved {
+        index: number;
+        offered: number[];
+        judged: number[];
+        seedKey: string;
+        carryIn: Carry[] | null;
+        continues: boolean;
+        uncovered: string[];
+        boosted: boolean;
+    }
+    let chain: Solved[] = [];
+    const boosted = Math.max(maxSeeds, BACKLOG_SEEDS);
+    const out: IntervalNeed[] = [];
+    const one = (interval: StaffingInterval, index: number): IntervalNeed => {
         // Chained hours never share a simulation, so they are simulated at their own load, not the grid's.
         const expected = prep.tags.map((t) => {
             const value = interval.arrivals[t.profile.tag] ?? 0;
@@ -634,7 +675,8 @@ export function staffingNeed(
         const busy = expected.map((v, g) => (v > 0 ? g : -1)).filter((g) => g >= 0);
         const uncovered = busy.filter((g) => !prep.pool.some((s) => s[g] >= 0)).map((g) => prep.tags[g].profile.tag);
         // A chain holds only across back-to-back intervals.
-        const carryIn = carries && interval.startMs === carriedTo ? carries : null;
+        let carryIn = carries && interval.startMs === carriedTo ? carries : null;
+        if (!carryIn) chain = [];
         carries = null;
         carriedTo = interval.startMs + lengthMs;
         const continues = prep.chained && intervals[index + 1]?.startMs === carriedTo;
@@ -647,6 +689,7 @@ export function staffingNeed(
         if (judged.length === 0) {
             // Nothing to judge: whatever was left over (already past its target) runs down or gives up.
             if (carryIn) carries = carryIn.map((c) => ageCarry(c, lengthMs));
+            chain = [];
             return quiet(interval.startMs, uncovered, 'none');
         }
         const key = expected.join(',');
@@ -659,15 +702,48 @@ export function staffingNeed(
         }
         if (options.budgetMs !== undefined && Date.now() - started > options.budgetMs) {
             incomplete = true;
+            chain = [];
             return quiet(interval.startMs, uncovered, 'skipped');
         }
         // Uncovered tags' work would only sit in a queue nobody reads: it is neither drawn nor seeded.
         const offered = expected.map((v, g) => (judged.includes(g) ? v : 0));
         const seedKey = prep.chained ? `${key}@${interval.startMs}` : key;
-        const { need, carryOut } = solve(offered, judged, seedKey, carryIn, continues);
+        // A backlog hour — carried-in work at least half its work — hangs on rare big-backlog days, which
+        // twenty seeds mostly miss. It is read on more seeds, and so are the two hours that built the backlog
+        // (re-read now, so the backlog hour opens with as many trajectories as it has seeds).
+        const work = newWork(interval.arrivals);
+        let carried = 0;
+        for (const carry of carryIn ?? []) {
+            for (let i = 0; i < carry.tag.length; i++) carried += carry.handle[i] * prep.tags[carry.tag[i]].cost;
+        }
+        if (carryIn) carried /= carryIn.length;
+        const backlog = prep.chained && carryIn !== null && carried >= BACKLOG_SHARE * (carried + work);
+        if (backlog) {
+            const builders = chain.slice(-2).filter((e) => !e.boosted);
+            if (builders.length > 0) {
+                let feed = builders[0].carryIn;
+                for (const e of builders) {
+                    const again = solve(e.offered, e.judged, e.seedKey, feed, e.continues, boosted);
+                    out[e.index] = { startMs: intervals[e.index].startMs, ...again.need, uncovered: e.uncovered };
+                    e.carryIn = feed;
+                    e.boosted = true;
+                    feed = again.carryOut;
+                }
+                carryIn = feed;
+            }
+        }
+        const seedCount = backlog ? boosted : maxSeeds;
+        const { need, carryOut } = solve(offered, judged, seedKey, carryIn, continues, seedCount);
+        if (prep.chained) {
+            chain.push({ index, offered, judged, seedKey, carryIn, continues, uncovered, boosted: backlog });
+            if (chain.length > 2) chain.shift();
+        }
         carries = carryOut;
         if (!prep.chained) memo.set(key, need);
         return { startMs: interval.startMs, ...need, uncovered };
+    };
+    intervals.forEach((interval, index) => {
+        out[index] = one(interval, index);
     });
     return { intervals: out, ms: Date.now() - started, simulations, cacheHits, incomplete };
 }
