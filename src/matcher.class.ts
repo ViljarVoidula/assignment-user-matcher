@@ -4622,7 +4622,11 @@ export default class AssignmentMatcher implements WorkflowHost {
             .zRem(this.acceptedAssignmentsExpiryKey, assignmentId);
         if (previousOwnerId) {
             multi.zRem(this.keys.userAcceptedAssignments(previousOwnerId), assignmentId);
-            multi.sRem(this.keys.userAssignments(previousOwnerId), `assignment:${assignmentId}`);
+            // Not when the owner is getting it back (`returnAcceptedToPending`):
+            // the add above is the point.
+            if (previousOwnerId !== userId) {
+                multi.sRem(this.keys.userAssignments(previousOwnerId), `assignment:${assignmentId}`);
+            }
         }
         multi.hDel(this.keys.acceptedAssignmentOwner(), assignmentId);
         // A re-offer is an offer. Without counting it, the new worker's accept
@@ -4781,6 +4785,28 @@ export default class AssignmentMatcher implements WorkflowHost {
 
         await this.touchUser(userId);
 
+        return true;
+    }
+
+    /**
+     * Undo an acceptance: the worker who accepted the task gets it back as a
+     * pending offer of their own. Nothing is refused or requeued for others, so
+     * unlike `rejectAssignment` it works on accepted work, and the worker is not
+     * barred from taking it again. Emits `released` (`reassigned`) for the
+     * worker, then `pending` — the same events and storage changes as handing
+     * accepted work to somebody else, with the owner on both ends.
+     *
+     * Only the accepting worker may do this; anyone else throws.
+     */
+    async returnAcceptedToPending(userId: string, assignmentId: string): Promise<boolean> {
+        await this.readyPromise;
+
+        const acceptedJson = await this.redisClient.hGet(this.acceptedAssignmentsKey, assignmentId);
+        const owner = acceptedJson ? await this.ownerOf(assignmentId, 'accepted', acceptedJson) : null;
+        if (!acceptedJson || owner !== userId) throw new Error('Assignment not accepted by user');
+
+        await this.offerAcceptedToUser(assignmentId, acceptedJson, userId, userId);
+        await this.touchUser(userId);
         return true;
     }
 

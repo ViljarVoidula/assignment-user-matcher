@@ -547,6 +547,56 @@ describe('Task updates (updateAssignment)', function () {
         });
     });
 
+    describe('returning accepted work to its own worker (returnAcceptedToPending)', function () {
+        it('puts the task back in the worker\'s pending list and says it was released', async function () {
+            const matcher = createMatcher();
+            await matcher.addUser({ id: 'u1', tags: ['plumbing'] });
+            await matcher.addAssignment({ id: 'a1', tags: ['plumbing'], priority: 50 });
+            await matcher.assignToUser('a1', 'u1');
+            await matcher.acceptAssignment('u1', 'a1');
+
+            await matcher.returnAcceptedToPending('u1', 'a1');
+
+            expect(await matcher.getCurrentAssignmentsForUser('u1')).to.deep.equal(['a1']);
+            expect(await redisClient.hGet(ownerKey, 'a1')).to.equal('u1');
+            expect(await redisClient.zScore(`${PREFIX}user:u1:accepted`, 'a1')).to.equal(null);
+            const counts = await matcher.getAssignmentCounts();
+            expect(counts.accepted).to.equal(0);
+            expect(counts.pending).to.equal(1);
+            const released = events.filter((e) => e.kind === 'released' && e.workerId === 'u1');
+            expect(released).to.have.length(1);
+        });
+
+        it('can be accepted again afterwards', async function () {
+            const matcher = createMatcher();
+            await matcher.addUser({ id: 'u1', tags: ['plumbing'] });
+            await matcher.addAssignment({ id: 'a1', tags: ['plumbing'], priority: 50 });
+            await matcher.assignToUser('a1', 'u1');
+            await matcher.acceptAssignment('u1', 'a1');
+            await matcher.returnAcceptedToPending('u1', 'a1');
+
+            expect(await matcher.acceptAssignment('u1', 'a1')).to.equal(true);
+        });
+
+        it('refuses anyone but the worker who accepted it', async function () {
+            const matcher = createMatcher();
+            await matcher.addUser({ id: 'u1', tags: ['plumbing'] });
+            await matcher.addUser({ id: 'u2', tags: ['plumbing'] });
+            await matcher.addAssignment({ id: 'a1', tags: ['plumbing'], priority: 50 });
+            await matcher.assignToUser('a1', 'u1');
+            await matcher.acceptAssignment('u1', 'a1');
+
+            let message = '';
+            try {
+                await matcher.returnAcceptedToPending('u2', 'a1');
+            } catch (error) {
+                message = (error as Error).message;
+            }
+            expect(message).to.match(/not accepted by user/);
+            expect((await matcher.getAssignmentCounts()).accepted).to.equal(1);
+        });
+    });
+
     describe('reassigning accepted work', function () {
         it('leaves a task with no SLA byte-identical in storage', async function () {
             const matcher = createMatcher();

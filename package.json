@@ -47,6 +47,8 @@
     },
     "scripts": {
         "test": "nyc mocha tests/ --recursive --extension .ts --exit",
+        "test:focused": "mocha --no-config --require ts-node/register --extension ts --exit",
+        "claude:usage": "python3 scripts/claude/claude-usage.py",
         "benchmark:learning": "ts-node benchmark-learning.ts",
         "benchmark:weights": "ts-node benchmark-weights.ts",
         "benchmark:scenarios": "ts-node benchmark-learning-scenarios.ts",
