@@ -68,7 +68,7 @@ describe('Matcher Coverage Tests', async function () {
             tags: ['tag1'],
             routingWeights: { tag1: 0 },
         };
-        // @ts-ignore
+        // @ts-expect-error matchScore is not public
         const result = await matcher.matchScore(user, 'tag1', 10);
         expect(result).to.deep.equal([0, 10]);
     });

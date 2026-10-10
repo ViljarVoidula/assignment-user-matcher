@@ -20,7 +20,7 @@ describe('WorkflowManager', function () {
         async addAssignment(assignment: Assignment) {
             return assignment;
         },
-        async matchUsersAssignments(userId: string) {
+        async matchUsersAssignments(_userId: string) {
             return [];
         },
     };

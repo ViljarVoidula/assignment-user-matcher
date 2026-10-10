@@ -125,17 +125,6 @@ describe('Matcher Wildcard Tests', async function () {
         await matcher.addAssignment({ id: 'a2', tags: ['skill:js:react'], priority: 10 });
         await matcher.addAssignment({ id: 'a3', tags: ['skill:python'], priority: 10 });
 
-        const user = {
-            id: 'u1',
-            tags: [],
-            routingWeights: {
-                'skill:js:*': 20, // Matches a1, a2
-                'skill:*:node': 50, // Matches a1 (assuming we support * in middle? No, implementation uses zRangeByLex which is prefix only)
-                // The implementation: wildcards = tags.filter((t) => t.tag.endsWith('*'));
-                // So only suffix wildcards are supported.
-            },
-        };
-
         // Let's test prefix matching specifically
         const user2 = {
             id: 'u2',

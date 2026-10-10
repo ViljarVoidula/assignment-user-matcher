@@ -1,6 +1,12 @@
-import { RedisClientType } from '../types/matcher';
+import {
+    RedisClientType,
+    WorkflowEvent,
+    DeadLetterEntry,
+    AuditEntry,
+    CircuitBreakerState,
+    ReliabilityMetrics,
+} from '../types/matcher';
 import { KeyBuilders } from '../utils/keys';
-import { WorkflowEvent, DeadLetterEntry, AuditEntry, CircuitBreakerState, ReliabilityMetrics } from '../types/matcher';
 
 /**
  * Calculate delay with exponential backoff and jitter
@@ -80,7 +86,7 @@ export class ReliabilityManager {
                     failureCount: Number(stateData.failureCount) || 0,
                     lastFailureTime: Number(stateData.lastFailureTime) || 0,
                 };
-                console.log('Loaded circuit breaker state from Redis:', this.circuitBreaker);
+                console.info('Loaded circuit breaker state from Redis:', this.circuitBreaker);
             }
         } catch (err) {
             console.error('Failed to load circuit breaker state from Redis:', err);

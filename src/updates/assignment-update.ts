@@ -134,7 +134,7 @@ export function applyUpdate(assignment: Assignment, patch: AssignmentUpdate, nor
 export function consumeOfferWindow(record: Record<string, any>): void {
     const schedule = record.schedule;
     if (schedule && typeof schedule === 'object' && schedule.notAfter !== undefined) {
-        const { notAfter, ...rest } = schedule as Record<string, unknown>;
+        const { notAfter: _notAfter, ...rest } = schedule as Record<string, unknown>;
         if (Object.keys(rest).length > 0) record.schedule = rest;
         else delete record.schedule;
     }

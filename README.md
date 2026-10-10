@@ -403,6 +403,10 @@ Reassigning accepted work lands it as **pending**, not accepted: the new user ge
 
 Hard rules still apply unless `force: true`: the user must not be paused, must have backlog headroom, must not be vetoed on the assignment, and must not have previously rejected it. The learning layer is never fed by manual assignments. When tracing is active the override is recorded as a decision trace with mode `'manual'`, so supervisor actions land in the same audit trail as organic matches.
 
+### `returnAcceptedToPending(userId: string, assignmentId: string): Promise<boolean>`
+
+Undo an acceptance: the worker who accepted the task gets it back as a **pending** offer of their own. Nothing is refused or requeued for others, so unlike `rejectAssignment` (which only works on pending work) this works on accepted work, and the worker is not barred from accepting it again. The completion deadline and accept stamps are cleared, and the lifecycle hook sees `released` (`reassigned`) for the worker followed by `pending`. Throws unless `userId` is the worker who accepted it.
+
 ### `updateAssignment(id: string, patch: AssignmentUpdate): Promise<UpdateAssignmentResult | null>`
 
 Edit a task that already exists — including one somebody is holding. The patch may carry `tags`, `priority`, `title` and `meta`; a field left `undefined` is untouched, and `title` / `meta` accept `null` to clear them. Policies (`escalation`, `sla`, `schedule`, `vetoedUsers`) are chosen when the work is created and are not patched piecemeal. Returns `null` when no live record exists; terminal work is not editable.
@@ -1039,7 +1043,10 @@ Traces are appended to a capped Redis stream (`decisionTraceMaxEntries`,
 default 1000), so the audit record survives restarts and is shared across
 replicas. Query with `getDecisionTraces({ assignmentId?, userId?, limit? })`
 (newest first), wipe with `clearDecisionTraces()`, and toggle at runtime with
-`setDecisionTraces(enabled)` / `isDecisionTracesEnabled()`.
+`setDecisionTraces(enabled)` / `isDecisionTracesEnabled()`. A lookup by
+`assignmentId` reads that assignment's entries through a per-assignment index
+kept in step with the capped stream, rather than scanning the stream; a
+`userId` filter on its own still scans it.
 
 What a trace contains:
 

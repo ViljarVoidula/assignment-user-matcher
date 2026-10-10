@@ -15,6 +15,8 @@ export default tseslint.config(
             '.codex/**',
             '.github/skills/**',
             '.impeccable/**',
+            // Another tool's git worktrees (gitignored): other commits' copies of this repo.
+            '.kilo/**',
             'docs/**',
             'example/**',
         ],

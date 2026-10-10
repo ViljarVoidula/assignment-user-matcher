@@ -256,7 +256,6 @@ describe('Assignment distance tests', async function () {
 
         const userMatches = await matcher.getCurrentAssignmentsForUser('1');
         expect(userMatches).to.be.deep.equal(['3', '2', '1', '0', '4', '5', '6', '7']);
-        debugger;
     });
 });
 
@@ -469,7 +468,7 @@ describe('Weighted skill matching tests', async function () {
         await matcher.addUser({
             id: 'wu1',
             tags: ['english', 'dutch'],
-            // @ts-ignore enrich user data with routing weights
+            // enrich user data with routing weights
             routingWeights: { english: 100, dutch: 0 },
         } as any);
 
@@ -491,7 +490,7 @@ describe('Weighted skill matching tests', async function () {
         await matcher.addUser({
             id: 'wu2',
             tags: ['english', 'dutch'],
-            // @ts-ignore enrich user data with routing weights
+            // enrich user data with routing weights
             routingWeights: { english: 100, dutch: 30 },
         } as any);
 

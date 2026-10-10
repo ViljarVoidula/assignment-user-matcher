@@ -171,6 +171,10 @@ export function createKeyBuilders(config: RedisKeyConfig) {
 
         // Decision trace stream (auditable routing decisions)
         decisionTraces: () => `${prefix}decisions:traces`,
+        /** Stream ids of one assignment's traces, newest first; kept in step with the capped stream. */
+        decisionTraceIndex: (assignmentId: string) => `${prefix}decisions:traces:by-assignment:${assignmentId}`,
+        /** First stream id written with an index; anything older predates it and is found by scanning. */
+        decisionTraceIndexedSince: () => `${prefix}decisions:traces:indexed-since`,
 
         // Redis Streams keys
         eventStream: () => `${prefix}events:stream`,

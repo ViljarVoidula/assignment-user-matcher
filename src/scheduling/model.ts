@@ -41,7 +41,6 @@ import type {
     WorkingTimeRules,
 } from './types';
 import { ScheduleValidationError } from './types';
-export { availabilityApplies } from './preferences';
 import { resolvePreferenceRules, validatePreferenceObjectives } from './preferences';
 import { createDefaultConstraints } from './constraints/constraint';
 import { scopeEmployeeConstraints } from './constraints/employee-scope';
@@ -54,6 +53,7 @@ import type { TimelineEntry } from './engine/timeline';
 import { buildSiteIndex } from './sites';
 import { PeriodClock, MINUTES_PER_DAY, addDays, assertIsoDate, daysBetween, isoWeekday, parseTimeOfDay } from './time';
 
+export { availabilityApplies } from './preferences';
 export { daysBetween, addDays } from './time';
 
 /**

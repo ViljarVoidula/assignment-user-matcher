@@ -10,8 +10,6 @@ import type { ScheduleInput, ScheduledAssignment } from '../../src/scheduling';
 import { buildSiteIndex, distanceKmBetween, travelMinutesBetween } from '../../src/scheduling/sites';
 import { ScheduleValidationError } from '../../src/scheduling/types';
 
-const H = 60;
-
 function cityInput(overrides: Partial<ScheduleInput> = {}): ScheduleInput {
     return {
         period: { startDate: '2026-01-05', endDate: '2026-01-11' },

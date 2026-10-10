@@ -36,7 +36,6 @@ import { MIN_HOURS_WEIGHT } from './engine/objective';
 import { buildModel } from './model';
 import { propagate } from './engine/propagation';
 import { assign, createState, unassign, type InternalState } from './engine/state';
-import { hardCompliant } from './engine/construction';
 import {
     anyHardDeltaGiven,
     hardBlocked,
@@ -865,7 +864,6 @@ function tradeFits(
     toEmployeeId: string,
     toShiftInstanceId: string | null,
 ): SwapCheck {
-    const ctx = state.ctx;
     const restore: Array<[string, string]> = [];
     for (const [employeeId, instanceId] of [
         [fromEmployeeId, fromShiftInstanceId],

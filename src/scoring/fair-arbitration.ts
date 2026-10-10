@@ -29,7 +29,8 @@ export function resolveFairnessKnobs(
     pairPriorities: number[],
     explicit: { loadPenalty: number; tieBand: number },
 ): { loadPenalty: number; tieBand: number } {
-    let { loadPenalty, tieBand } = explicit;
+    const { tieBand } = explicit;
+    let { loadPenalty } = explicit;
     const ratio = mode ? PRESET_LOAD_PENALTY_RATIO[mode] : undefined;
     if (ratio && loadPenalty <= 0 && pairPriorities.length > 0) {
         const sorted = [...pairPriorities].sort((a, b) => a - b);

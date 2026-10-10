@@ -334,7 +334,6 @@ export class WorkflowManager {
 
         // Scan back in time in batches, filtering status/workflowDefinitionId in
         // memory, until we have `limit` matches or the index is exhausted.
-        // eslint-disable-next-line no-constant-condition
         while (instances.length < limit) {
             const ids = await this.redisClient.zRangeWithScores(byTimeKey, upperBound, '-inf', {
                 REV: true,
@@ -1000,7 +999,7 @@ export class WorkflowManager {
         });
 
         this.subscriberClient.on('connect', () => {
-            console.log('Subscriber client connected');
+            console.info('Subscriber client connected');
             this.subscriberReconnectAttempts = 0;
             this.reliability.updateReconnectCount(0);
         });
@@ -1011,7 +1010,7 @@ export class WorkflowManager {
         });
 
         this.subscriberClient.on('ready', () => {
-            console.log('Subscriber client ready');
+            console.info('Subscriber client ready');
             this.reliability.updateRedisHealth(true);
         });
 
@@ -1032,7 +1031,7 @@ export class WorkflowManager {
         while (attempt < maxAttempts && this.orchestratorRunning) {
             try {
                 await this.setupSubscriberClient();
-                console.log('Subscriber client reconnected successfully');
+                console.info('Subscriber client reconnected successfully');
                 return;
             } catch (err) {
                 attempt++;

@@ -119,10 +119,6 @@ function resolveOptions(options?: AutoRoutingWeightsOptions): ResolvedAutoWeight
     };
 }
 
-function isManualTag(tag: string, existingWeights?: Record<string, number>): boolean {
-    return !!existingWeights && tag in existingWeights;
-}
-
 /**
  * Evidence backing a tag, in independent attempts.
  *

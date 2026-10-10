@@ -94,7 +94,7 @@ describe('Learning ingestion atomic commit', function () {
             keys,
             options,
         );
-        const id = await m.recordDecision('u', 'a', { bias: 1 }, 0, ['t']);
+        await m.recordDecision('u', 'a', { bias: 1 }, 0, ['t']);
         await rejected(m.applyOutcome('a', 'complete'));
         const model = await m.getModel();
         expect(await m.applyOutcome('a', 'complete')).to.equal(false);
@@ -105,7 +105,7 @@ describe('Learning ingestion atomic commit', function () {
 
     it('commits concurrent duplicate events once across separate managers', async () => {
         const m = new LearningManager(client, keys, options);
-        const id = await m.recordDecision('u', 'a', { bias: 1 }, 0, ['t']);
+        await m.recordDecision('u', 'a', { bias: 1 }, 0, ['t']);
         const results = await Promise.all(
             Array.from({ length: 12 }, () => new LearningManager(client, keys, options).applyOutcome('a', 'complete')),
         );

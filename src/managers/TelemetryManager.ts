@@ -18,7 +18,9 @@ export class TelemetryManager {
                 end: () => {
                     try {
                         span.end();
-                    } catch {}
+                    } catch {
+                        // Tracing is observability: it never fails the call it observes.
+                    }
                 },
             };
         } catch {
@@ -31,7 +33,9 @@ export class TelemetryManager {
         try {
             span.recordException(error);
             span.setStatus({ code: 2, message: error.message });
-        } catch {}
+        } catch {
+            // Tracing is observability: it never fails the call it observes.
+        }
     }
 
     setSpanAttributes(span: any, attributes: Record<string, string | number | boolean>): void {
@@ -40,6 +44,8 @@ export class TelemetryManager {
             for (const [key, value] of Object.entries(attributes)) {
                 span.setAttribute(key, value);
             }
-        } catch {}
+        } catch {
+            // Tracing is observability: it never fails the call it observes.
+        }
     }
 }

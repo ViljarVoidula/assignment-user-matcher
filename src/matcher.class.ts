@@ -97,7 +97,6 @@ import type {
     WorkflowInstanceWithSnapshot,
     WorkflowInstanceQuery,
     WorkflowInstancePage,
-    WorkflowTransition,
     LearningFeatureExtractor,
     LearningFeatures,
     LearningAssignmentContext,
@@ -127,35 +126,27 @@ import type {
     MatchPreviewInput,
     DecisionTraceQuery,
     AssignmentLifecycleEvent,
-    EscalationPolicy,
     EscalationSweepResult,
     CompletionDeadlineSweepResult,
     SlaExpirySweepResult,
     ScheduleSweepResult,
     MaintenanceOptions,
     MaintenanceReport,
-    TimeSlot,
     SlotAvailability,
     SlotBooking,
     SlotBookingRefusal,
     SlotCandidate,
     BookingSweepResult,
-    SlaPolicy,
     SlaStats,
-    SchedulePolicy,
-    RecurrencePolicy,
     RecurringAssignment,
     RecurringAssignmentRecord,
     RecurrenceSweepResult,
-    AssignmentLintIssue,
-    AssignmentLintContext,
     AssignmentReadinessReport,
     QueueAuditOptions,
     QueueAuditEntry,
     QueueAuditReport,
     RetentionSweepResult,
     CompletedAssignmentPage,
-    UserStatusFilter,
     UserQueryOptions,
     UserSummary,
     UserQueryResult,
@@ -572,7 +563,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         if (!this.onAssignmentLifecycle) return;
         try {
             this.onAssignmentLifecycle(event);
-        } catch (err) {
+        } catch {
             // Best-effort hook: do not propagate.
         }
     }
@@ -2078,7 +2069,8 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     private async enqueueAssignment(assignment: Assignment, schedulePolicy: NormalizedSchedulePolicy | null) {
-        let { id, tags, priority, latitude, longitude } = assignment;
+        const { id, tags, latitude, longitude } = assignment;
+        let { priority } = assignment;
         if (!priority) priority = await this.calculatePriority(assignment);
 
         // First-enqueue clock for the freshness TTL: NX semantics via the
@@ -4055,7 +4047,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      * outcomes to workers who never received the work.
      */
     private async matchAllUsersFair(): Promise<void> {
-        let users: any[] = [];
+        const users: any[] = [];
         let cursor = '0';
         do {
             const { cursor: nextCursor, entries } = await this.redisClient.hScan(this.usersKey, cursor, { COUNT: 500 });
@@ -4343,7 +4335,7 @@ export default class AssignmentMatcher implements WorkflowHost {
         }
 
         // Otherwise, process all users in parallel as before.
-        let users: any[] = [];
+        const users: any[] = [];
         let cursor = '0';
 
         // Fetch all users in a single loop

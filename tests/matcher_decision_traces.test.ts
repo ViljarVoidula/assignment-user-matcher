@@ -485,6 +485,85 @@ describe('Matcher Decision Traces & Explainability', function () {
             expect(limited).to.have.length(2);
         });
 
+        it("finds an assignment's traces without reading the whole stream", async function () {
+            // A full scan per lookup was 1,000 entries parsed on every task read
+            // and every completion — most of the API's CPU under load.
+            const matcher = new Matcher(redisClient, {
+                redisPrefix: 'trace_index_test:',
+                enableDecisionTraces: true,
+            });
+            await matcher.waitUntilReady();
+            await matcher.addUser({ id: 'alice', tags: ['support'] });
+            for (const [id, priority] of [
+                ['a1', 100],
+                ['a2', 90],
+                ['a3', 80],
+            ] as const) {
+                await matcher.addAssignment({ id, tags: ['support'], priority });
+            }
+            await matcher.matchUsersAssignments();
+
+            let scans = 0;
+            const original = redisClient.xRevRange.bind(redisClient);
+            redisClient.xRevRange = (...args: unknown[]) => {
+                scans++;
+                return original(...args);
+            };
+            try {
+                const traces = await matcher.getDecisionTraces({ assignmentId: 'a2' });
+                expect(traces.map((trace) => trace.assignmentId)).to.deep.equal(['a2']);
+                expect(await matcher.getDecisionTraces({ assignmentId: 'never-matched' })).to.deep.equal([]);
+            } finally {
+                redisClient.xRevRange = original;
+            }
+            expect(scans).to.equal(0);
+        });
+
+        it('keeps the index no bigger than the capped stream, and clears it with the traces', async function () {
+            const matcher = new Matcher(redisClient, {
+                redisPrefix: 'trace_index_trim:',
+                enableDecisionTraces: true,
+                decisionTraceMaxEntries: 2,
+            });
+            await matcher.waitUntilReady();
+            await matcher.addUser({ id: 'alice', tags: ['support'] });
+            for (const [id, priority] of [
+                ['a1', 100],
+                ['a2', 90],
+                ['a3', 80],
+            ] as const) {
+                await matcher.addAssignment({ id, tags: ['support'], priority });
+            }
+            await matcher.matchUsersAssignments();
+
+            // a1's trace fell off the stream, so its index went with it.
+            expect(await redisClient.exists('trace_index_trim:decisions:traces:by-assignment:a1')).to.equal(0);
+            expect(await matcher.getDecisionTraces({ assignmentId: 'a1' })).to.deep.equal([]);
+            expect((await matcher.getDecisionTraces({ assignmentId: 'a3' })).map((t) => t.assignmentId)).to.deep.equal([
+                'a3',
+            ]);
+
+            await matcher.clearDecisionTraces();
+            expect(await redisClient.keys('trace_index_trim:decisions:*')).to.deep.equal([]);
+        });
+
+        it('still finds traces recorded before the index existed', async function () {
+            const matcher = new Matcher(redisClient, {
+                redisPrefix: 'trace_index_legacy:',
+                enableDecisionTraces: true,
+            });
+            await matcher.waitUntilReady();
+            await matcher.addUser({ id: 'alice', tags: ['support'] });
+            await matcher.addAssignment({ id: 'a1', tags: ['support'], priority: 100 });
+            await matcher.matchUsersAssignments();
+            // As a stream written by a release that kept no index would look.
+            await redisClient.del('trace_index_legacy:decisions:traces:by-assignment:a1');
+            await redisClient.del('trace_index_legacy:decisions:traces:indexed-since');
+
+            const traces = await matcher.getDecisionTraces({ assignmentId: 'a1' });
+            expect(traces.map((trace) => trace.assignmentId)).to.deep.equal(['a1']);
+        });
+
         it('clearDecisionTraces removes stored traces', async function () {
             const matcher = new Matcher(redisClient, {
                 redisPrefix: 'trace_clear_test:',
