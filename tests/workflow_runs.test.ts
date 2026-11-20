@@ -252,7 +252,17 @@ describe('Workflow Runs (platform-facing surface)', function () {
             expect(firstFail!.payload!.willRetry).to.equal(true);
             expect(transitions.some((t) => t.kind === 'run.failed')).to.equal(false);
 
-            await (mgr as any).processWorkflowEvent({ ...failEvent, eventId: 'evt-fail-2' });
+            // A stale callback for the first attempt is ignored: the retry is new work.
+            await (mgr as any).processWorkflowEvent({ ...failEvent, eventId: 'evt-fail-stale' });
+            expect(transitions.filter((t) => t.kind === 'step.failed')).to.have.length(1);
+
+            const retried = await mgr.getWorkflowInstance(instance.id);
+            expect(retried!.currentAssignmentId).to.not.equal(instance.currentAssignmentId);
+            await (mgr as any).processWorkflowEvent({
+                ...failEvent,
+                eventId: 'evt-fail-2',
+                assignmentId: retried!.currentAssignmentId!,
+            });
             const failures = transitions.filter((t) => t.kind === 'step.failed');
             expect(failures).to.have.length(2);
             expect(failures[1].payload!.willRetry).to.equal(false);
@@ -372,6 +382,9 @@ describe('Workflow Runs (platform-facing surface)', function () {
             const instance = await mgr.startWorkflow(externalDef.id, 'u1');
 
             await mgr.completeWorkflowStep(instance.id, 'ext1', { success: true, data: { approved: true } });
+            // Cleared only once the completion is saved, so a lost event still leaves the timeout to settle it.
+            expect(await redisClient.zScore(keys.workflowStepExpiryIndex(), `${instance.id}|ext1`)).to.not.be.null;
+            await mgr.processWorkflowEvents(10);
 
             const member = await redisClient.zScore(keys.workflowStepExpiryIndex(), `${instance.id}|ext1`);
             expect(member).to.be.null;
