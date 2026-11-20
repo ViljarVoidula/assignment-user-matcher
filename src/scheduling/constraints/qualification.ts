@@ -9,7 +9,8 @@
  * So possession is a question about a *date*, not a fact about a person:
  * `hasQualification(employee, tag, date)`, never `hasSkill(employee, tag)`.
  * Tags on `Employee.tags` stay valid for the whole period; anything with an
- * expiry belongs in `qualifications`.
+ * expiry belongs in `qualifications`, and a dated entry overrides a plain tag
+ * of the same name.
  */
 
 import type { Employee, RuleVerdict, SchedulingConstraint } from '../types';
@@ -64,12 +65,18 @@ export function qualification(): SchedulingConstraint {
     });
 }
 
-/** Whether the employee holds `tag` on `date`, by plain tag or dated qualification. */
+/**
+ * Whether the employee holds `tag` on `date`, by plain tag or dated qualification.
+ *
+ * A dated entry for the tag is the authority: when one exists, a plain tag of
+ * the same name does not answer. Callers that send every skill both ways (the
+ * hosted platform does) would otherwise never see an expiry date enforced.
+ */
 export function holds(employee: Employee, tag: string, date: string, minLevel?: number): boolean {
-    if (minLevel === undefined && (employee.tags ?? []).includes(tag)) return true;
-    return (employee.qualifications ?? []).some(
+    const dated = (employee.qualifications ?? []).filter((q) => q.tag === tag);
+    if (minLevel === undefined && dated.length === 0 && (employee.tags ?? []).includes(tag)) return true;
+    return dated.some(
         (q) =>
-            q.tag === tag &&
             (q.validFrom === undefined || q.validFrom <= date) &&
             (q.validUntil === undefined || q.validUntil >= date) &&
             (minLevel === undefined || (q.level ?? 0) >= minLevel),

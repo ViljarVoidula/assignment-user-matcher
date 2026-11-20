@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import { buildModel } from '../../src/scheduling/model';
 import { assign, createState } from '../../src/scheduling/engine/state';
 import { staffingViolations } from '../../src/scheduling/constraints/min-staffing';
-import { solveSchedule, checkCompliance } from '../../src/scheduling';
+import { solveSchedule, checkCompliance, rankCandidates, diagnoseInfeasibility } from '../../src/scheduling';
 import type { Employee, ScheduleInput, ShiftTemplate } from '../../src/scheduling';
 
 /**
@@ -185,5 +185,99 @@ describe('dated qualifications in tag counts', () => {
             }),
         );
         expect(result.assignments.map((a) => a.employeeId)).to.deep.equal(['current']);
+    });
+});
+
+/**
+ * A caller that sends a skill both as a plain tag and as a dated qualification
+ * (the hosted platform does, for every skill) must get the date honoured. The
+ * plain tag used to answer first, so an expired certificate never blocked
+ * anyone.
+ */
+describe('a dated qualification overrides the same plain tag', () => {
+    const both: Employee = {
+        id: 'both',
+        tags: ['flt'],
+        timeOff: [],
+        qualifications: [{ tag: 'flt', validUntil: '2026-03-04' }],
+    };
+
+    it('refuses the shift after the date, and allows it before', () => {
+        const result = solveSchedule(
+            input({
+                employees: [both],
+                shifts: [shift('truck', ['2026-03-03', '2026-03-05'], { minEmployees: 1, requiredTags: ['flt'] })],
+            }),
+        );
+        const dates = result.assignments.map((a) => a.date);
+        expect(dates).to.include('2026-03-03');
+        expect(dates).not.to.include('2026-03-05');
+    });
+
+    it('reports a hand-placed shift after the date as an expired hard breach', () => {
+        const scheduleInput = input({
+            employees: [both],
+            shifts: [shift('truck', ['2026-03-05'], { minEmployees: 1, requiredTags: ['flt'] })],
+        });
+        const ctx = buildModel(scheduleInput);
+        const shiftInstanceId = ctx.instances[0].id;
+        const report = checkCompliance(scheduleInput, [
+            { employeeId: 'both', shiftInstanceId, date: '2026-03-05', reasons: [] },
+        ]);
+        const breach = report.violations.find((v) => v.constraintId === 'qualification');
+        expect(breach?.severity).to.equal('hard');
+        expect(breach?.message).to.contain('expired 2026-03-04');
+    });
+
+    it('does not count the expired skill toward a per-tag minimum', () => {
+        const scheduleInput = input({
+            employees: [both],
+            shifts: [shift('truck', ['2026-03-05'], { minEmployees: 1, tagRequirements: { flt: 1 } })],
+        });
+        const ctx = buildModel(scheduleInput);
+        expect(ctx.holdsTagOn('both', 'flt', '2026-03-05')).to.equal(false);
+        expect(ctx.holdsTagOn('both', 'flt', '2026-03-03')).to.equal(true);
+        const state = createState(ctx);
+        assign(state, 'both', ctx.instances[0].id, []);
+        expect(staffingViolations(ctx, state, 'hard').some((v) => v.message.includes('flt'))).to.equal(true);
+    });
+
+    it('does not count the expired skill against a per-tag maximum', () => {
+        const fresh: Employee = { id: 'fresh', tags: ['flt'], timeOff: [] };
+        const scheduleInput = input({
+            employees: [both, fresh],
+            shifts: [shift('truck', ['2026-03-05'], { minEmployees: 2, maxEmployees: 2, tagMaximums: { flt: 1 } })],
+        });
+        const ctx = buildModel(scheduleInput);
+        const shiftInstanceId = ctx.instances[0].id;
+        const report = checkCompliance(scheduleInput, [
+            { employeeId: 'both', shiftInstanceId, date: '2026-03-05', reasons: [] },
+            { employeeId: 'fresh', shiftInstanceId, date: '2026-03-05', reasons: [] },
+        ]);
+        expect(report.violations.filter((v) => v.severity === 'hard')).to.deep.equal([]);
+    });
+
+    it('leaves the expired skill out of candidate tagsHeld and skill cover', () => {
+        const scheduleInput = input({
+            employees: [both],
+            shifts: [shift('truck', ['2026-03-05'], { minEmployees: 1, tagRequirements: { flt: 1 } })],
+        });
+        const ctx = buildModel(scheduleInput);
+        const [candidate] = rankCandidates(scheduleInput, ctx.instances[0].id, []);
+        expect(candidate).to.exist;
+        expect(candidate.tagsHeld).not.to.include('flt');
+        const cover = diagnoseInfeasibility(scheduleInput).tagCover.find((c) => c.tag === 'flt');
+        expect(cover?.holders).to.equal(0);
+    });
+
+    it('still accepts a plain tag with no dated entry for it', () => {
+        const plain: Employee = { id: 'plain', tags: ['flt'], timeOff: [] };
+        const result = solveSchedule(
+            input({
+                employees: [plain],
+                shifts: [shift('truck', ['2026-03-05'], { minEmployees: 1, requiredTags: ['flt'] })],
+            }),
+        );
+        expect(result.assignments).to.have.length(1);
     });
 });

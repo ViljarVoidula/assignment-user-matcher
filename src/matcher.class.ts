@@ -536,6 +536,8 @@ export default class AssignmentMatcher implements WorkflowHost {
             retentionMs: options?.workflowInstanceRetentionMs,
             autoTrimEventStream: options?.workflowEventStreamAutoTrim,
             retryBackoffMs: options?.workflowRetryBackoffMs,
+            machineLeaseMs: options?.workflowMachineLeaseMs,
+            startRecoveryMs: options?.workflowStartRecoveryMs,
             eventBatchSize: options?.workflowEventBatchSize,
             pollBlockMs: options?.workflowPollBlockMs,
             maxEventsPerSecond: options?.workflowMaxEventsPerSecond,
@@ -2110,6 +2112,12 @@ export default class AssignmentMatcher implements WorkflowHost {
             multi.zAdd(this.assignmentsSlaExpiryKey, { score: slaExpiry, value: id });
         }
 
+        // Workflow work aimed at one named person is found through a per-user
+        // index, never by scanning the queue. Written in the same transaction
+        // as the queued record so a reader can never see one without the other.
+        const targetedAt = this.workflowTargetOf(assignment);
+        if (targetedAt) multi.sAdd(this.keys.userTargeted(targetedAt), id);
+
         // The offer deadline is absolute, so requeues re-add the same score —
         // the notAfter clock is never extended.
         if (schedulePolicy?.notAfter !== undefined) {
@@ -2268,6 +2276,9 @@ export default class AssignmentMatcher implements WorkflowHost {
             .multi()
             .del(this.keys.userAssignments(userId))
             .del(this.keys.userRejected(userId))
+            // keys.userTargeted(userId) is deliberately kept: queued workflow
+            // work can still name this user, and re-adding the same id must
+            // find it again. Entries whose record has gone are dropped on read.
             .del(this.keys.userVetoed(userId))
             .del(this.keys.userOfferCooldown(userId))
             .del(this.keys.userAcceptedAssignments(userId))
@@ -4022,10 +4033,34 @@ export default class AssignmentMatcher implements WorkflowHost {
         const tagScored = userAssignments
             .slice(workflowTargetedCount)
             .filter((ua) => claimedIds.has(ua.id) && !targetedIds.has(ua.id));
-        // A targeted assignment that lost the claim was already moved to
-        // pending for this same user on an earlier pass — its backlog
-        // membership below is an idempotent re-add, so it is never stripped.
-        return { assignments: [...workflowTargeted, ...tagScored], claimedIds, workflowTargeted };
+        const held = await this.targetedHeldBy(user, workflowTargeted, claimedIds);
+        return { assignments: [...held, ...tagScored], claimedIds, workflowTargeted: held };
+    }
+
+    /**
+     * The targeted assignments this user really holds after a claim attempt:
+     * the ones just claimed, plus any an earlier pass already moved to pending
+     * for this same user (an idempotent re-add of their backlog membership).
+     *
+     * A targeted assignment is still ordinary queued work that tag matching
+     * can hand to somebody else, so losing the claim does NOT mean "already
+     * mine". Granting backlog membership regardless gave the target a phantom
+     * copy of work another person held — and accepting that phantom deleted
+     * the real holder's pending record.
+     */
+    private async targetedHeldBy<T extends { id: string }>(
+        user: User,
+        targeted: T[],
+        claimedIds: Set<string>,
+    ): Promise<T[]> {
+        const lost = targeted.filter((t) => !claimedIds.has(t.id));
+        if (lost.length === 0) return targeted;
+        const owners = await this.redisClient.hmGet(
+            this.assignmentOwnerKey,
+            lost.map((t) => t.id),
+        );
+        const notMine = new Set(lost.filter((_, i) => owners[i] !== user.id).map((t) => t.id));
+        return notMine.size === 0 ? targeted : targeted.filter((t) => !notMine.has(t.id));
     }
 
     /**
@@ -4145,17 +4180,20 @@ export default class AssignmentMatcher implements WorkflowHost {
             perUser.map(async ({ user, candidates }) => {
                 const workflowOnly = candidates.userAssignments.slice(0, candidates.workflowTargetedCount);
                 if (workflowOnly.length === 0) return;
-                if (collector) {
-                    // Membership must be read before the sAdd below
-                    workflowGrants.push(...(await this.filterNewWorkflowGrants(user, workflowOnly)));
-                }
-                await this.claimSelected(
+                // Membership must be read before the sAdd below
+                const newGrants = collector ? await this.filterNewWorkflowGrants(user, workflowOnly) : [];
+                const claimed = await this.claimSelected(
                     user,
                     workflowOnly.map((a) => ({ id: a.id, tags: (a as { tags?: string }).tags ?? '' })),
                 );
+                const held = await this.targetedHeldBy(user, workflowOnly, claimed);
+                // Only work this user really holds is traced as granted.
+                const heldIds = new Set(held.map((h) => h.id));
+                workflowGrants.push(...newGrants.filter((g) => heldIds.has(g.assignmentId)));
+                if (held.length === 0) return;
                 await this.redisClient.sAdd(
                     this.keys.userAssignments(user.id),
-                    workflowOnly.map((a) => `assignment:${a.id}`),
+                    held.map((a) => `assignment:${a.id}`),
                 );
             }),
         );
@@ -4700,8 +4738,27 @@ export default class AssignmentMatcher implements WorkflowHost {
         );
         if (!isAssigned) throw new Error('Assignment not found for user');
 
+        // Backlog membership alone is not ownership. If the pending record
+        // belongs to somebody else, this membership is stale: accepting on it
+        // would delete the real holder's pending record and owner entry and
+        // store nothing, losing the work. Drop the stale entry instead.
+        const pendingOwner = await this.redisClient.hGet(this.assignmentOwnerKey, assignmentId);
+        if (pendingOwner && pendingOwner !== userId) {
+            await this.redisClient.sRem(this.keys.userAssignments(userId), `assignment:${assignmentId}`);
+            throw new Error('Assignment not found for user');
+        }
+
         // Get the assignment JSON before removing from pending
         const json = await this.redisClient.hGet(this.pendingAssignmentsKey, assignmentId);
+        if (!json) {
+            // A backlog entry with no pending record behind it (a late re-add
+            // after the work was accepted, removed or requeued). Nothing is
+            // accepted, so nothing may look accepted: no lifecycle event, no
+            // learning outcome, and above all no wait-clock removal for work
+            // that may be sitting in the queue. The stale entry is dropped.
+            await this.redisClient.sRem(this.keys.userAssignments(userId), `assignment:${assignmentId}`);
+            return false;
+        }
 
         const now = Date.now();
         const multi = this.redisClient.multi();
@@ -4838,7 +4895,36 @@ export default class AssignmentMatcher implements WorkflowHost {
         await this.touchUser(userId);
 
         if (json) {
-            await this.requeueAfterRefusal(JSON.parse(json), 'reject');
+            const rejected = JSON.parse(json);
+            const leftMatching = await this.requeueAfterRefusal(rejected, 'reject');
+            // The step hears about a refusal only when nobody can now take the
+            // work through it: the rejection budget ran out (parked or failed),
+            // or the one named person the step was aimed at said no. A reject
+            // by one of several eligible people is ordinary matching — the
+            // work is back in the queue for the others. Published after the
+            // requeue, so a step failing on it removes work that is in place.
+            if (this.enableWorkflows && rejected._workflowInstanceId) {
+                if (leftMatching) {
+                    await this.workflow.publishWorkflowEvent({
+                        eventId: randomUUID(),
+                        type: 'EXPIRED',
+                        userId,
+                        assignmentId,
+                        timestamp: Date.now(),
+                    });
+                } else if (rejected._targetUserId === userId) {
+                    // Same event, and the same step outcome (fail, retry or
+                    // escalate), as that person letting a blocking offer lapse.
+                    await this.workflow.publishWorkflowEvent({
+                        eventId: randomUUID(),
+                        type: 'EXPIRED',
+                        userId,
+                        assignmentId,
+                        timestamp: Date.now(),
+                        payload: { reason: 'rejected-by-target' },
+                    });
+                }
+            }
         }
 
         return true;
@@ -4850,11 +4936,12 @@ export default class AssignmentMatcher implements WorkflowHost {
      * the budget is exhausted, applies `onMaxRejections` instead of
      * requeueing. Non-SLA assignments take the untouched legacy path.
      */
-    private async requeueAfterRefusal(assignment: Assignment, cause: 'reject' | 'blocking-expiry'): Promise<void> {
+    /** Returns true when the refusal took the work out of matching (parked or failed) instead of requeueing it. */
+    private async requeueAfterRefusal(assignment: Assignment, cause: 'reject' | 'blocking-expiry'): Promise<boolean> {
         const policy = normalizeSlaPolicy(assignment.sla);
         if (!policy) {
             await this.addAssignment(assignment);
-            return;
+            return false;
         }
 
         const record = assignment as Record<string, any>;
@@ -4865,10 +4952,11 @@ export default class AssignmentMatcher implements WorkflowHost {
         // accumulating so stats stay honest, but the assignment is requeued.
         if (!rejectionBudgetExhausted(assignment, policy) || policy.onMaxRejections === 'keep') {
             await this.addAssignment(assignment);
-            return;
+            return false;
         }
 
         await this.applyRejectionExhaustion(assignment, policy, rejections, cause);
+        return true;
     }
 
     /**
@@ -5225,6 +5313,19 @@ export default class AssignmentMatcher implements WorkflowHost {
     }
 
     /**
+     * Active workflow runs nothing has happened to for at least `idleMs`,
+     * oldest first. A step without `timeoutMs` waits for as long as its work
+     * does; poll this to find runs that have waited too long (their work was
+     * removed, the person they were aimed at left, nobody is eligible) and
+     * decide what to do with them — `cancelWorkflow()` is the engine's only
+     * intervention; restarting is a new run.
+     */
+    async getStalledWorkflowRuns(idleMs: number, limit?: number): Promise<WorkflowInstance[]> {
+        await this.readyPromise;
+        return this.workflow.listStalledWorkflowInstances(idleMs, limit);
+    }
+
+    /**
      * Complete (or fail, via `outcome.success: false`) an external step from
      * outside this process — the counterpart to the `step.ready` transition
      * delivered via `onWorkflowEvent`. Throws if the step isn't the run's
@@ -5233,7 +5334,7 @@ export default class AssignmentMatcher implements WorkflowHost {
     async completeWorkflowStep(
         instanceId: string,
         stepId: string,
-        outcome: { success: boolean; data?: Record<string, any>; error?: string },
+        outcome: { success: boolean; data?: Record<string, any>; error?: string; assignmentId?: string },
     ): Promise<boolean> {
         await this.readyPromise;
         return this.workflow.completeWorkflowStep(instanceId, stepId, outcome);
@@ -5319,6 +5420,7 @@ export default class AssignmentMatcher implements WorkflowHost {
      */
     async backfillWorkflowIndexes(): Promise<number> {
         await this.readyPromise;
+        await this.rebuildTargetedIndex();
         return this.workflow.backfillWorkflowIndexes();
     }
 
@@ -5416,7 +5518,15 @@ export default class AssignmentMatcher implements WorkflowHost {
             multi.hDel(this.pendingAssignmentsKey, id);
             multi.zRem(this.pendingAssignmentsExpiryKey, id);
             multi.hDel(this.assignmentOwnerKey, id);
-            await multi.exec();
+            const replies = (await multi.exec()) as unknown[];
+
+            // Claim gate: the pending record's removal is what makes this lapse
+            // ours. Two replicas sweeping at once both read the record, but
+            // only one deletes it — the other must not requeue the work a
+            // second time or report the lapse twice. (Everything written above
+            // is the same for both, so the loser's writes change nothing.) A record
+            // that was already gone when read is somebody else's too.
+            if (Number(replies[replies.length - 3]) === 0) continue;
 
             this.emitAssignmentLifecycle({
                 kind: 'expired',
@@ -5433,72 +5543,109 @@ export default class AssignmentMatcher implements WorkflowHost {
                 await this.learning.applyOutcome(id, 'expire', { expectedUserId: owner ?? undefined });
             }
 
-            // Publish workflow expired event if workflows are enabled
-            if (this.enableWorkflows && owner) {
-                await this.workflow.publishWorkflowEvent({
+            // Tell a workflow whose step this is that the offer lapsed. Most
+            // lapses requeue the work — ordinary matching, which must not fail
+            // the step (the step's own timeoutMs is the workflow's clock), so
+            // the event says `requeued`. Only work that leaves matching here
+            // (parked, or failed on an exhausted rejection budget) reaches
+            // the step's failure/escalation path. A null record was taken by
+            // a concurrent transition that reports itself, so nothing is sent.
+            let lapseEvent: WorkflowEvent | null = null;
+            if (this.enableWorkflows && owner && assignment) {
+                const leavesMatching =
+                    Boolean(
+                        slaPolicy &&
+                            countsAsRefusal &&
+                            rejectionBudgetExhausted(assignment, slaPolicy) &&
+                            slaPolicy.onMaxRejections !== 'keep',
+                    ) ||
+                    Boolean(decision?.exhausted && decision.onExhausted === 'park') ||
+                    // A step aimed at one named person whose lapse just barred
+                    // that person can never reach them again.
+                    Boolean(decision?.blockPreviousOwner && assignment._targetUserId === owner);
+                lapseEvent = {
                     eventId: randomUUID(),
                     type: 'EXPIRED',
                     userId: owner,
                     assignmentId: id,
                     timestamp: now,
-                });
+                    payload: leavesMatching ? undefined : { requeued: true },
+                };
             }
 
             if (!assignment) continue;
 
-            // The SLA rejection budget outranks the escalation ladder: once
-            // nobody will take the work, tier hops are moot.
-            if (
-                slaPolicy &&
-                countsAsRefusal &&
-                rejectionBudgetExhausted(assignment, slaPolicy) &&
-                slaPolicy.onMaxRejections !== 'keep'
-            ) {
-                await this.applyRejectionExhaustion(assignment, slaPolicy, rejectionCountOf(assignment), 'blocking-expiry');
-                continue;
-            }
-
-            if (decision && decision.exhausted) {
-                this.emitAssignmentLifecycle({
-                    kind: 'escalationExhausted',
-                    taskId: id,
-                    level: decision.level,
-                    parked: decision.onExhausted === 'park',
-                    at: now,
-                });
-                if (decision.onExhausted === 'park') {
-                    // Held out of matching entirely: no requeue, and the wait
-                    // clock is cleared so a parked item stops inflating
-                    // oldestWaitingMs for work that is still winnable.
-                    await this.redisClient
-                        .multi()
-                        .hSet(this.keys.parkedAssignments(), id, JSON.stringify(assignment))
-                        .zRem(this.keys.assignmentsQueuedAt(), id)
-                        .zRem(this.scheduleNotAfterKey, id)
-                        .exec();
-                    parked++;
-                    continue;
+            // Requeue, escalate or park first; the workflow hears about the
+            // lapse only once the work is where it is going. Published before,
+            // a step failing on the lapse removed its work and this sweep then
+            // put it straight back — live work for a step that had moved on.
+            const settle = async (): Promise<void> => {
+                // The SLA rejection budget outranks the escalation ladder: once
+                // nobody will take the work, tier hops are moot.
+                if (
+                    slaPolicy &&
+                    countsAsRefusal &&
+                    rejectionBudgetExhausted(assignment, slaPolicy) &&
+                    slaPolicy.onMaxRejections !== 'keep'
+                ) {
+                    await this.applyRejectionExhaustion(
+                        assignment,
+                        slaPolicy,
+                        rejectionCountOf(assignment),
+                        'blocking-expiry',
+                    );
+                    return;
                 }
+
+                if (decision && decision.exhausted) {
+                    this.emitAssignmentLifecycle({
+                        kind: 'escalationExhausted',
+                        taskId: id,
+                        level: decision.level,
+                        parked: decision.onExhausted === 'park',
+                        at: now,
+                    });
+                    if (decision.onExhausted === 'park') {
+                        // Held out of matching entirely: no requeue, and the wait
+                        // clock is cleared so a parked item stops inflating
+                        // oldestWaitingMs for work that is still winnable.
+                        await this.redisClient
+                            .multi()
+                            .hSet(this.keys.parkedAssignments(), id, JSON.stringify(assignment))
+                            .zRem(this.keys.assignmentsQueuedAt(), id)
+                            .zRem(this.scheduleNotAfterKey, id)
+                            .exec();
+                        parked++;
+                        return;
+                    }
+                    await this.addAssignment(assignment);
+                    return;
+                }
+
+                if (decision) {
+                    await this.addAssignment(decision.assignment);
+                    escalations++;
+                    this.emitAssignmentLifecycle({
+                        kind: 'escalated',
+                        taskId: id,
+                        fromWorkerId: owner ?? null,
+                        level: decision.level,
+                        blockedPreviousOwner: decision.blockPreviousOwner && Boolean(owner),
+                        reason: 'no-response',
+                        escalatedAt: now,
+                    });
+                    return;
+                }
+
                 await this.addAssignment(assignment);
-                continue;
+            };
+            try {
+                await settle();
+            } finally {
+                // Even if the requeue throws: the pending record is already
+                // gone, so this is the only chance to tell the run.
+                if (lapseEvent) await this.workflow.publishWorkflowEvent(lapseEvent);
             }
-
-            if (decision) {
-                await this.addAssignment(decision.assignment);
-                escalations++;
-                this.emitAssignmentLifecycle({
-                    kind: 'escalated',
-                    taskId: id,
-                    fromWorkerId: owner ?? null,
-                    level: decision.level,
-                    blockedPreviousOwner: decision.blockPreviousOwner && Boolean(owner),
-                    reason: 'no-response',
-                    escalatedAt: now,
-                });
-                continue;
-            }
-
-            await this.addAssignment(assignment);
         }
 
         return { expired: expiredIds.length, escalations, parked };
@@ -6998,13 +7145,16 @@ export default class AssignmentMatcher implements WorkflowHost {
                 await this.learning.applyOutcome(id, 'expire', { expectedUserId: userId, systemFault: true });
             }
 
-            if (this.enableWorkflows) {
+            // The released work is requeued below, so a workflow step keeps
+            // waiting for the next worker rather than failing.
+            if (this.enableWorkflows && json) {
                 await this.workflow.publishWorkflowEvent({
                     eventId: randomUUID(),
                     type: 'EXPIRED',
                     userId,
                     assignmentId: id,
                     timestamp: now,
+                    payload: { requeued: true },
                 });
             }
 
@@ -7036,37 +7186,120 @@ export default class AssignmentMatcher implements WorkflowHost {
      * Get assignments specifically targeted at a user through active workflows.
      * These take priority over general pool assignments for deterministic matching.
      */
+    /** The named user a queued workflow assignment is aimed at, if any. */
+    private workflowTargetOf(assignment: Record<string, any>): string | undefined {
+        const target = assignment._targetUserId;
+        return typeof target === 'string' && target && assignment._workflowInstanceId ? target : undefined;
+    }
+
+    private targetedIndexReady = false;
+    private targetedIndexRebuild: Promise<void> | null = null;
+
+    /**
+     * Build the per-user targeted index from the queued store. Runs once per
+     * deployment (guarded by a marker key) so work queued by a version that
+     * predates the index is still found; also the explicit repair path behind
+     * `backfillWorkflowIndexes()`.
+     */
+    private async rebuildTargetedIndex(): Promise<void> {
+        const queued = await this.redisClient.hGetAll(this.assignmentsRefKey);
+        const multi = this.redisClient.multi();
+        for (const [assignmentId, json] of Object.entries(queued)) {
+            if (json.indexOf('"_targetUserId"') === -1) continue;
+            try {
+                const target = this.workflowTargetOf(JSON.parse(json));
+                if (target) multi.sAdd(this.keys.userTargeted(target), assignmentId);
+            } catch {
+                // Ignore parse errors
+            }
+        }
+        multi.set(this.keys.targetedIndexReady(), '1');
+        await multi.exec();
+        this.targetedIndexReady = true;
+    }
+
     private async getWorkflowTargetedAssignments(
         userId: string,
     ): Promise<Array<{ id: string; priority: number; tags: string }>> {
         const targeted: Array<{ id: string; priority: number; tags: string }> = [];
 
-        // Scan queued assignments for those with _targetUserId matching this user
-        const [queuedAssignments, rejectedMembers] = await Promise.all([
-            this.redisClient.hGetAll(this.assignmentsRefKey),
+        if (!this.targetedIndexReady) {
+            // A bulk pass looks up every user at once: they share one check
+            // (and one rebuild) rather than each scanning the queue.
+            this.targetedIndexRebuild ??= (async () => {
+                if (await this.redisClient.exists(this.keys.targetedIndexReady())) this.targetedIndexReady = true;
+                else await this.rebuildTargetedIndex();
+            })().finally(() => {
+                this.targetedIndexRebuild = null;
+            });
+            await this.targetedIndexRebuild;
+        }
+
+        // O(work aimed at this user), not O(queue): this runs on every match
+        // pass for every user whenever workflows are enabled.
+        const indexKey = this.keys.userTargeted(userId);
+        const ids = await this.redisClient.sMembers(indexKey);
+        if (ids.length === 0) return targeted;
+
+        const [records, rejectedMembers] = await Promise.all([
+            this.redisClient.hmGet(this.assignmentsRefKey, ids),
             this.redisClient.sMembers(this.keys.userRejected(userId)),
         ]);
         const rejected = new Set<string>(rejectedMembers);
+        const stale: string[] = [];
 
-        for (const [assignmentId, json] of Object.entries(queuedAssignments)) {
+        ids.forEach((assignmentId, i) => {
+            const json = records[i];
+            if (!json) {
+                // Claimed, removed or otherwise out of the queue.
+                stale.push(assignmentId);
+                return;
+            }
             try {
                 const assignment = JSON.parse(json);
+                if (this.workflowTargetOf(assignment) !== userId) {
+                    stale.push(assignmentId);
+                    return;
+                }
                 // Hard veto applies even to deterministic workflow targeting,
                 // and so does the user's own prior rejection — re-granting a
                 // rejected assignment forever violates the rejection contract.
-                if (assignment.vetoedUsers?.includes(userId)) continue;
-                if (rejected.has(assignmentId)) continue;
-                if (assignment._targetUserId === userId && assignment._workflowInstanceId) {
-                    // This is a workflow assignment targeted at this user
-                    targeted.push({
-                        id: assignmentId,
-                        priority: assignment.priority ?? 1000,
-                        tags: ((assignment.tags ?? []) as string[]).join(','),
-                    });
-                }
+                if (assignment.vetoedUsers?.includes(userId)) return;
+                if (rejected.has(assignmentId)) return;
+                targeted.push({
+                    id: assignmentId,
+                    priority: assignment.priority ?? 1000,
+                    // Every tag index the record sits in, so the claim clears
+                    // them all — including the injected `default` tag, which
+                    // is not on the record. Left behind, those entries pile up
+                    // at the head of the shared index as unclaimable ghosts.
+                    tags: [
+                        ...((assignment.tags ?? []) as string[]),
+                        ...(this.enableDefaultMatching ? ['default'] : []),
+                    ].join(','),
+                });
             } catch {
                 // Ignore parse errors
             }
+        });
+
+        if (stale.length > 0) {
+            // A requeue can land between the read above and this removal; its
+            // SADD rides with the record write, so re-checking the record
+            // afterwards and restoring the entry is correct in every
+            // interleaving — the index never loses live work.
+            await this.redisClient.sRem(indexKey, stale);
+            const recheck = await this.redisClient.hmGet(this.assignmentsRefKey, stale);
+            const restored = stale.filter((assignmentId, i) => {
+                const json = recheck[i];
+                if (!json) return false;
+                try {
+                    return this.workflowTargetOf(JSON.parse(json)) === userId;
+                } catch {
+                    return false;
+                }
+            });
+            if (restored.length > 0) await this.redisClient.sAdd(indexKey, restored);
         }
 
         // Sort by priority (higher first)

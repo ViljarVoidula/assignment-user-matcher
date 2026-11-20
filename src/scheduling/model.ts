@@ -412,16 +412,14 @@ function normalizeTagRequirements(
                 );
             }
         }
-        out[tag] = requirement.level === undefined ? { min: requirement.min } : { min: requirement.min, level: requirement.level };
+        out[tag] =
+            requirement.level === undefined ? { min: requirement.min } : { min: requirement.min, level: requirement.level };
     }
     return out;
 }
 
 /** Ceilings, checked like the minimums beside them. A negative maximum can never be met. */
-function normalizeTagMaximums(
-    stated: Record<string, number> | undefined,
-    templateId: string,
-): Record<string, number> {
+function normalizeTagMaximums(stated: Record<string, number> | undefined, templateId: string): Record<string, number> {
     const out: Record<string, number> = {};
     for (const [tag, max] of Object.entries(stated ?? {})) {
         if (!Number.isInteger(max) || max < 0) {
@@ -435,10 +433,7 @@ function normalizeTagMaximums(
 }
 
 /** Proportions, checked as fractions. A ratio outside 0..1 is not a proportion of anything. */
-function normalizeTagRatios(
-    stated: Record<string, number> | undefined,
-    templateId: string,
-): Record<string, number> {
+function normalizeTagRatios(stated: Record<string, number> | undefined, templateId: string): Record<string, number> {
     const out: Record<string, number> = {};
     for (const [tag, ratio] of Object.entries(stated ?? {})) {
         if (typeof ratio !== 'number' || !Number.isFinite(ratio) || ratio < 0 || ratio > 1) {
@@ -777,6 +772,8 @@ export function buildModel(input: ScheduleInput): ModelContext {
 
     const employeeById = new Map<string, Employee>();
     const employeeTags = new Map<string, Set<string>>();
+    /** Tags a dated qualification names, per employee: those tags answer from the dates, never the plain tag. */
+    const qualifiedTags = new Map<string, Set<string>>();
     const employeeBlockedIntervals = new Map<string, Array<{ start: number; end: number }>>();
     const rulesByEmployee = new Map<string, WorkingTimeRules>();
     const personIdOf = new Map<string, string>();
@@ -787,6 +784,8 @@ export function buildModel(input: ScheduleInput): ModelContext {
         if (employeeById.has(employee.id)) throw new ScheduleValidationError(`Duplicate employee id "${employee.id}"`);
         employeeById.set(employee.id, employee);
         employeeTags.set(employee.id, new Set(employee.tags ?? []));
+        if (employee.qualifications?.length)
+            qualifiedTags.set(employee.id, new Set(employee.qualifications.map((q) => q.tag)));
         employeeBlockedIntervals.set(employee.id, blockedIntervalsFor(employee, clock, periodDays, instanceById));
         // Per-person rule overrides replace whole families, so an override must
         // satisfy the same invariants the global rule was validated against.
@@ -799,8 +798,10 @@ export function buildModel(input: ScheduleInput): ModelContext {
     }
 
     // Tag possession is a question about the shift's date, so per-tag minimums
-    // and maximums must resolve it the same way `requiredTags` does. Plain tags
-    // short-circuit; only a dated qualification needs the scan. The cache keeps
+    // and maximums must resolve it the same way `requiredTags` does. A plain tag
+    // short-circuits only when no qualification names the same tag — a dated
+    // entry is the authority, or an expired one would still count wherever the
+    // caller also sends the plain tag (the hosted platform sends both). The cache keeps
     // the search loop's repeated lookups off that scan — the model is immutable
     // once built, so a memo can never go stale.
     const tagOnCache = new Map<string, boolean>();
@@ -814,9 +815,8 @@ export function buildModel(input: ScheduleInput): ModelContext {
         return employee ? holds(employee, tag, date, minLevel) : false;
     };
     const holdsTagOn = (employeeId: string, tag: string, date: string): boolean => {
-        if (employeeTags.get(employeeId)?.has(tag)) return true;
-        const employee = employeeById.get(employeeId);
-        if (!employee?.qualifications?.length) return false;
+        if (!qualifiedTags.get(employeeId)?.has(tag)) return employeeTags.get(employeeId)?.has(tag) ?? false;
+        const employee = employeeById.get(employeeId)!;
         const key = `${employeeId}\0${tag}\0${date}`;
         const cached = tagOnCache.get(key);
         if (cached !== undefined) return cached;

@@ -1594,6 +1594,14 @@ export type MatcherOptions = {
     completedAssignmentsRetentionMs?: number;
     /** Initial backoff delay for scheduled workflow event retries in ms (default: 1000) */
     workflowRetryBackoffMs?: number;
+    /**
+     * How long a machine step with no timeout of its own may run before the
+     * timeout sweep treats it as interrupted and fails or retries it
+     * (default 15 minutes; 0 disables).
+     */
+    workflowMachineLeaseMs?: number;
+    /** How long after creation a run whose first step was never saved is started by the timeout sweep (default 30000) */
+    workflowStartRecoveryMs?: number;
     /** Max stream entries read per orchestrator poll (XREADGROUP COUNT, default: 10) */
     workflowEventBatchSize?: number;
     /** Blocking wait per orchestrator poll in ms (XREADGROUP BLOCK, default: 5000) */
@@ -1944,6 +1952,8 @@ export interface ParallelBranchState {
     assignmentId: string;
     status: 'pending' | 'completed' | 'failed';
     result?: Record<string, any>;
+    /** Retries this branch has used (`failurePolicy: 'retry'`), against its step's `maxRetries` */
+    retryCount?: number;
 }
 
 /** A running instance of a workflow */
@@ -1962,6 +1972,20 @@ export interface WorkflowInstance {
     currentAssignmentId?: string;
     /** For parallel execution: track all active branches */
     parallelBranches?: ParallelBranchState[];
+    /** The step that forked the current parallel group; it decides where the group continues */
+    parallelForkStepId?: string;
+    /**
+     * Attempts that did not complete — failed or timed out — oldest first
+     * (the most recent 200). `history` records only what completed.
+     */
+    failures?: Array<{
+        stepId: string;
+        assignmentId: string;
+        userId: string;
+        at: number;
+        reason: 'failed' | 'expired';
+        error?: string;
+    }>;
     /** Persistent context passed between steps */
     context: Record<string, any>;
     /** History of completed steps with their results */

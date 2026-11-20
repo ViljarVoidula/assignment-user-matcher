@@ -19,6 +19,12 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         userAssignments: (userId: string) => `${prefix}user:${userId}:assignments`,
         userRejected: (userId: string) => `${prefix}user:${userId}:rejected`,
         userVetoed: (userId: string) => `${prefix}user:${userId}:vetoed`,
+        // Queued workflow assignments aimed at this user by name. A superset
+        // cache of the queued store: entries whose record has left the queue
+        // are dropped on read.
+        userTargeted: (userId: string) => `${prefix}user:${userId}:targeted`,
+        // Set once the targeted index has been built from the queued store.
+        targetedIndexReady: () => `${prefix}workflow:targeted-index:ready`,
         // Offers this user let lapse, resting before they can be made again:
         // a zset of RAW assignment ids scored by the epoch ms the rest ends.
         // Subtracted from candidate discovery exactly like the rejected set.
@@ -236,6 +242,9 @@ export function createKeyBuilders(config: RedisKeyConfig) {
         workflowStepExpiry: (instanceId: string, stepId: string) => `${prefix}workflow:${instanceId}:step:${stepId}:expiry`,
         workflowStepExpiryIndex: () => `${prefix}workflow:steps:expiry`,
         workflowInstancesActive: () => `${prefix}workflows:instances:active`,
+        // Runs created but whose first step has not been saved yet (score = createdAt).
+        workflowInstancesStarting: () => `${prefix}workflows:instances:starting`,
+        workflowStartLock: (instanceId: string) => `${prefix}workflow:instance:${instanceId}:start-lock`,
         workflowAuditStream: () => `${prefix}workflow:audit:stream`,
         circuitBreakerState: () => `${prefix}reliability:circuit-breaker:state`,
         circuitBreakerFailures: () => `${prefix}reliability:circuit-breaker:failures`,

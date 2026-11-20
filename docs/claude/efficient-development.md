@@ -3,8 +3,9 @@
 Project default: Opus 5.5 (`claude-opus-5-5`) with medium effort for planning,
 implementation, debugging, test design, and validation, with one implementer.
 Validation quality comes from executable checks, observable behavior, and fresh
-test evidence. Keep effort at medium; use the hooks and validation runner to
-enforce the fix-and-test loop.
+test evidence scoped to the change. Keep effort at medium; use focused native
+commands by default. Full validation profiles are exceptional, and hooks never
+require them to complete routine work.
 Keep Opus active when leaving plan mode. Delegate only for a
 concrete independent review or isolated task. The command hook allows at most
 two new agent calls per user prompt and denies new background agents. Continue
@@ -45,7 +46,9 @@ Reuse existing patterns and dependencies.
 Keep the plan brief using Opus 5.5, then implement and validate in the main
 session using Opus 5.5 with medium effort. Use Opus 5.5 for any independent review.
 Delegate only when independent review or isolation materially helps.
-Run focused checks while iterating and required broader checks at completion.
+Run focused checks for affected behavior while iterating and at completion.
+Use full suites only for an explicit user request, release gate, or concrete
+cross-cutting risk that focused checks cannot cover; explain why and limit scope.
 Save full logs to disk; report failures and summaries.
 Stop when the criteria pass; list optional improvements separately.
 ```
@@ -58,67 +61,104 @@ constraints explicitly to planners/reviewers; preserve them across compaction.
 Read only relevant sections to keep context focused.
 
 Run `pnpm test:focused tests/example.test.ts [--grep pattern]` during iteration.
-This bypasses `.mocharc.json`'s global spec. Keep the required final suite and
-Redis isolation rules. Use existing examples as scaffolds for recurring work.
+This bypasses `.mocharc.json`'s global spec. Keep Redis isolation rules. Completion
+does not automatically require the full suite. Use existing examples as scaffolds
+for recurring work.
 
 Checkpoint decisions, changed files, acceptance criteria, and validation before
 compacting around 100k context. Avoid exceeding 150k. Start a fresh session for
 unrelated work. Do not run background loops unless explicitly requested. An
 eight-hour session span is a signal to investigate, not proof of continuous work.
 
-## Enforced validation
+## Scope-first validation
 
-`scripts/claude/claude-validation.py` is the shared tool for these five checkouts.
-`scripts/claude/validation-profiles.json` maps source paths to fixed validation
-commands. It uses existing project test, lint, build, coverage, parity, and browser
-commands; it does not replace their assertions or coverage requirements.
+Run the smallest meaningful checks for the touched files and affected behavior.
+Choose relevant test files/cases and lint changed files. Add a type check, build,
+integration test, or browser spec only when the change needs that evidence.
+Documentation/copy/styling changes need proportionate checks, not automatic full
+web lint, tests, production build, and onboarding/console sweeps.
+An entire browser project or package suite is a broad check even when launched
+directly with pnpm; do not bypass this policy by avoiding the validation runner.
+
+Examples from the engine root (substitute the files/cases relevant to the task):
 
 ```bash
-python3 scripts/claude/claude-validation.py status
-python3 scripts/claude/claude-validation.py run --profile engine
-python3 scripts/claude/claude-validation.py run --profile web --profile browser-public
-python3 scripts/claude/claude-validation.py run --profile server --profile platform
-python3 scripts/claude/claude-validation.py run --profile claude
-# Inside Claude, with the SessionStart environment available, select changed profiles:
-python3 scripts/claude/claude-validation.py run
+pnpm test:focused tests/matcher_workflows.test.ts --grep 'affected behavior'
+pnpm --dir example/web exec vitest run src/lib/format.test.ts
+pnpm --dir example/web exec vitest related src/lib/format.ts --run
+pnpm --dir example/server exec node --import tsx --test tests/csp.test.ts
+pnpm --dir example/e2e exec playwright test tests/console/roster-solve.spec.ts --project=console --workers=1
+pnpm --dir example/e2e exec playwright test tests/onboarding/voice-setup.spec.ts --project=onboarding --workers=1
+python3 -m unittest discover -s scripts/claude/tests -p test_claude_validation.py -v
 ```
 
-Run these from the engine checkout, or use the script's absolute path from a
-sibling checkout. Profile commands execute in their configured package directory.
-Use focused native test commands while iterating; use the configured runner for
-the required final checks and recorded evidence.
+Use `pnpm exec eslint <changed-files>` in the relevant package for file-scoped
+lint. In `platform`, use `pnpm exec vitest run <affected-test-files>` rather than
+`pnpm test`, which rebuilds every package and runs the entire coverage gate.
+Keep assertions, coverage thresholds, Redis isolation, and browser worker limits.
+Focused checks do not claim full-suite coverage. Check that selected tests really
+ran; a zero-match filter or a skipped check is not validation.
 
-SessionStart saves a source baseline and preserves it across resume/compaction.
-PreToolUse initializes it before the first mutation if needed. PostToolUse and
-PostToolUseFailure detect changed inputs after Edit, Write, Bash, and delegated
-work and remind Claude which profiles need evidence. Stop blocks completion while
-an affected profile is missing, failed, or stale. It supplies the exact runner
-command and instructs Claude to read failures, fix their cause, and rerun.
-Read-only turns and edits already present at startup do not require unrelated
-suites. Source changes elsewhere in this shared workspace can invalidate evidence;
-the gate conservatively requires validation of changed inputs.
+Run only the browser specs that cover the affected flow. Console changes do not
+automatically need onboarding; signup/setup changes use relevant onboarding specs.
+Use an existing dev server for focused UI behavior when appropriate. Production
+CSP, prerendering, bundles, and server routing need a built server; Playwright's
+`scripts/serve.sh` prepares it when no `E2E_BASE_URL` is supplied. Do not run the
+entire web lint/test/build profile as a browser prerequisite. Avoid fixed sleeps
+between runs; check service readiness, or address an actual rate limit for the
+affected test. Maintain feature-specific acceptance criteria and visual review
+from `example/e2e/TEST-PLAN.md`, PRODUCT.md, and DESIGN.md.
 
-The runner saves real exit codes and full logs under `.claude/validation/runs/`,
-and receipts under `.claude/validation/receipts/`. Receipts bind the checks to
-source content and the configured command recipe. New files, deletions, shell
-edits, and edits made during a check invalidate the relevant evidence. Zero-test
-runs and an explicit parity-check skip do not count as passing. A failed rerun
-invalidates an earlier pass. Checks run in sequence with a shared runner lock;
-direct external test runs still need to follow the project's Redis isolation rules.
+Batch related edits before checking. After a pass, rerun only checks affected by
+later edits or unresolved failures. Read a failure's log and fix or isolate its
+cause before retrying; do not repeatedly rerun broad suites hoping for green.
+Save full logs and real exit codes, and report the checks performed and any actual
+blockers. A missing full-profile receipt is not a blocker for focused development.
 
-Browser checks use the built site and existing Playwright projects; console and
-onboarding runs use one worker. Build prerequisites run before browser checks
-unless matching passing web evidence already exists. Maintain the relevant
-feature-specific acceptance criteria and visual review from `e2e/TEST-PLAN.md`,
-PRODUCT.md, and DESIGN.md: automated passes do not prove those by themselves.
-The AI checkout currently has no behavioral test suite, so its profile reports
-static checks only; supply separate evidence for changed runtime behavior.
+### Exceptional full runs
 
-If validation is unavailable, after hook feedback end with `Validation blocked:`
-and name every pending profile plus its actual blocker. This allows an honest
-incomplete handoff and records no passing result. Do not claim verified completion
-or disable hooks to get past failures. Hooks and receipts are workflow controls,
-not a security boundary against manually altering the configuration or evidence.
+Full validation is reserved for an explicit user request, an actual release/CI
+gate, or concrete cross-cutting risk that focused checks cannot cover, such as a
+major dependency/toolchain change with uncertain impact. A routine feature, a
+high-risk label alone, completing a task, or a stale receipt does not justify a
+full run. Explain the reason and select only the necessary profiles. Run once
+after the cohesive change is ready; broaden or repeat only for new evidence.
+The release pipeline retains its existing tests and coverage gates.
+
+`scripts/claude/claude-validation.py` is the shared full-profile runner for these
+five checkouts. `scripts/claude/validation-profiles.json` defines its commands.
+Bare `run` and `run --profile NAME` are rejected before executing checks. Full runs
+must explicitly provide `--full`, a nonempty `--reason`, and `--profile NAME`:
+
+```bash
+python3 scripts/claude/claude-validation.py status --profile web
+# Only after identifying an exceptional need; do not copy this into routine work:
+python3 scripts/claude/claude-validation.py run --full --reason 'Release requires web validation' --profile web
+```
+
+Use the script's absolute path from sibling checkouts. `status --profile NAME`
+inspects only selected areas; bare `status` lists all available profiles without
+running checks. Only explicitly selected
+profiles run; there is no automatic expansion to all changed profiles or to web
+validation from a browser profile. Matching passing source/command receipts are
+reused. Use `--force` with a concrete reason only when fresh execution is needed,
+for example after a runtime environment change. Full logs and real exit codes are
+saved under `.claude/validation/runs/`, and receipts under
+`.claude/validation/receipts/`; the reason is recorded in the receipt. Changes to
+inputs or commands, missing logs, zero-test runs, explicit skips, and failed reruns
+cannot count as matching passing evidence. Checks are serialized by a shared lock.
+The AI checkout's profile contains static checks only; changed runtime behavior
+needs separate evidence.
+
+### Advisory hooks
+
+SessionStart saves a source baseline across resume/compaction; PreToolUse
+initializes it if needed. PostToolUse and PostToolUseFailure advise on newly
+changed areas, not mandatory full profiles. They do not repeat reminders for
+every edit in the same area. Stop never blocks completion on full-suite receipts
+and does not scan all checkouts. Missing/corrupt hook state does not force a full
+run. Report actual focused results and blockers honestly; no special
+`Validation blocked:` phrase is required to end a turn.
 
 The existing usage reports, bounded agent guard, and Impeccable hooks remain
 active. New hook registration applies on the next Claude session. Hook event

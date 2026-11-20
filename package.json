@@ -52,6 +52,7 @@
         "benchmark:learning": "ts-node benchmark-learning.ts",
         "benchmark:weights": "ts-node benchmark-weights.ts",
         "benchmark:scenarios": "ts-node benchmark-learning-scenarios.ts",
+        "benchmark:workflows": "ts-node --transpile-only benchmark-workflows.ts",
         "benchmark:scheduling": "ts-node benchmark-scheduling.ts",
         "benchmark:scheduling:complex": "ts-node --transpile-only benchmark-scheduling-complex.ts",
         "benchmark:forecast": "ts-node --transpile-only scripts/forecast-benchmark.ts",

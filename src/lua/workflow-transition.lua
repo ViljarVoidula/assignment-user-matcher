@@ -18,17 +18,30 @@ local key = KEYS[1]
 local expected_version = tonumber(ARGV[1])
 local new_data = ARGV[2]
 
+-- The version lives in its own field so a transition does not have to decode
+-- the whole instance (definition snapshot, history, context) to compare one
+-- number. The field is only trusted while `sum` still matches the stored JSON:
+-- a replica on a release from before these fields existed writes `data`
+-- alone, leaving the field behind, and trusting it then either refuses every
+-- later save or — when it happens to equal what a stale reader expects —
+-- lets that reader overwrite the newer run. Hashing the string is far cheaper
+-- than decoding it; the JSON is decoded only when the fields cannot vouch.
 local current = redis.call('HGET', key, 'data')
 if not current then
     return cjson.encode({err = 'NOT_FOUND'})
 end
 
-local parsed = cjson.decode(current)
-if parsed.version ~= expected_version then
-    return cjson.encode({err = 'VERSION_MISMATCH', current_version = parsed.version})
+local current_version = redis.call('HGET', key, 'version')
+local sum = redis.call('HGET', key, 'sum')
+if not current_version or not sum or redis.sha1hex(current) ~= sum then
+    current_version = cjson.decode(current).version
 end
 
-redis.call('HSET', key, 'data', new_data)
+if tonumber(current_version) ~= expected_version then
+    return cjson.encode({err = 'VERSION_MISMATCH', current_version = tonumber(current_version)})
+end
+
+redis.call('HSET', key, 'data', new_data, 'version', expected_version + 1, 'sum', redis.sha1hex(new_data))
 if KEYS[2] and ARGV[3] then
     redis.call('SET', KEYS[2], '1', 'PX', tonumber(ARGV[3]))
 end

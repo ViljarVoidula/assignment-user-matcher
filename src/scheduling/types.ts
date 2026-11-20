@@ -41,7 +41,11 @@ export interface Employee {
      * understates their hours and overstates their rest.
      */
     personId?: string;
-    /** Qualifications with optional validity dates. Absent dates mean "always valid". */
+    /**
+     * Qualifications with optional validity dates. Absent dates mean "always valid".
+     * When an entry names a tag, the entries alone decide whether that tag is held;
+     * an `Employee.tags` entry of the same name is ignored.
+     */
     qualifications?: Qualification[];
     /** Recurring availability, preferences and hard blackouts. */
     availability?: AvailabilityRule[];

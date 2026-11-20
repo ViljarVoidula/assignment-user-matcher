@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'crypto';
+import { AsyncLocalStorage } from 'async_hooks';
 import {
     RedisClientType,
     WorkflowDefinition,
@@ -43,6 +44,16 @@ export type MachineTaskHandler = (args: {
     instance: WorkflowInstance;
     step: WorkflowStep;
     definition: WorkflowDefinition;
+    /** Aborted when the step's timeout fires — stop work and side effects. */
+    signal?: AbortSignal;
+    /**
+     * Id of this attempt of this step. Every retry — including the one that
+     * follows a crashed or timed-out attempt — is a new attempt with a new id,
+     * so this identifies one execution, not "this step of this run". To make
+     * an outside effect happen once per run however often the step is
+     * retried, key it on `instance.id` + `step.id` instead.
+     */
+    attemptId?: string;
 }) => Promise<Record<string, any> | void>;
 
 export class WorkflowManager {
@@ -53,10 +64,31 @@ export class WorkflowManager {
     private luaScriptSha: string | null = null;
     /** Script source, kept so a NOSCRIPT after a Redis restart can re-load it. */
     private luaScriptSource: string | null = null;
-    /** Event id being applied right now — saveInstance stamps its idempotency
-     *  marker atomically with the CAS write. Safe as an ambient field: events
-     *  are processed sequentially within one manager. */
-    private processingEventId: string | null = null;
+    /**
+     * Event id being applied by the current call chain — saveInstance stamps
+     * its idempotency marker atomically with the CAS write.
+     *
+     * Scoped per async call chain, not held in a field: one manager applies
+     * events concurrently (the stream loop, startWorkflow, machine steps, the
+     * retry drain and the reclaim timer all overlap), and a shared field let
+     * one event's save stamp another event's marker. An event that then lost
+     * its CAS race found "its" marker on the retry and was dropped unapplied —
+     * a run stuck forever with nothing in the dead-letter queue.
+     *
+     * The scope also names the event's own run, and saveInstance stamps only
+     * that run's saves: host code reached from inside the scope (an
+     * onWorkflowEvent hook or a machine handler that starts or cancels
+     * another run) inherits it, and that other run's save must never mark
+     * this event as applied. The onWorkflowEvent hook and machine handlers
+     * are additionally run outside the scope (the matcher's own lifecycle and
+     * decision hooks, reached through addAssignment/matching, are not).
+     *
+     * The scope also holds the transitions emitted while the event is being
+     * applied: they are delivered once the run's save has succeeded and
+     * dropped if it fails, so an attempt that loses the version race and is
+     * applied again does not report the same transition twice.
+     */
+    private eventScope = new AsyncLocalStorage<{ eventId: string; instanceId?: string; emits: Array<() => void> }>();
     private machineHandlers: Map<string, MachineTaskHandler> = new Map();
     private throttleWindowStart: number = 0;
     private throttleTokensUsed: number = 0;
@@ -97,6 +129,18 @@ export class WorkflowManager {
             throttleWindowMs?: number;
             /** Fired after every durably-applied transition; best-effort, errors swallowed */
             onWorkflowEvent?: (transition: WorkflowTransition) => void;
+            /**
+             * How long a machine step with no timeout of its own may run before
+             * the timeout sweep treats it as interrupted and fails/retries it
+             * (default 15 minutes; 0 disables). Without it a process that died
+             * mid-handler left the run waiting forever.
+             */
+            machineLeaseMs?: number;
+            /**
+             * How long after creation a run whose first step was never saved
+             * is picked up by the timeout sweep and started (default 30s).
+             */
+            startRecoveryMs?: number;
         },
     ) {}
 
@@ -110,12 +154,41 @@ export class WorkflowManager {
         instance: WorkflowInstance,
         extra?: { stepId?: string; assignmentId?: string; payload?: Record<string, any> },
     ): void {
-        if (!this.options.onWorkflowEvent) return;
-        try {
-            this.options.onWorkflowEvent({ kind, instance, ...extra });
-        } catch {
-            // Swallowed by design — a broken consumer must never affect workflow processing.
-        }
+        const hook = this.options.onWorkflowEvent;
+        if (!hook) return;
+        const scope = this.eventScope.getStore();
+        // Held transitions report the run as it was when they happened, not
+        // as later steps of the same event left it.
+        const snapshot: WorkflowInstance = scope
+            ? {
+                  ...instance,
+                  context: { ...instance.context },
+                  history: instance.history.slice(),
+                  parallelBranches: instance.parallelBranches?.map((b) => ({ ...b })),
+                  failures: instance.failures?.slice(),
+              }
+            : instance;
+        const fire = () => {
+            try {
+                this.eventScope.exit(() => hook({ kind, instance: snapshot, ...extra }));
+            } catch {
+                // Swallowed by design — a broken consumer must never affect workflow processing.
+            }
+        };
+        if (scope) scope.emits.push(fire);
+        else fire();
+    }
+
+    /** Deliver the transitions held for the current event, in order. */
+    private flushTransitions(): void {
+        const scope = this.eventScope.getStore();
+        if (!scope || scope.emits.length === 0) return;
+        for (const fire of scope.emits.splice(0)) fire();
+    }
+
+    private machineLeaseMs(): number | undefined {
+        const lease = this.options.machineLeaseMs ?? 15 * 60_000;
+        return lease > 0 ? lease : undefined;
     }
 
     async init(): Promise<void> {
@@ -257,7 +330,15 @@ export class WorkflowManager {
             const sequence = await this.redisClient.incr(this.keys.workflowInstanceSequence());
 
             const multi = this.redisClient.multi();
-            multi.hSet(this.keys.workflowInstance(instanceId), 'data', JSON.stringify(instance));
+            const initialData = JSON.stringify(instance);
+            multi.hSet(this.keys.workflowInstance(instanceId), {
+                data: initialData,
+                version: '1',
+                sum: WorkflowManager.checksum(initialData),
+            });
+            // Until its first step is saved the run is only "starting": a
+            // crash before that save is recovered by the timeout sweep.
+            multi.zAdd(this.keys.workflowInstancesStarting(), { score: now, value: instanceId });
             multi.sAdd(this.keys.workflowInstancesByUser(userId), instanceId);
             multi.hSet(this.keys.workflowInstances(), instanceId, workflowDefinitionId);
             multi.zAdd(this.keys.workflowInstancesActive(), { score: now, value: instanceId });
@@ -289,7 +370,32 @@ export class WorkflowManager {
 
             this.emitTransition('run.started', instance, { stepId: definition.initialStepId });
 
-            await this.executeWorkflowStep(instance, definition.initialStepId, definition);
+            try {
+                await this.executeWorkflowStep(instance, definition.initialStepId, definition);
+            } catch (err) {
+                // Start recovery got to the first step before this call did:
+                // the run is started, just not by us.
+                const stored = await this.getWorkflowInstance(instanceId);
+                if (!String((err as Error)?.message ?? err).includes('VERSION_MISMATCH')) {
+                    if (stored && stored.version > 1) {
+                        // The first step was saved before something later
+                        // threw (a machine result that could not be saved,
+                        // the next step's work failing to queue). The run is
+                        // started and its step timeout will settle it, so
+                        // the caller gets the run — an error here would
+                        // invite a retry and a second live run.
+                        console.error(`Workflow run ${instanceId} started, then hit an error:`, err);
+                        endSpan();
+                        return stored;
+                    }
+                    // Nothing was saved: the caller is told the start failed,
+                    // so the run must not come alive later through recovery.
+                    await this.failUnstartedRun(instanceId, err);
+                    throw err;
+                }
+                endSpan();
+                return stored ?? instance;
+            }
 
             endSpan();
             return instance;
@@ -371,6 +477,24 @@ export class WorkflowManager {
         return { instances, nextCursor };
     }
 
+    /**
+     * Active runs nothing has happened to for at least `idleMs`, oldest
+     * first. A run whose step has no timeout waits for as long as its work
+     * does; this is how a host finds the ones that have waited too long
+     * (work removed by an operator, a named person who left, nobody eligible).
+     */
+    async listStalledWorkflowInstances(idleMs: number, limit = 100): Promise<WorkflowInstance[]> {
+        const ids = await this.redisClient.zRangeByScore(this.keys.workflowInstancesActive(), '-inf', Date.now() - idleMs, {
+            LIMIT: { offset: 0, count: Math.max(limit, 1) },
+        });
+        const stalled: WorkflowInstance[] = [];
+        for (const id of ids) {
+            const instance = await this.getWorkflowInstance(id);
+            if (instance?.status === 'active') stalled.push(instance);
+        }
+        return stalled;
+    }
+
     async getActiveWorkflowsForUser(userId: string): Promise<WorkflowInstance[]> {
         const instanceIds = await this.redisClient.sMembers(this.keys.workflowInstancesByUser(userId));
         if (instanceIds.length === 0) return [];
@@ -405,15 +529,18 @@ export class WorkflowManager {
             throw new Error(`Workflow instance not found: ${instanceId}`);
         }
 
+        // A run that already ended has nothing to cancel; flipping a completed
+        // or failed run to cancelled would rewrite its outcome.
+        if (instance.status !== 'active') return false;
+
         const expectedVersion = instance.version;
         instance.status = 'cancelled';
 
         const outstandingAssignmentIds: string[] = [];
         const outstandingStepIds: string[] = [];
-        if (instance.currentAssignmentId) {
-            outstandingAssignmentIds.push(instance.currentAssignmentId);
-            if (instance.currentStepId) outstandingStepIds.push(instance.currentStepId);
-        }
+        if (instance.currentAssignmentId) outstandingAssignmentIds.push(instance.currentAssignmentId);
+        // Machine and external steps have no assignment but do have a timeout.
+        if (instance.currentStepId) outstandingStepIds.push(instance.currentStepId);
         for (const branch of instance.parallelBranches ?? []) {
             if (branch.status === 'pending') {
                 outstandingAssignmentIds.push(branch.assignmentId);
@@ -431,7 +558,7 @@ export class WorkflowManager {
             if (this.host.removeAssignment) {
                 await this.host.removeAssignment(assignmentId);
             }
-            await this.redisClient.del(this.keys.workflowAssignmentLink(assignmentId));
+            await this.forgetStepWork(assignmentId);
         }
 
         this.emitTransition('run.cancelled', instance);
@@ -492,13 +619,20 @@ export class WorkflowManager {
                     });
                 }
 
-                const timeoutMs = parallelStep.timeoutMs ?? definition.defaultTimeoutMs;
+                // Machine branches run one after another, so a branch's lease
+                // has to cover the branches ahead of it as well as itself.
+                const lease = this.machineLeaseMs();
+                const timeoutMs =
+                    parallelStep.timeoutMs ??
+                    definition.defaultTimeoutMs ??
+                    (taskType === 'machine' && lease ? lease * machineParallelSteps.length : undefined);
                 if (timeoutMs) {
                     await this.setStepTimeout(instance.id, parallelStepId, timeoutMs);
                 }
             }
 
             instance.parallelBranches = branches;
+            instance.parallelForkStepId = stepId;
             instance.currentStepId = null;
             instance.currentAssignmentId = undefined;
             await this.saveInstance(instance, expectedVersion);
@@ -531,7 +665,7 @@ export class WorkflowManager {
             instance.currentAssignmentId = undefined;
             instance.currentStepId = stepId;
 
-            const timeoutMs = step.timeoutMs ?? definition.defaultTimeoutMs;
+            const timeoutMs = step.timeoutMs ?? definition.defaultTimeoutMs ?? this.machineLeaseMs();
             if (timeoutMs) {
                 await this.setStepTimeout(instance.id, stepId, timeoutMs);
             }
@@ -593,6 +727,7 @@ export class WorkflowManager {
             timestamp: Date.now(),
         };
 
+        let result: Record<string, any> | void;
         try {
             const handlerName = step.machineTask?.handler;
             const registered = handlerName ? this.machineHandlers.get(handlerName) : undefined;
@@ -605,19 +740,25 @@ export class WorkflowManager {
                 );
             }
 
-            const run = Promise.resolve(executor({ instance, step, definition }));
+            const abort = new AbortController();
+            const run = Promise.resolve(
+                this.eventScope.exit(() =>
+                    executor({ instance, step, definition, signal: abort.signal, attemptId: syntheticAssignmentId }),
+                ),
+            );
             // Prevent unhandled rejections when the handler loses the timeout race
             run.catch(() => {});
 
             const timeoutMs = step.timeoutMs ?? definition.defaultTimeoutMs;
-            let result: Record<string, any> | void;
             if (timeoutMs) {
                 let timer: NodeJS.Timeout | undefined;
                 const timeout = new Promise<never>((_, reject) => {
-                    timer = setTimeout(
-                        () => reject(new Error(`Machine step "${step.id}" timed out after ${timeoutMs}ms`)),
-                        timeoutMs,
-                    );
+                    timer = setTimeout(() => {
+                        // Tell the handler to stop: the race below only stops
+                        // waiting for it, and its side effects would carry on.
+                        abort.abort();
+                        reject(new Error(`Machine step "${step.id}" timed out after ${timeoutMs}ms`));
+                    }, timeoutMs);
                 });
                 try {
                     result = await Promise.race([run, timeout]);
@@ -627,12 +768,6 @@ export class WorkflowManager {
             } else {
                 result = await run;
             }
-
-            await this.processWorkflowEvent({
-                ...eventBase,
-                type: 'COMPLETED',
-                payload: result ? { ...result } : undefined,
-            });
         } catch (err: any) {
             await this.processWorkflowEvent({
                 ...eventBase,
@@ -641,7 +776,33 @@ export class WorkflowManager {
                     error: err?.message ?? String(err),
                 },
             });
+            return;
         }
+
+        // Applied outside the handler's try: a save that fails here must not
+        // be reported as the handler failing. It propagates instead; the
+        // step's timeout (its own, or the machine lease) is still armed —
+        // it is cleared only after the save — and recovers the run.
+        await this.processWorkflowEvent({
+            ...eventBase,
+            type: 'COMPLETED',
+            payload: result ? { ...result } : undefined,
+        });
+    }
+
+    /**
+     * Drop what is left of a step's superseded work after the matcher has
+     * removed it: the link back to the run, and a parked copy. The matcher's
+     * removeAssignment leaves the parked store alone (its own park flows rely
+     * on that), and a parked record that outlives its step is re-queued, for a
+     * step that has already failed, the moment somebody unparks it.
+     */
+    private async forgetStepWork(assignmentId: string): Promise<void> {
+        await this.redisClient
+            .multi()
+            .del(this.keys.workflowAssignmentLink(assignmentId))
+            .hDel(this.keys.parkedAssignments(), assignmentId)
+            .exec();
     }
 
     private async setStepTimeout(instanceId: string, stepId: string, timeoutMs: number): Promise<void> {
@@ -656,8 +817,175 @@ export class WorkflowManager {
         await multi.exec();
     }
 
+    /**
+     * Drop a step's timeout once the step has an outcome. Without this every
+     * finished step left its entry in the expiry index until the timeout came
+     * due — with day-long timeouts, an index the size of a day's traffic that
+     * the sweep then had to read an instance for, one by one, to discard.
+     */
+    /**
+     * clearStepTimeout after a save: the event is already applied and marked,
+     * so a throw here could not be retried — it would only discard the
+     * transitions still waiting to be delivered. A timeout left behind is
+     * harmless (the sweep drops it when it comes due).
+     */
+    private async clearStepTimeoutQuietly(instanceId: string, stepId: string): Promise<void> {
+        try {
+            await this.clearStepTimeout(instanceId, stepId);
+        } catch (err) {
+            console.error(`Failed to clear the timeout of step "${stepId}" in workflow ${instanceId}:`, err);
+        }
+    }
+
+    private async clearStepTimeout(instanceId: string, stepId: string): Promise<void> {
+        // Only once the step's outcome is saved, and only if the run is no
+        // longer on it. Cleared any earlier, a failure between the clear and
+        // the save (creating the next step's work, a lost version race) left
+        // the run on this step with nothing to move it — fatal for a machine
+        // step, whose result never travels the stream and is never
+        // redelivered. Read back rather than trusted from the caller: the
+        // advance may have re-entered this step and re-armed its timeout.
+        const instance = await this.getWorkflowInstance(instanceId);
+        const live =
+            !!instance &&
+            instance.status === 'active' &&
+            (instance.currentStepId === stepId ||
+                (instance.parallelBranches?.some((b) => b.stepId === stepId && b.status === 'pending') ?? false));
+        if (live) return;
+        await this.redisClient
+            .multi()
+            .zRem(this.keys.workflowStepExpiryIndex(), `${instanceId}|${stepId}`)
+            .del(this.keys.workflowStepExpiry(instanceId, stepId))
+            .exec();
+    }
+
+    /**
+     * Start runs whose creation was interrupted before their first step was
+     * saved (a crash; a first step that throws fails the run instead). Such a run is active with
+     * nothing outstanding and no timeout, so nothing else would ever move it.
+     * Runs on the timeout sweep. The version check plus the CAS save mean two
+     * replicas — or this and a slow startWorkflow — cannot both start it, and
+     * a machine first step runs only after that save, so only once.
+     */
+    async recoverInterruptedStarts(): Promise<number> {
+        const key = this.keys.workflowInstancesStarting();
+        const graceMs = this.options.startRecoveryMs ?? 30_000;
+        const ids = await this.redisClient.zRangeByScore(key, '-inf', Date.now() - graceMs);
+        let recovered = 0;
+        for (const id of ids) {
+            // One replica per run: the first step creates work before its
+            // save, and two replicas doing so queue that work twice.
+            const claimed = await this.redisClient.set(this.keys.workflowStartLock(id), this.options.streamConsumerName, {
+                NX: true,
+                PX: Math.max(graceMs, 10_000),
+            });
+            if (!claimed) continue;
+            try {
+                const instance = await this.getWorkflowInstance(id);
+                if (!instance || instance.status !== 'active' || instance.version !== 1) {
+                    await this.redisClient.zRem(key, id);
+                    continue;
+                }
+                const definition =
+                    instance.definitionSnapshot ?? (await this.getWorkflowDefinition(instance.workflowDefinitionId));
+                const attempts = await this.redisClient.hIncrBy(this.keys.workflowInstance(id), 'startAttempts', 1);
+                if (!definition || attempts > WorkflowManager.MAX_START_RECOVERIES) {
+                    await this.failUnstartedRun(
+                        id,
+                        new Error(definition ? 'first step could not be started' : 'definition not found'),
+                    );
+                    continue;
+                }
+                // Retried once per grace period, not on every sweep.
+                await this.redisClient.zAdd(key, { score: Date.now(), value: id });
+                // The crash may have come before or after the original
+                // announcement, so a recovered run is announced again.
+                this.emitTransition('run.started', instance, {
+                    stepId: instance.currentStepId ?? definition.initialStepId,
+                });
+                try {
+                    await this.executeWorkflowStep(
+                        instance,
+                        instance.currentStepId ?? definition.initialStepId,
+                        definition,
+                    );
+                    recovered++;
+                } catch (err) {
+                    if (!String((err as Error)?.message ?? err).includes('VERSION_MISMATCH')) {
+                        console.error(`Could not start interrupted workflow run ${id}:`, err);
+                    }
+                }
+            } finally {
+                // Past its expiry the lock may be another replica's.
+                const lockKey = this.keys.workflowStartLock(id);
+                if ((await this.redisClient.get(lockKey)) === this.options.streamConsumerName) {
+                    await this.redisClient.del(lockKey);
+                }
+            }
+        }
+        return recovered;
+    }
+
+    private static readonly MAX_START_RECOVERIES = 5;
+
+    /** Same digest the transition script computes (redis.sha1hex) over the stored JSON. */
+    private static checksum(data: string): string {
+        return createHash('sha1').update(data).digest('hex');
+    }
+
+    /**
+     * Fail a run that never got past creation. Only a run still at its first
+     * version is touched — one that has been saved since is somebody's live run.
+     */
+    private async failUnstartedRun(instanceId: string, cause: unknown): Promise<void> {
+        try {
+            const instance = await this.getWorkflowInstance(instanceId);
+            if (!instance || instance.status !== 'active' || instance.version !== 1) {
+                await this.redisClient.zRem(this.keys.workflowInstancesStarting(), instanceId);
+                return;
+            }
+            // The first step creates its work and timeouts before its save, so
+            // a run that never saved can still have both. Ids are a function
+            // of the run's (unchanged) state, so they can be named here.
+            const definition =
+                instance.definitionSnapshot ?? (await this.getWorkflowDefinition(instance.workflowDefinitionId));
+            const firstStepId = instance.currentStepId ?? definition?.initialStepId;
+            const firstStep = definition?.steps.find((step) => step.id === firstStepId);
+            const stepIds = firstStep ? [firstStep.id, ...(firstStep.parallelStepIds ?? [])] : [];
+
+            instance.status = 'failed';
+            await this.saveInstance(instance, 1);
+            for (const stepId of stepIds) {
+                const workId = this.deterministicAssignmentId({ ...instance, retryCount: 0 }, stepId);
+                await this.redisClient
+                    .multi()
+                    .zRem(this.keys.workflowStepExpiryIndex(), `${instanceId}|${stepId}`)
+                    .del(this.keys.workflowStepExpiry(instanceId, stepId))
+                    .exec();
+                if (this.host.removeAssignment) {
+                    await this.host.removeAssignment(workId).catch(() => {
+                        /* never created, or not an assignment step */
+                    });
+                }
+                await this.forgetStepWork(workId);
+            }
+            this.emitTransition('run.failed', instance, {
+                stepId: instance.currentStepId ?? undefined,
+                payload: { error: (cause as Error)?.message ?? String(cause) },
+            });
+        } catch (err) {
+            console.error(`Could not fail unstarted workflow run ${instanceId}:`, err);
+        }
+    }
+
     async processExpiredWorkflowSteps(): Promise<number> {
         if (!this.options.enableWorkflows) return 0;
+
+        try {
+            await this.recoverInterruptedStarts();
+        } catch (err) {
+            console.error('Workflow start recovery failed:', err);
+        }
 
         const indexKey = this.keys.workflowStepExpiryIndex();
         const due = await this.redisClient.zRangeByScore(indexKey, '-inf', Date.now());
@@ -709,7 +1037,7 @@ export class WorkflowManager {
     async completeWorkflowStep(
         instanceId: string,
         stepId: string,
-        outcome: { success: boolean; data?: Record<string, any>; error?: string },
+        outcome: { success: boolean; data?: Record<string, any>; error?: string; assignmentId?: string },
     ): Promise<boolean> {
         const instance = await this.getWorkflowInstance(instanceId);
         if (!instance) {
@@ -732,10 +1060,15 @@ export class WorkflowManager {
             throw new Error(`Step "${stepId}" is not an external step`);
         }
 
-        await this.redisClient.zRem(this.keys.workflowStepExpiryIndex(), `${instanceId}|${stepId}`);
-        await this.redisClient.del(this.keys.workflowStepExpiry(instanceId, stepId));
-
+        // The step's timeout is cleared when this event is applied, not here:
+        // clearing first and crashing before the publish left an external
+        // step with neither a timeout nor an event.
         const assignmentId = branch?.assignmentId ?? this.deterministicAssignmentId(instance, stepId);
+        // step.ready carries the attempt's id; a caller that passes it back
+        // cannot answer a later attempt of the same step by mistake.
+        if (outcome.assignmentId && outcome.assignmentId !== assignmentId) {
+            throw new Error(`Step "${stepId}" has moved on to a later attempt for instance ${instanceId}`);
+        }
         await this.publishWorkflowEvent({
             eventId: randomUUID(),
             type: outcome.success ? 'COMPLETED' : 'FAILED',
@@ -754,6 +1087,7 @@ export class WorkflowManager {
         instance: WorkflowInstance,
         step: WorkflowStep,
         definition: WorkflowDefinition,
+        branchAttempt = 0,
     ): Promise<Assignment> {
         if (!step.assignmentTemplate) {
             throw new Error(`Assignment step "${step.id}" is missing assignmentTemplate`);
@@ -764,15 +1098,21 @@ export class WorkflowManager {
         if (targetUserSelector === 'initiator') {
             targetUserId = instance.initiatorUserId;
         } else if (targetUserSelector === 'previous') {
-            const lastEntry = instance.history[instance.history.length - 1];
-            targetUserId = lastEntry?.userId ?? instance.initiatorUserId;
+            // The last person who actually did a step. Escalation hops are
+            // recorded in history with no user, so they are skipped: a step
+            // reached through one would otherwise lose its target entirely.
+            let previousUserId: string | undefined;
+            for (let i = instance.history.length - 1; i >= 0 && !previousUserId; i--) {
+                previousUserId = instance.history[i].userId || undefined;
+            }
+            targetUserId = previousUserId ?? instance.initiatorUserId;
         } else if (typeof targetUserSelector === 'object' && 'tag' in targetUserSelector) {
             targetUserId = '';
         } else {
             targetUserId = targetUserSelector as string;
         }
 
-        const assignmentId = this.deterministicAssignmentId(instance, step.id);
+        const assignmentId = this.deterministicAssignmentId(instance, step.id, branchAttempt);
         const assignment: Assignment = {
             id: assignmentId,
             tags: step.assignmentTemplate.tags ?? ['workflow'],
@@ -1202,7 +1542,13 @@ export class WorkflowManager {
         };
     }
 
-    private async processWorkflowEvent(event: WorkflowEvent): Promise<void> {
+    private processWorkflowEvent(event: WorkflowEvent): Promise<void> {
+        return this.eventScope.run({ eventId: event.eventId, instanceId: event.workflowInstanceId, emits: [] }, () =>
+            this.applyWorkflowEvent(event),
+        );
+    }
+
+    private async applyWorkflowEvent(event: WorkflowEvent): Promise<void> {
         if (!event.workflowInstanceId) return;
 
         const { span, end: endSpan } = this.telemetry.startSpan('workflow.process_event', {
@@ -1214,7 +1560,6 @@ export class WorkflowManager {
 
         try {
             const maxAttempts = 3;
-            this.processingEventId = event.eventId;
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 // Re-checked each attempt: a concurrent duplicate delivery loses
                 // the CAS race, retries here with fresh state, and must see
@@ -1247,6 +1592,23 @@ export class WorkflowManager {
                     if (!isCurrentStep && !isPendingBranch) {
                         break;
                     }
+
+                    // Same step, earlier visit: a retry, an escalation or a
+                    // loop back gives the step new work under a new id, and
+                    // a late event still carrying the old id (a completion or
+                    // lapse of the superseded work) must not be applied to
+                    // the visit that replaced it.
+                    if (event.assignmentId) {
+                        const pendingBranch = instance.parallelBranches?.find(
+                            (b) => b.stepId === event.stepId && b.status === 'pending',
+                        );
+                        const currentWorkId = pendingBranch
+                            ? pendingBranch.assignmentId
+                            : (instance.currentAssignmentId ?? this.deterministicAssignmentId(instance, event.stepId));
+                        if (currentWorkId !== event.assignmentId) {
+                            break;
+                        }
+                    }
                 }
 
                 try {
@@ -1261,8 +1623,12 @@ export class WorkflowManager {
                             await this.handleStepExpiry(instance, definition, event);
                             break;
                     }
+                    this.flushTransitions();
                     break;
                 } catch (err: any) {
+                    // Nothing this attempt reported was saved.
+                    const scope = this.eventScope.getStore();
+                    if (scope) scope.emits.length = 0;
                     // Optimistic-lock conflicts are retried in place with a fresh
                     // read instead of waiting for the reclaim loop.
                     if (attempt < maxAttempts - 1 && String(err?.message ?? err).includes('VERSION_MISMATCH')) {
@@ -1278,12 +1644,19 @@ export class WorkflowManager {
             this.telemetry.recordSpanError(span, err instanceof Error ? err : new Error(String(err)));
             endSpan();
             throw err;
-        } finally {
-            this.processingEventId = null;
         }
     }
 
     private async handleStepCompletion(
+        instance: WorkflowInstance,
+        definition: WorkflowDefinition,
+        event: WorkflowEvent,
+    ): Promise<void> {
+        await this.applyStepCompletion(instance, definition, event);
+        if (event.stepId) await this.clearStepTimeoutQuietly(instance.id, event.stepId);
+    }
+
+    private async applyStepCompletion(
         instance: WorkflowInstance,
         definition: WorkflowDefinition,
         event: WorkflowEvent,
@@ -1313,23 +1686,39 @@ export class WorkflowManager {
         });
 
         const expectedVersion = instance.version;
+        // Branches still pending when a waitForAll:false group advances lost
+        // the race; their work is withdrawn once the advance is saved.
+        let losingBranches: ParallelBranchState[] = [];
+        let continuation: WorkflowStep = step;
         if (instance.parallelBranches) {
             const branch = instance.parallelBranches.find((b) => b.stepId === stepId);
             if (branch) {
                 branch.status = 'completed';
                 branch.result = event.payload;
+                const fork = this.forkOf(instance, definition);
                 const allComplete = instance.parallelBranches.every((b) => b.status === 'completed');
-                if (!allComplete && step.waitForAll !== false) {
+                if (!allComplete && (step.waitForAll ?? fork?.waitForAll) !== false) {
                     await this.saveInstance(instance, expectedVersion);
                     return;
                 }
+                losingBranches = instance.parallelBranches.filter((b) => b.status === 'pending');
                 instance.parallelBranches = undefined;
+                instance.parallelForkStepId = undefined;
+
+                // Where a finished group goes next belongs to the step that
+                // forked it. Reading it off the branch that happened to finish
+                // last made the continuation depend on completion order. A
+                // fork that declares no continuation keeps the old behaviour
+                // (the finishing branch decides).
+                if (fork && ((fork.routing && fork.routing.length > 0) || fork.defaultNextStepId !== undefined)) {
+                    continuation = fork;
+                }
             }
         }
 
         let nextStepId: string | null = null;
-        if (step.routing && step.routing.length > 0) {
-            for (const route of step.routing) {
+        if (continuation.routing && continuation.routing.length > 0) {
+            for (const route of continuation.routing) {
                 if (this.evaluateCondition(route.condition, event.payload, instance.context)) {
                     nextStepId = route.targetStepId;
                     break;
@@ -1337,13 +1726,15 @@ export class WorkflowManager {
             }
         }
 
-        if (!nextStepId && step.defaultNextStepId !== undefined) {
-            nextStepId = step.defaultNextStepId;
+        if (!nextStepId && continuation.defaultNextStepId !== undefined) {
+            nextStepId = continuation.defaultNextStepId;
         }
 
         if (nextStepId) {
             instance.currentStepId = nextStepId;
             instance.currentAssignmentId = undefined;
+            // maxRetries is a per-step budget: a new step starts fresh.
+            instance.retryCount = 0;
             await this.executeWorkflowStep(instance, nextStepId, definition);
         } else {
             instance.status = 'completed';
@@ -1352,9 +1743,85 @@ export class WorkflowManager {
             await this.saveInstance(instance, expectedVersion);
             this.emitTransition('run.completed', instance);
         }
+
+        await this.withdrawBranchesQuietly(instance.id, losingBranches);
+    }
+
+    /**
+     * withdrawBranches for use after the run has been saved: the event is
+     * already marked applied, so a throw could not be retried — it would only
+     * fail an event that has in fact been applied.
+     */
+    private async withdrawBranchesQuietly(instanceId: string, branches: ParallelBranchState[]): Promise<void> {
+        if (branches.length === 0) return;
+        try {
+            await this.withdrawBranches(instanceId, branches);
+        } catch (err) {
+            console.error(`Failed to withdraw superseded branches of workflow ${instanceId}:`, err);
+        }
+    }
+
+    /**
+     * The step that forked the run's current parallel group. Recorded on the
+     * instance when the group starts; runs forked before that field existed
+     * fall back to the first step whose parallelStepIds cover the group.
+     */
+    private forkOf(instance: WorkflowInstance, definition: WorkflowDefinition): WorkflowStep | undefined {
+        if (instance.parallelForkStepId) {
+            return definition.steps.find((s) => s.id === instance.parallelForkStepId);
+        }
+        const groupStepIds = (instance.parallelBranches ?? []).map((b) => b.stepId);
+        if (groupStepIds.length === 0) return undefined;
+        return definition.steps.find(
+            (s) => s.parallelStepIds && groupStepIds.every((id) => s.parallelStepIds!.includes(id)),
+        );
+    }
+
+    /**
+     * Clear the timeouts and remove the outstanding work of parallel branches
+     * the run no longer waits for. Late events for them are already ignored by
+     * the consume-time relevance guard; this stops people working on them.
+     */
+    private async withdrawBranches(instanceId: string, branches: ParallelBranchState[]): Promise<void> {
+        // Read back rather than trust the caller's copy: the advance may have
+        // run further steps inline (a machine step that loops straight back to
+        // the fork), and only the stored run says which steps are live now.
+        const instance = await this.getWorkflowInstance(instanceId);
+        for (const branch of branches) {
+            // Timeouts are keyed by step, not by visit: when the advance has
+            // already re-entered this step (a loop back to the fork, or a
+            // route straight to a sibling), the timeout now belongs to the
+            // new visit and must survive. Assignment ids are per visit, so
+            // removing the old one below is always safe.
+            const reentered =
+                !!instance &&
+                instance.status === 'active' &&
+                (instance.currentStepId === branch.stepId ||
+                    (instance.parallelBranches?.some((b) => b.stepId === branch.stepId && b.status === 'pending') ??
+                        false));
+            if (!reentered) {
+                await this.redisClient.zRem(this.keys.workflowStepExpiryIndex(), `${instanceId}|${branch.stepId}`);
+                await this.redisClient.del(this.keys.workflowStepExpiry(instanceId, branch.stepId));
+            }
+            if (this.host.removeAssignment) {
+                await this.host.removeAssignment(branch.assignmentId).catch(() => {
+                    /* machine/external branch, or already gone — nothing to withdraw */
+                });
+            }
+            await this.forgetStepWork(branch.assignmentId);
+        }
     }
 
     private async handleStepFailure(
+        instance: WorkflowInstance,
+        definition: WorkflowDefinition,
+        event: WorkflowEvent,
+    ): Promise<void> {
+        await this.applyStepFailure(instance, definition, event);
+        if (event.stepId) await this.clearStepTimeoutQuietly(instance.id, event.stepId);
+    }
+
+    private async applyStepFailure(
         instance: WorkflowInstance,
         definition: WorkflowDefinition,
         event: WorkflowEvent,
@@ -1365,26 +1832,90 @@ export class WorkflowManager {
         const step = definition.steps.find((s) => s.id === stepId);
         if (!step) return;
 
-        const maxRetries = step.maxRetries ?? 0;
+        const failingBranch = instance.parallelBranches?.find((b) => b.stepId === stepId);
+        // A branch's budget may be declared once on the fork, like its policy.
+        const maxRetries =
+            step.maxRetries ?? (failingBranch ? this.forkOf(instance, definition)?.maxRetries : undefined) ?? 0;
         const expectedVersion = instance.version;
+
+        // history holds what completed; this is the record of what did not.
+        const failures = instance.failures ?? [];
+        failures.push({
+            stepId,
+            assignmentId: event.assignmentId,
+            userId: event.userId,
+            at: event.timestamp,
+            reason: event.type === 'EXPIRED' ? 'expired' : 'failed',
+            error: event.payload?.error ?? event.payload?.reason,
+        });
+        instance.failures = failures.slice(-200);
 
         // Handle parallel branch failure
         if (instance.parallelBranches) {
             const branch = instance.parallelBranches.find((b) => b.stepId === stepId);
             if (branch) {
+                const policy = step.failurePolicy ?? this.forkOf(instance, definition)?.failurePolicy ?? 'abort';
+                const branchRetries = branch.retryCount ?? 0;
+                const retryBranch = policy === 'retry' && branchRetries < maxRetries;
                 branch.status = 'failed';
                 this.emitTransition('step.failed', instance, {
                     stepId,
                     assignmentId: event.assignmentId,
-                    payload: { ...event.payload, willRetry: false },
+                    payload: { ...event.payload, willRetry: retryBranch },
                 });
 
-                const policy = step.failurePolicy ?? 'abort';
-                if (policy === 'abort') {
+                if (retryBranch) {
+                    // Retry the branch in place: its own budget, its own new
+                    // work id, the rest of the group untouched. (Running it
+                    // through the single-step path made the branch the run's
+                    // current step, and two retrying branches then dropped
+                    // each other's completions.)
+                    if (branch.assignmentId && this.host.removeAssignment) {
+                        await this.host.removeAssignment(branch.assignmentId).catch(() => {
+                            /* machine/external branch, or already gone */
+                        });
+                        await this.forgetStepWork(branch.assignmentId);
+                    }
+                    branch.retryCount = branchRetries + 1;
+                    branch.status = 'pending';
+                    const taskType = step.taskType ?? 'assignment';
+                    if (taskType === 'assignment') {
+                        branch.assignmentId = (
+                            await this.createWorkflowAssignment(instance, step, definition, branch.retryCount)
+                        ).id;
+                    } else {
+                        branch.assignmentId = this.deterministicAssignmentId(instance, stepId, branch.retryCount);
+                    }
+                    const timeoutMs =
+                        step.timeoutMs ??
+                        definition.defaultTimeoutMs ??
+                        (taskType === 'machine' ? this.machineLeaseMs() : undefined);
+                    if (timeoutMs) await this.setStepTimeout(instance.id, stepId, timeoutMs);
+                    await this.saveInstance(instance, expectedVersion);
+                    if (taskType === 'machine') {
+                        await this.executeMachineStep(instance, step, definition, branch.assignmentId);
+                    } else if (taskType === 'external') {
+                        this.emitTransition('step.ready', instance, {
+                            stepId,
+                            assignmentId: branch.assignmentId,
+                            payload: { name: step.external!.name, input: step.external!.input },
+                        });
+                    }
+                    return;
+                }
+
+                // Whatever happens next, this branch's work is finished with;
+                // and when the run fails, so is every branch still waiting.
+                const failedWork = { ...branch };
+                if (policy === 'abort' || policy === 'retry') {
                     // Fail entire workflow
+                    const stillPending = instance.parallelBranches
+                        .filter((b) => b.status === 'pending')
+                        .map((b) => ({ ...b }));
                     instance.status = 'failed';
                     await this.saveInstance(instance, expectedVersion);
                     this.emitTransition('run.failed', instance, { stepId, payload: event.payload });
+                    await this.withdrawBranchesQuietly(instance.id, [failedWork, ...stillPending]);
                     return;
                 } else if (policy === 'continue') {
                     // Check if remaining branches can complete
@@ -1400,6 +1931,7 @@ export class WorkflowManager {
                     } else {
                         await this.saveInstance(instance, expectedVersion);
                     }
+                    await this.withdrawBranchesQuietly(instance.id, [failedWork]);
                     return;
                 }
             }
@@ -1423,7 +1955,7 @@ export class WorkflowManager {
             await this.host.removeAssignment(supersededId).catch(() => {
                 /* already gone (completed, cancelled, swept) — nothing to supersede */
             });
-            await this.redisClient.del(this.keys.workflowAssignmentLink(supersededId));
+            await this.forgetStepWork(supersededId);
         }
 
         if (willRetry) {
@@ -1442,6 +1974,11 @@ export class WorkflowManager {
         definition: WorkflowDefinition,
         event: WorkflowEvent,
     ): Promise<void> {
+        // A lapsed offer whose work the matcher requeued is ordinary matching,
+        // not a step timeout: the step keeps waiting for the next worker, and
+        // only its own timeoutMs may fail or escalate it.
+        if (event.payload?.requeued === true) return;
+
         this.emitTransition('step.expired', instance, { stepId: event.stepId, assignmentId: event.assignmentId });
 
         if (await this.tryEscalateExpiredStep(instance, definition, event)) return;
@@ -1484,7 +2021,7 @@ export class WorkflowManager {
             await this.host.removeAssignment(assignmentId).catch(() => {
                 /* already gone (accepted, cancelled, swept) — nothing to supersede */
             });
-            await this.redisClient.del(this.keys.workflowAssignmentLink(assignmentId));
+            await this.forgetStepWork(assignmentId);
         }
 
         instance.history.push({
@@ -1503,9 +2040,15 @@ export class WorkflowManager {
             payload: { from: stepId, to: target, depth },
         });
 
-        // Deliberately does not touch instance.retryCount: an escalation is a
-        // different person getting the work, not another attempt at the same one.
+        // An escalation is a different step getting the work, not another
+        // attempt at the same one: it never consumes a retry, and the target
+        // step starts with its own fresh maxRetries budget.
+        instance.retryCount = 0;
         await this.executeWorkflowStep(instance, target, definition);
+        // An escalation that came from the matcher (a parked or refused
+        // offer) rather than from the step's own timeout leaves that timeout
+        // in the index.
+        await this.clearStepTimeoutQuietly(instance.id, stepId);
         return true;
     }
 
@@ -1636,10 +2179,10 @@ export class WorkflowManager {
             // CAS write: a crash after the transition but before a separate
             // marker write would otherwise re-apply the event on redelivery.
             const markerTtl = this.reliability.options.workflowIdempotencyTtlMs;
+            const scope = this.eventScope.getStore();
+            const processingEventId = scope && scope.instanceId === instance.id ? scope.eventId : undefined;
             const keys =
-                this.processingEventId && markerTtl
-                    ? [instanceKey, this.keys.processedEvent(this.processingEventId)]
-                    : [instanceKey];
+                processingEventId && markerTtl ? [instanceKey, this.keys.processedEvent(processingEventId)] : [instanceKey];
             const args =
                 keys.length === 2
                     ? [String(expectedVersion), newData, String(markerTtl)]
@@ -1660,7 +2203,19 @@ export class WorkflowManager {
                 throw new Error(`Workflow transition failed: ${parsed.err}`);
             }
         } else {
-            await this.redisClient.hSet(instanceKey, 'data', newData);
+            await this.redisClient.hSet(instanceKey, {
+                data: newData,
+                version: String(instance.version),
+                sum: WorkflowManager.checksum(newData),
+            });
+        }
+
+        // Saved: what this event reported up to here is now true.
+        if (this.eventScope.getStore()?.instanceId === instance.id) this.flushTransitions();
+
+        // The first save is what makes a run "started" (see recoverInterruptedStarts).
+        if (expectedVersion === 1) {
+            await this.redisClient.zRem(this.keys.workflowInstancesStarting(), instance.id);
         }
 
         await this.syncInstanceIndexes(instance);
@@ -1692,9 +2247,13 @@ export class WorkflowManager {
      * Deterministic assignment id for a step execution, so replays of the same
      * event after a crash produce the same assignment instead of duplicates.
      */
-    private deterministicAssignmentId(instance: WorkflowInstance, stepId: string): string {
+    private deterministicAssignmentId(instance: WorkflowInstance, stepId: string, branchAttempt = 0): string {
+        // A retried parallel branch keeps the run's retryCount and history
+        // length, so its attempt number is what makes the new id distinct.
+        // Omitted at 0 so every id issued before branch retries is unchanged.
+        const attempt = branchAttempt > 0 ? `:b${branchAttempt}` : '';
         return createHash('sha256')
-            .update(`wfa:${instance.id}:${stepId}:${instance.retryCount}:${instance.history.length}`)
+            .update(`wfa:${instance.id}:${stepId}:${instance.retryCount}:${instance.history.length}${attempt}`)
             .digest('hex')
             .slice(0, 32);
     }
